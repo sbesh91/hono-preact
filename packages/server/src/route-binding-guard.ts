@@ -415,13 +415,15 @@ function assertRoomChannelCongruent(
   const missing = [...undeclared, ...notGuaranteed];
 
   if (missing.length > 0) {
+    // Computed unconditionally (not just for `bound`): the COLOCATED
+    // exemption advisory below is now ALSO gated on it (Finding 9, #274
+    // round-8 fix), mirroring the socket twin
+    // (`maybeReportColocatedSocketParams`'s `liveTiers === 0` early return).
+    const appUse = ctx.appUse ?? [];
+    const pageUse = ctx.routeUseByPattern.get(routeId) ?? [];
+    const liveTiers =
+      serverTierSize(appUse) + serverTierSize(pageUse) + serverTierSize(defUse);
     if (bound) {
-      const appUse = ctx.appUse ?? [];
-      const pageUse = ctx.routeUseByPattern.get(routeId) ?? [];
-      const liveTiers =
-        serverTierSize(appUse) +
-        serverTierSize(pageUse) +
-        serverTierSize(defUse);
       if (liveTiers > 0) {
         const parts: string[] = [];
         if (undeclared.length > 0) {
@@ -459,7 +461,15 @@ function assertRoomChannelCongruent(
     }
     // Either colocated (never fails the boot, regardless of tier liveness)
     // or bound with all three tiers empty today (exempted, but a guard added
-    // later would misread the param): advise, don't throw.
+    // later would misread the param): advise, don't throw. For the
+    // COLOCATED case specifically, only advise while some tier IS live
+    // (Finding 9): a genuinely guard-less route has no guard TODAY that
+    // could misread the missing param, so there is nothing to warn about
+    // yet -- matching the socket twin's identical gate. A BOUND room with
+    // all tiers empty always advises regardless: it already opted into the
+    // route contract, so "a guard added LATER would misread this" is worth
+    // surfacing even at liveTiers === 0.
+    if (!bound && liveTiers === 0) return;
     ctx.onRoomParamExemption?.({
       name,
       moduleKey,
@@ -532,8 +542,7 @@ export function warnRoomParamExemption(
       `whether live now or added later, reads ` +
       `ctx.location.pathParams.${info.params[0]} as undefined. Rename the ` +
       `channel or route param(s) to match, make the channel slot required, ` +
-      `or bind the room explicitly with serverRoute('${info.routeId}').room(...) ` +
-      `to authorize on that route param.`
+      `or ${bindingAdvice('room', info.routeId, false)}`
   );
 }
 
@@ -571,6 +580,47 @@ function maybeReportColocatedSocketParams(
 }
 
 /**
+ * The actionable "how to fix" clause shared by the colocated-socket and
+ * room-exemption advisories below: both end with "bind explicitly with
+ * serverRoute(routeId).<kind>(...)", and that advice is WRONG when
+ * `routeId` itself carries a non-conforming `:param` segment (e.g. a
+ * hyphenated `/board/:board-id`), because binding such a route hard-fails
+ * at boot (`assertConformingBoundRouteId` above). Followed literally, the
+ * advice would break the app instead of fixing it. Detect that case and
+ * give the correct advice instead: rename the route param to the supported
+ * `[A-Za-z0-9_]+` class FIRST, then bind (or, without renaming, read the
+ * value off the query/headers in the unit's own `use`/`open`/`onJoin`).
+ *
+ * `sentenceStart` capitalizes the leading word: `warnColocatedSocketParams`
+ * uses this clause as its own sentence, `warnRoomParamExemption` splices it
+ * mid-sentence after "...or ".
+ */
+function bindingAdvice(
+  kind: 'socket' | 'room',
+  routeId: string,
+  sentenceStart: boolean
+): string {
+  const badSegment = nonConformingRouteSegment(routeId);
+  if (badSegment === undefined) {
+    return kind === 'socket'
+      ? `${sentenceStart ? 'Bind' : 'bind'} with serverRoute('${routeId}').socket(...) to authorize on it.`
+      : `${sentenceStart ? 'Bind' : 'bind'} the room explicitly with ` +
+          `serverRoute('${routeId}').room(...) to authorize on it.`;
+  }
+  return (
+    `serverRoute('${routeId}').${kind}(...) cannot fix this: its segment ` +
+    `'${badSegment}' is not a conforming ':param' spelling, and binding it ` +
+    `would hard-fail at boot (see the route-bound conformance check above). ` +
+    `Rename the route param so it only uses letters, digits, and ` +
+    `underscores, THEN bind with serverRoute('${routeId}').${kind}(...); or, ` +
+    `without renaming, read the value off the query/headers in the ` +
+    (kind === 'socket'
+      ? `socket's own 'use'/'open' instead.`
+      : `room's own 'use'/'onJoin' instead.`)
+  );
+}
+
+/**
  * Console advisory for a colocated socket on a param-bearing, guarded route,
  * fired through `RouteBindingCheckContext.onColocatedSocketParams`. Fires in
  * BOTH dev and prod (see the field's own doc). One per socket for the life
@@ -590,8 +640,7 @@ export function warnColocatedSocketParams(
       `param${info.params.length > 1 ? 's' : ''} ${info.params.join(', ')}. ` +
       `A colocated socket resolves no param wire, so a guard on its chain ` +
       `will read ${info.params.length > 1 ? 'those params' : 'that param'} ` +
-      `as undefined. Bind with serverRoute('${info.routeId}').socket(...) ` +
-      `instead of colocation to authorize on ${info.params.length > 1 ? 'those route params' : 'that route param'}.`
+      `as undefined. ${bindingAdvice('socket', info.routeId, true)}`
   );
 }
 

@@ -283,6 +283,16 @@ function _genericWrapperProbe<
 }
 void _genericWrapperProbe;
 
+// Finding 6 (#274 round-8 fix): the identical `useSocket({})` pin
+// (define-socket.test-d.ts), for `useRoom`. `RoomRefShape`'s `RoomRefBrand`
+// field is required, so a plain object -- even one with the other,
+// optional, phantom fields -- is not a real `RoomRef`.
+// @ts-expect-error a plain object is not a real RoomRef
+useRoom({});
+// @ts-expect-error an object with the right-shaped optional fields, but no
+// RoomRefBrand, is still not a real RoomRef
+useRoom({ __incoming: {}, __outgoing: {} });
+
 void _routeRoomProbes;
 void _bareRoomProbes;
 void _multiParamProbes;

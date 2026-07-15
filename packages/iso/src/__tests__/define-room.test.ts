@@ -60,7 +60,7 @@ describe('defineRoom (runtime def)', () => {
     };
     expect(() => defineRoom(badChannel, {})).toThrow(/board:boardId/);
     expect(() => defineRoom(badChannel, {})).toThrow(
-      /not a valid channel param/
+      /RouteParams still reads 'boardId'/
     );
   });
 
@@ -86,5 +86,15 @@ describe('defineRoom (runtime def)', () => {
     expect(() => _defineRouteRoom('/board', badChannel, {})).toThrow(
       /^serverRoute\(r\)\.room\('board:boardId'\):/
     );
+  });
+
+  it('throws for a hand-rolled channel with more than one optional slot (F2 topic-collapse hazard)', () => {
+    // The same defineChannel-only F2 check (assertConformingChannelName) is
+    // re-run on a hand-rolled Channel that bypassed defineChannel entirely.
+    const badChannel: Channel<'room/:a?/:b?', unknown> = {
+      name: 'room/:a?/:b?',
+      key: () => 'room' as never,
+    };
+    expect(() => defineRoom(badChannel, {})).toThrow(/unambiguous topic/);
   });
 });

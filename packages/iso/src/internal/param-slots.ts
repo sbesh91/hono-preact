@@ -278,3 +278,48 @@ export function isHazardousColonSegment(segment: string): boolean {
   }
   return segment.startsWith(':') || typeLayerClaimsParam(segment);
 }
+
+/**
+ * Every OPTIONAL (`?`) or REST (`*`/`+`) `:param` slot name in a pattern, in
+ * pattern order, with the leading colon and the modifier stripped.
+ *
+ * `interpolatePattern` (interpolate-pattern.ts) drops an absent-or-empty
+ * segment outright (its own doc: "avoids emitting `//`"). For a ROUTE
+ * pattern (`buildPath`'s callers) that is correct: a trailing optional
+ * legitimately shortens the href. For a CHANNEL name it is a hazard once TWO
+ * OR MORE such slots exist: two distinct key sets that each omit a
+ * DIFFERENT slot collapse onto the SAME topic string. E.g. channel
+ * `room/:a?/:b?`, key `{ a: 'x' }` -> topic `room/x`, and key `{ b: 'x' }`
+ * -> topic `room/x` too -- the same topic, two different resources, so
+ * presence and broadcasts cross-leak between them. A channel with AT MOST
+ * ONE such slot cannot collapse this way: only one segment can ever be
+ * absent, so every distinct key set still yields a distinct topic.
+ *
+ * `+` (rest-one-or-more) is included alongside `?`/`*` even though
+ * `requiredParamSlots` treats it as required (so a wire-level parse denies a
+ * connection that omits it, see `parseKeyParams`/`isPresentParamSlot`):
+ * `interpolatePattern` itself applies the identical absent-or-empty-drops
+ * rule to a `+` segment with no special case, so a direct `channel.key(...)`
+ * call that does not first go through that wire-level required-presence
+ * gate (a future caller, or a server-side topic recomputation) is not
+ * protected by it. Treating `+` the same as `?`/`*` here is the safe,
+ * simple choice rather than relying on every current and future caller of
+ * `key()` to enforce required-presence first.
+ *
+ * `defineChannel` (define-channel.ts) rejects a channel name with more than
+ * one slot from this list at definition time; exported so `defineRoom`'s
+ * hand-rolled `Channel` re-validation path (define-room.ts, via the shared
+ * `assertConformingChannelName`) runs the identical check. Route patterns
+ * (`buildPath`) are NOT checked against this predicate: a route with
+ * multiple optional segments is an ordinary, legitimate href shape.
+ */
+export function optionalOrRestParamSlots(pattern: string): string[] {
+  return pattern
+    .split('/')
+    .map((seg) => matchParamSegment(seg))
+    .filter(
+      (m): m is RegExpExecArray =>
+        m !== null && (m[2] === '?' || m[2] === '*' || m[2] === '+')
+    )
+    .map((m) => m[1]);
+}

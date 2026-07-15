@@ -16,6 +16,7 @@ import type {
   SocketCloseInfo,
   ReconnectOptions,
 } from './internal/ws-lifecycle.js';
+import type { RoomRefBrand } from './define-room.js';
 
 // Re-export the shared lifecycle types so consumers can name them off useRoom.
 export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
@@ -27,8 +28,15 @@ export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
  * `UseRoomOptions<RoomRef<...>>` in its own method) makes the constraint check
  * recurse through that method, which TS rejects as excessively deep. `RoomRef`
  * is structurally assignable to this shape, so callers pass a `RoomRef` as-is.
+ *
+ * `[RoomRefBrand]` is REQUIRED (no `?`), unlike every other field here, for
+ * the identical reason `use-socket.ts`'s `SocketRefShape` requires
+ * `SocketRefBrand`: without it every field was optional, so a plain `{}`
+ * trivially satisfied `R extends AnyRoomRefShape` and `useRoom({})`
+ * type-checked with no error.
  */
 type RoomRefShape<Incoming, Outgoing, State, Params> = {
+  readonly [RoomRefBrand]: true;
   readonly [FORM_MODULE_FIELD]?: string;
   readonly [FORM_ROOM_FIELD]?: string;
   readonly __incoming?: Incoming;

@@ -206,6 +206,20 @@ function _genericWrapperProbe<R extends SocketRef<unknown, unknown>>(
 }
 void _genericWrapperProbe;
 
+// Finding 6 (#274 round-8 fix): `useSocket`'s generic constraint widened from
+// the full `SocketRef` (whose `useSocket` method it is required) to a
+// structural shape (`AnySocketRefShape`, use-socket.ts) so `Params`/etc. can
+// be read without recursing through that method. Every field in that shape
+// used to be optional, so a plain object with none of them still satisfied
+// the constraint and `useSocket({})` compiled -- pin that it no longer does:
+// the shape's `SocketRefBrand` field is required, and only a real `SocketRef`
+// (built via `defineSocket`/`serverRoute(r).socket`) carries it.
+// @ts-expect-error a plain object is not a real SocketRef
+useSocket({});
+// @ts-expect-error an object with the right-shaped optional fields, but no
+// SocketRefBrand, is still not a real SocketRef
+useSocket({ __incoming: {}, __outgoing: {} });
+
 void _probes;
 void _routeSocketProbe;
 void _openArityProbe;

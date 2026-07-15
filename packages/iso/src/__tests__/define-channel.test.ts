@@ -58,8 +58,11 @@ describe('defineChannel param-name validation', () => {
     // one constant topic 'board:boardId'. The old `segment.startsWith(':')`
     // gate missed this spelling entirely; it must throw now.
     expect(() => defineChannel('board:boardId')).toThrow(/board:boardId/);
+    // The colon-namespaced-literal shape gets its OWN advice (Finding 10):
+    // there is no ':param' to rename here, so the message explains the
+    // RouteParams/interpolatePattern mismatch instead.
     expect(() => defineChannel('board:boardId')).toThrow(
-      /not a valid channel param/
+      /RouteParams still reads 'boardId'/
     );
   });
 
@@ -109,10 +112,23 @@ describe('defineChannel param-name validation', () => {
 
   it('still throws for a colon-namespaced name whose suffix IS a claimable identifier (the type layer would require it as a param)', () => {
     expect(() => defineChannel('board:boardId')).toThrow(
-      /not a valid channel param/
+      /RouteParams still reads 'boardId'/
     );
     expect(() => defineChannel('metrics:cpu')).toThrow(
-      /not a valid channel param/
+      /RouteParams still reads 'cpu'/
+    );
+  });
+
+  it('advises a colon-namespaced-literal hazard to make a real segment or drop the colon (not "rename the param")', () => {
+    // The ':'-prefixed shape's "rename the param" advice does not fit here:
+    // 'board:boardId' never used a ':param' at all, so there is nothing to
+    // rename. The message must point at the real fix instead.
+    expect(() => defineChannel('board:boardId')).toThrow(
+      /make it a real ':param' segment/
+    );
+    expect(() => defineChannel('board:boardId')).toThrow(/board\/:boardId/);
+    expect(() => defineChannel('board:boardId')).toThrow(
+      /remove the colon from the constant name/
     );
   });
 
@@ -120,5 +136,28 @@ describe('defineChannel param-name validation', () => {
     expect(() => defineChannel('board/:board-id')).toThrow(
       /not a valid channel param/
     );
+  });
+});
+
+describe('defineChannel multi-optional-slot validation (F2)', () => {
+  it('throws for a channel with two optional slots (topic-collapse hazard)', () => {
+    // room/:a?/:b? -- key {a:'x'} and key {b:'x'} both drop the OTHER
+    // absent slot and resolve to the same topic 'room/x', cross-leaking
+    // presence/broadcasts between what the author modeled as two distinct
+    // resources.
+    expect(() => defineChannel('room/:a?/:b?')).toThrow(/unambiguous topic/);
+    expect(() => defineChannel('room/:a?/:b?')).toThrow(/:a/);
+    expect(() => defineChannel('room/:a?/:b?')).toThrow(/:b/);
+  });
+
+  it('throws for a mix of optional and rest slots', () => {
+    expect(() => defineChannel('room/:a*/:b?')).toThrow(/unambiguous topic/);
+    expect(() => defineChannel('room/:a+/:b?')).toThrow(/unambiguous topic/);
+  });
+
+  it('does not throw for at most one optional slot', () => {
+    expect(() => defineChannel('room/:a/:b?')).not.toThrow();
+    expect(() => defineChannel('room/:a?')).not.toThrow();
+    expect(() => defineChannel('room/:a/:b')).not.toThrow();
   });
 });

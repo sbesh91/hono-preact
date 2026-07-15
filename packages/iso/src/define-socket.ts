@@ -91,6 +91,24 @@ export interface SocketDef<
   readonly __routeId?: string;
 }
 
+// Nominal brand marking a value as a real `SocketRef`, never actually
+// present at runtime -- a `declare const ... unique symbol`, the same
+// phantom-brand device `define-channel.ts`'s `TopicPayload` uses, except
+// this one is REQUIRED (no `?`) rather than permissive-in. `useSocket`'s
+// generic constraint (`use-socket.ts`'s local `SocketRefShape`, chosen over
+// the full `SocketRef` to avoid an excessively-deep recursive constraint
+// through `useSocket`'s own method) reads message/param types from a
+// STRUCTURAL shape with every field optional except this brand. Without a
+// required field, a plain `{}` satisfies "every field optional" trivially,
+// so `useSocket({})` type-checked with no error -- closing that hole is the
+// point of this brand. Exported (type-only) so `use-socket.ts` can declare
+// the identical property key on its constraint; TypeScript rejects a type
+// missing a REQUIRED property outright, so only a real `SocketRef` (which
+// always carries this field, via the sanctioned cast in `makeSocketRef`)
+// satisfies it.
+declare const SocketRefBrand: unique symbol;
+export type { SocketRefBrand };
+
 /**
  * The client-facing reference. On the server it is the SocketDef; on the client
  * the `.server` import is stripped to a `{ __module, __socket }` descriptor. The
@@ -99,6 +117,7 @@ export interface SocketDef<
  * route's params, so `useSocket(ref, { params })` is typed).
  */
 export interface SocketRef<Incoming, Outgoing, Params = {}> {
+  readonly [SocketRefBrand]: true;
   readonly [FORM_MODULE_FIELD]?: string;
   readonly [FORM_SOCKET_FIELD]?: string;
   readonly __incoming?: Incoming;

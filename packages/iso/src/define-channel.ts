@@ -1,6 +1,9 @@
 import type { RouteParams } from './internal/typed-routes.js';
 import { interpolatePattern } from './internal/interpolate-pattern.js';
-import { isHazardousColonSegment } from './internal/param-slots.js';
+import {
+  isHazardousColonSegment,
+  optionalOrRestParamSlots,
+} from './internal/param-slots.js';
 
 // A topic string branded with its payload type. The brand is phantom (a
 // `unique symbol` optional key, never present at runtime), so it carries the
@@ -46,6 +49,12 @@ export interface Channel<Name extends string, Payload> {
  * `interpolatePattern` already agree the segment is a literal. This is an
  * ordinary, working colon-namespaced constant name, not a hazard.
  *
+ * Also rejects a name carrying MORE THAN ONE optional/rest slot
+ * (`optionalOrRestParamSlots`, param-slots.ts): with two or more, two
+ * distinct key sets that each omit a DIFFERENT slot collapse onto the SAME
+ * topic (see that function's own doc for the full hazard). A name with at
+ * most one such slot is unaffected.
+ *
  * Throwing here, at definition time, is the loud failure that replaces the
  * old (correct) behavior of denying every connection: cheaper and louder
  * than a per-connection check.
@@ -75,7 +84,17 @@ export function assertConformingChannelName(
   constructorLabel: string = 'defineChannel'
 ): void {
   for (const segment of name.split('/')) {
-    if (isHazardousColonSegment(segment)) {
+    if (!isHazardousColonSegment(segment)) continue;
+    // Two distinct hazard shapes (see this function's own doc), each needing
+    // DIFFERENT advice: a ':'-prefixed segment IS an attempted ':param' with
+    // an invalid name, so "rename the param" is correct and actionable. A
+    // colon-namespaced LITERAL segment (the colon is not at the segment's
+    // start, e.g. 'board:boardId') is not a ':param' at all -- there is no
+    // param to rename -- the hazard is that the type-level RouteParams still
+    // reads the text after the colon as a REQUIRED param this channel's
+    // interpolatePattern never substitutes, so advice must point at THAT
+    // mismatch instead.
+    if (segment.startsWith(':')) {
       throw new Error(
         `${constructorLabel}('${name}'): the param segment '${segment}' is not ` +
           `a valid channel param. A channel param must be ':name', where ` +
@@ -85,6 +104,34 @@ export function assertConformingChannelName(
           `underscores.`
       );
     }
+    const colonIndex = segment.indexOf(':');
+    const claimedParam = segment.slice(colonIndex + 1).replace(/[?*+]$/, '');
+    throw new Error(
+      `${constructorLabel}('${name}'): the segment '${segment}' is a ` +
+        `colon-namespaced literal, not a ':param' -- but the type-level ` +
+        `RouteParams still reads '${claimedParam}' (the text after the ` +
+        `colon) as a REQUIRED param, and interpolatePattern never ` +
+        `substitutes it (it is not a real ':param' segment), so every call ` +
+        `to key() would collapse onto the one constant topic '${name}' while ` +
+        `the type still promises a param that is never there. Either make it ` +
+        `a real ':param' segment (e.g. '${segment.slice(0, colonIndex)}/:` +
+        `${claimedParam}' instead of '${segment}') so the value actually ` +
+        `substitutes, or remove the colon from the constant name so it reads ` +
+        `as an ordinary literal.`
+    );
+  }
+  const ambiguousSlots = optionalOrRestParamSlots(name);
+  if (ambiguousSlots.length > 1) {
+    throw new Error(
+      `${constructorLabel}('${name}'): more than one optional or rest param ` +
+        `slot (${ambiguousSlots.map((s) => `':${s}'`).join(', ')}). A channel ` +
+        `key must resolve to ONE unambiguous topic, but interpolatePattern ` +
+        `drops an absent or empty segment, so two distinct key sets that each ` +
+        `omit a DIFFERENT one of these slots would collapse onto the SAME ` +
+        `topic (a cross-resource presence and broadcast leak). Use at most ` +
+        `one optional ('?') or rest ('*'/'+') slot in a channel name, or make ` +
+        `the extra slot(s) required.`
+    );
   }
 }
 

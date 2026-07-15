@@ -4,6 +4,7 @@ import {
   assertRegistryRouteBindingsValid,
   warnAliasedLayoutBinding,
   warnRoomParamBinding,
+  warnRoomParamExemption,
   warnColocatedSocketParams,
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
@@ -1055,11 +1056,24 @@ describe('room route/channel param congruence', () => {
       ).rejects.toThrow(/route param .*id.* is not a key of channel/i);
     });
 
-    it('does not throw when ALL THREE tiers are empty, and fires the exemption advisory', async () => {
+    it('does not throw when ALL THREE tiers are empty, and fires the exemption advisory (BOUND room)', async () => {
+      // A route-BOUND room (explicit __routeId) keeps firing this advisory
+      // even at liveTiers === 0: the author already opted into the route
+      // contract, so "a guard added LATER would misread this" is worth
+      // surfacing even when nothing reads it today. This is DIFFERENT from
+      // the colocated case (Finding 9 / #274 round-8 fix, see the
+      // 'colocated vs bound room asymmetry' describe block below): a
+      // COLOCATED room on an equally guard-less route fires NO advisory,
+      // since it never opted into anything and there is nothing live to warn
+      // about yet.
       const routes = [
         routeOf('/board/:id', {
           __moduleKey: 'm',
-          serverRooms: { chat: { channel: { name: 'global-chat' } } },
+          serverRooms: {
+            chat: boundRoomDef('/board/:id', {
+              channel: { name: 'global-chat' },
+            }),
+          },
         }),
       ];
       const seen: RoomParamExemptionInfo[] = [];
@@ -1172,8 +1186,45 @@ describe('room route/channel param congruence', () => {
     // appConfig.use/page-use/def.use can never read ctx.location.pathParams.
     // Counting raw array length would make an app-level logger or a
     // client-scope middleware hard-fail the boot of an otherwise-exempt
-    // (guard-less) room.
-    it('does not throw when the app tier contains ONLY a non-server (client-scope) middleware', async () => {
+    // (guard-less) BOUND room.
+    it('does not throw when the app tier contains ONLY a non-server (client-scope) middleware (BOUND room)', async () => {
+      const clientOnly = defineClientMiddleware(async (_c, next) => next());
+      const routes = [
+        routeOf('/board/:id', {
+          __moduleKey: 'm',
+          serverRooms: {
+            chat: boundRoomDef('/board/:id', {
+              channel: { name: 'global-chat' },
+            }),
+          },
+        }),
+      ];
+      const seen: RoomParamExemptionInfo[] = [];
+      await expect(
+        assertRouteBindingsMatchMount(routes, {
+          routeUseByPattern: new Map([['/board/:id', []]]),
+          appUse: [clientOnly],
+          onRoomParamExemption: (info) => seen.push(info),
+        })
+      ).resolves.toBeUndefined();
+      // A BOUND room's exemption advisory always fires once exempted
+      // (regardless of tier liveness), unlike the COLOCATED case below.
+      expect(seen).toEqual([
+        {
+          name: 'chat',
+          moduleKey: 'm',
+          routeId: '/board/:id',
+          channelName: 'global-chat',
+          params: ['id'],
+        },
+      ]);
+    });
+
+    // (Finding 9, #274 round-8 fix) The same client-only middleware, on the
+    // COLOCATED path: since it counts as zero live SERVER tiers (same
+    // reasoning as above), the colocated exemption advisory now stays
+    // silent too, matching the socket twin's identical gate.
+    it('does not fire the colocated exemption advisory when the app tier contains ONLY a non-server middleware', async () => {
       const clientOnly = defineClientMiddleware(async (_c, next) => next());
       const routes = [
         routeOf('/board/:id', {
@@ -1189,15 +1240,7 @@ describe('room route/channel param congruence', () => {
           onRoomParamExemption: (info) => seen.push(info),
         })
       ).resolves.toBeUndefined();
-      expect(seen).toEqual([
-        {
-          name: 'chat',
-          moduleKey: 'm',
-          routeId: '/board/:id',
-          channelName: 'global-chat',
-          params: ['id'],
-        },
-      ]);
+      expect(seen).toEqual([]);
     });
   });
 
@@ -1391,6 +1434,53 @@ describe('colocated vs bound room asymmetry (#274 asymmetry fix)', () => {
   // 'room route/channel param congruence' (P2-a/P2-b, now on explicitly
   // bound room defs) and 'bound route param conformance', unchanged by this
   // fix and re-verified by the full suite run.
+
+  // (Finding 9, #274 round-8 fix) The colocated exemption advisory had NO
+  // tier-liveness gate at all, unlike its socket twin
+  // (maybeReportColocatedSocketParams, which early-returns at
+  // liveTiers === 0): a colocated room on a genuinely guard-LESS route
+  // still fired, pure noise, since no guard exists yet that could misread
+  // the missing param. Align the two: gate the colocated exemption on the
+  // same liveTiers > 0 condition. The BOUND-with-empty-tiers advisory (see
+  // 'does not throw when ALL THREE tiers are empty...' above) is
+  // unaffected: a bound room already opted into the route contract.
+  it('does NOT fire the colocated exemption advisory on a genuinely guard-less route', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverRooms: { chat: { channel: { name: 'chat/:chatId' } } },
+      }),
+    ];
+    const seen: RoomParamExemptionInfo[] = [];
+    await expect(
+      assertRouteBindingsMatchMount(routes, {
+        routeUseByPattern: new Map([['/board/:id', []]]),
+        onRoomParamExemption: (info) => seen.push(info),
+      })
+    ).resolves.toBeUndefined();
+    expect(seen).toEqual([]);
+  });
+
+  it('still fires the colocated exemption advisory once a guard tier goes live (page-use)', async () => {
+    const routes = [
+      routeOf('/board/:id', {
+        __moduleKey: 'm',
+        serverRooms: { chat: { channel: { name: 'chat/:chatId' } } },
+      }),
+    ];
+    const seen: RoomParamExemptionInfo[] = [];
+    await expect(
+      assertRouteBindingsMatchMount(routes, {
+        routeUseByPattern: new Map([['/board/:id', [guard]]]),
+        onRoomParamExemption: (info) => seen.push(info),
+      })
+    ).resolves.toBeUndefined();
+    expect(seen).toHaveLength(1);
+  });
+
+  // (the app-use-only-live case is already pinned above, test 1: 'does not
+  // throw for a COLOCATED room on a param-bearing route with a live app-use
+  // tier, and fires the advisory')
 });
 
 describe('colocated socket param advisory (onColocatedSocketParams, round-6 fix P2-4)', () => {
@@ -1608,6 +1698,34 @@ describe('warnColocatedSocketParams', () => {
       warn.mockRestore();
     }
   });
+
+  // (Finding 5, #274 round-8 fix) The default advice ("bind with
+  // serverRoute(routeId).socket(...)") is WRONG when routeId itself carries
+  // a non-conforming ':param' segment: binding such a route hard-fails at
+  // boot (assertConformingBoundRouteId). The message must detect that and
+  // advise renaming the param FIRST, or reading the value off the query in
+  // the socket's own use/open instead.
+  it('gives rename-first advice instead of "bind" when the route param is non-conforming (hyphenated)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      warnColocatedSocketParams(warned, {
+        name: 'feed',
+        moduleKey: 'm',
+        routeId: '/board/:board-id',
+        params: ['board-id'],
+      });
+      const msg = String(warn.mock.calls[0][0]);
+      // Must NOT tell the author to bind it as-is: that hard-fails at boot.
+      expect(msg).not.toMatch(/Bind with serverRoute/);
+      expect(msg).toContain('cannot fix this');
+      expect(msg).toContain(":board-id'");
+      expect(msg).toContain('Rename the route param');
+      expect(msg).toContain("use'/'open");
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe('warnAliasedLayoutBinding', () => {
@@ -1747,6 +1865,88 @@ describe('warnRoomParamBinding', () => {
       const second = String(warn.mock.calls[1][0]);
       expect(first).toContain('src/server/chat');
       expect(second).toContain('src/routes/board/chat');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
+describe('warnRoomParamExemption', () => {
+  it('warns once per binding key, naming the room, route, channel, and params', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      const info: RoomParamExemptionInfo = {
+        name: 'cursors',
+        moduleKey: 'm',
+        routeId: '/board/:id',
+        channelName: 'board/:boardId',
+        params: ['id'],
+      };
+      warnRoomParamExemption(warned, info);
+      warnRoomParamExemption(warned, info);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const msg = String(warn.mock.calls[0][0]);
+      expect(msg).toContain("'cursors'");
+      expect(msg).toContain("'/board/:id'");
+      expect(msg).toContain('id');
+      expect(msg).toContain("'board/:boardId'");
+      expect(msg).toContain('serverRoute');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('warns again (module-qualified dedup key) for the same name/routeId under a DIFFERENT moduleKey', () => {
+    // The dedup key is module-qualified (`${moduleKey}::${name}@${routeId}`),
+    // same reasoning as warnRoomParamBinding/warnColocatedSocketParams, even
+    // though this message's OWN text does not print the moduleKey (a
+    // pre-existing gap, out of scope here): two distinct modules must still
+    // each get their own warning rather than one silently deduping the other.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      warnRoomParamExemption(warned, {
+        name: 'cursors',
+        moduleKey: 'src/server/board',
+        routeId: '/board/:id',
+        channelName: 'board/:boardId',
+        params: ['id'],
+      });
+      warnRoomParamExemption(warned, {
+        name: 'cursors',
+        moduleKey: 'src/routes/board',
+        routeId: '/board/:id',
+        channelName: 'board/:boardId',
+        params: ['id'],
+      });
+      expect(warn).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // (Finding 5, #274 round-8 fix) Same hazard as warnColocatedSocketParams:
+  // "bind the room explicitly with serverRoute(routeId).room(...)" is WRONG
+  // when routeId carries a non-conforming ':param' segment, since binding it
+  // hard-fails at boot. Advise renaming first instead.
+  it('gives rename-first advice instead of "bind" when the route param is non-conforming (hyphenated)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const warned = new Set<string>();
+      warnRoomParamExemption(warned, {
+        name: 'cursors',
+        moduleKey: 'm',
+        routeId: '/board/:board-id',
+        channelName: 'cursors',
+        params: ['board-id'],
+      });
+      const msg = String(warn.mock.calls[0][0]);
+      expect(msg).not.toMatch(/bind the room explicitly/);
+      expect(msg).toContain('cannot fix this');
+      expect(msg).toContain(":board-id'");
+      expect(msg).toContain('Rename the route param');
+      expect(msg).toContain("use'/'onJoin");
     } finally {
       warn.mockRestore();
     }

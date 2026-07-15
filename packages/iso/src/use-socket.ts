@@ -14,6 +14,7 @@ import type {
   SocketCloseInfo,
   ReconnectOptions,
 } from './internal/ws-lifecycle.js';
+import type { SocketRefBrand } from './define-socket.js';
 
 // Re-export the shared lifecycle types so the public surface is unchanged.
 export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
@@ -24,8 +25,17 @@ export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
  * full `SocketRef` (whose method references `UseSocketOptions<SocketRef<...>>`)
  * makes the constraint recurse through that method, which TS rejects as
  * excessively deep. Mirrors `RoomRefShape` in use-room.ts.
+ *
+ * `[SocketRefBrand]` is REQUIRED (no `?`), unlike every other field here.
+ * Without it, every field in this shape was optional, so a plain `{}`
+ * trivially satisfied `R extends AnySocketRefShape` and `useSocket({})`
+ * type-checked with no error -- a real `SocketRef` was never actually
+ * required. `SocketRef` (define-socket.ts) always carries this brand (via
+ * the sanctioned cast in `makeSocketRef`), so only a real socket ref
+ * satisfies this constraint now.
  */
 type SocketRefShape<Incoming, Outgoing, Params> = {
+  readonly [SocketRefBrand]: true;
   readonly [FORM_MODULE_FIELD]?: string;
   readonly [FORM_SOCKET_FIELD]?: string;
   readonly __incoming?: Incoming;

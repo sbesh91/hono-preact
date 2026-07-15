@@ -701,6 +701,59 @@ describe('loadersHandler: location validation', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it('a route-bound loader on /plugin/:constructor DENIES when a guard reads pathParams.constructor (prototype-chain bypass, pre-existing bug closed here)', async () => {
+    // Same bug class as the realtime socket/room paths (see
+    // sockets-handler.test.ts's identical /plugin/:constructor pin):
+    // `pathParams` on the loader RPC body is a plain client-JSON object
+    // (`JSON.parse` result), which inherits `Object.prototype`. The param-name
+    // grammar admits every Object.prototype member name (constructor,
+    // toString, valueOf, hasOwnProperty, ...), so a guard reading
+    // `ctx.location.pathParams.constructor` for a route bound to
+    // '/plugin/:constructor' would resolve the INHERITED (truthy) Object
+    // constructor function instead of `undefined` for the absent slot, so
+    // `if (!id) deny()` would wrongly PASS. Pre-existing on `main` (identical
+    // to the realtime bug), fixed here on the loader RPC dispatch path by
+    // running validated pathParams/searchParams through `toNullProtoParams`.
+    let observedId: unknown = 'not-yet-observed';
+    const requireId = defineServerMiddleware(async (mwCtx, next) => {
+      observedId = (mwCtx.location.pathParams as Record<string, unknown>)
+        .constructor;
+      if (!observedId) {
+        const { deny } = await import('@hono-preact/iso');
+        throw deny(403, 'missing id');
+      }
+      await next();
+    });
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(
+        {
+          './pages/plugin.server.ts': {
+            __moduleKey: 'pages/plugin',
+            serverLoaders: {
+              default: serverRoute('/plugin/:constructor').loader(async () => ({
+                ok: true,
+              })),
+            },
+          },
+        },
+        { resolvePageUse: async () => [requireId] }
+      )
+    );
+    const res = await app.request('http://localhost/__loaders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: 'pages/plugin',
+        loader: 'default',
+        location: { path: '/plugin/x', pathParams: {}, searchParams: {} },
+      }),
+    });
+    expect(observedId).toBeUndefined();
+    expect(res.status).toBe(403);
+  });
 });
 
 describe('loadersHandler bare-loader guarded-route dev warning', () => {
