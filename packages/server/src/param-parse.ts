@@ -90,26 +90,24 @@ export function parseKeyParams(
     ) {
       return { ok: false, reason: 'invalid-payload' };
     }
-    // Restrict to the pattern's DECLARED slots (required + optional/rest)
-    // FIRST, so an undeclared extra never influences the payload verdict.
+    // One pass over the wire entries: drop an undeclared key (a real HTTP
+    // request or channel key can never populate one), reject a non-string
+    // value under a DECLARED slot (a contract lie), and keep the rest.
+    // Restricting to declared slots BEFORE the non-string check means an
+    // undeclared extra never influences the verdict. `declared` excludes every
+    // reserved name (no route or channel can declare one), so no key assigned
+    // here can be `__proto__` or an `Object.prototype` member: an ordinary
+    // object is safe.
     const declared = new Set(declaredParamSlots(pattern));
-    const declaredEntries = Object.entries(parsed).filter(([key]) =>
-      declared.has(key)
-    );
-    // Now reject only a non-string value under a slot the pattern declares.
-    if (declaredEntries.some(([, v]) => typeof v !== 'string')) {
-      return { ok: false, reason: 'invalid-payload' };
+    const collected: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (!declared.has(key)) continue;
+      if (typeof value !== 'string') {
+        return { ok: false, reason: 'invalid-payload' };
+      }
+      collected[key] = value;
     }
-    // Every declared value is a string (checked above), so the predicate
-    // filter is a sound narrowing to `[string, string][]`, not a cast over an
-    // unvalidated shape. `declared` excludes every reserved name (no route or
-    // channel can declare one), so no key here can be `__proto__` or an
-    // `Object.prototype` member: an ordinary object is safe.
-    params = Object.fromEntries(
-      declaredEntries.filter(
-        (e): e is [string, string] => typeof e[1] === 'string'
-      )
-    );
+    params = collected;
   }
   const missing = requiredParamSlots(pattern).filter(
     (slot) => !isPresentParamSlot(params, slot)

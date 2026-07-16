@@ -46,6 +46,20 @@ export function matchParamSegment(segment: string): RegExpExecArray | null {
   return PARAM_SEGMENT.exec(segment);
 }
 
+// Every conforming `:param` segment of `pattern`, as its match array (m[1] is
+// the name, m[2] the optional `?`/`*`/`+` flag), in segment order. The one
+// place the `split('/') -> matchParamSegment -> keep non-null` scan is spelled;
+// the exported slot helpers below each apply their own flag predicate to it, so
+// a change to how a param segment is enumerated lands in exactly one place.
+function paramSegments(pattern: string): RegExpExecArray[] {
+  const out: RegExpExecArray[] = [];
+  for (const seg of pattern.split('/')) {
+    const m = matchParamSegment(seg);
+    if (m) out.push(m);
+  }
+  return out;
+}
+
 /**
  * True iff `segment` is a conforming `:param` segment (the same grammar
  * `PARAM_SEGMENT` matches): a `:name` where `name` is one or more of
@@ -120,12 +134,9 @@ export function isReservedParamName(name: string): boolean {
  * count as a reserved-named param.
  */
 export function reservedParamNamesIn(pattern: string): string[] {
-  const names: string[] = [];
-  for (const seg of pattern.split('/')) {
-    const m = matchParamSegment(seg);
-    if (m && isReservedParamName(m[1])) names.push(m[1]);
-  }
-  return names;
+  return paramSegments(pattern)
+    .filter((m) => isReservedParamName(m[1]))
+    .map((m) => m[1]);
 }
 
 /**
@@ -142,12 +153,8 @@ export function reservedParamNamesIn(pattern: string): string[] {
  * check all agree on what "required" means.
  */
 export function requiredParamSlots(pattern: string): string[] {
-  return pattern
-    .split('/')
-    .map((seg) => matchParamSegment(seg))
-    .filter(
-      (m): m is RegExpExecArray => m !== null && m[2] !== '?' && m[2] !== '*'
-    )
+  return paramSegments(pattern)
+    .filter((m) => m[2] !== '?' && m[2] !== '*')
     .map((m) => m[1]);
 }
 
@@ -166,11 +173,7 @@ export function requiredParamSlots(pattern: string): string[] {
  * not from Hono, and it only ever binds a pattern's own declared slots.
  */
 export function declaredParamSlots(pattern: string): string[] {
-  return pattern
-    .split('/')
-    .map((seg) => matchParamSegment(seg))
-    .filter((m): m is RegExpExecArray => m !== null)
-    .map((m) => m[1]);
+  return paramSegments(pattern).map((m) => m[1]);
 }
 
 /**
@@ -338,12 +341,7 @@ export function isHazardousColonSegment(segment: string): boolean {
  * multiple optional segments is an ordinary, legitimate href shape.
  */
 export function optionalOrRestParamSlots(pattern: string): string[] {
-  return pattern
-    .split('/')
-    .map((seg) => matchParamSegment(seg))
-    .filter(
-      (m): m is RegExpExecArray =>
-        m !== null && (m[2] === '?' || m[2] === '*' || m[2] === '+')
-    )
+  return paramSegments(pattern)
+    .filter((m) => m[2] === '?' || m[2] === '*' || m[2] === '+')
     .map((m) => m[1]);
 }

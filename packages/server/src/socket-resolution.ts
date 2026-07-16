@@ -327,6 +327,22 @@ export async function resolveConnection(
       def.channel,
       ctx.req.query(SOCKET_KEY_PARAM)
     );
+    // A failed room-key resolution (bad/absent wire, missing required slot) is
+    // a protocol-level reject independent of the guard: both consumers deny on
+    // `denied || !roomKey.ok`. Short-circuit here WITHOUT running the guard
+    // chain, so its side effects (rate-limit, audit-log) do not fire for a
+    // connection that is already doomed. Mirrors the route-bound socket branch,
+    // which short-circuits on a failed param parse before the guard runs.
+    if (!roomKey.ok) {
+      return {
+        kind: 'room',
+        roomDef: def,
+        roomKey,
+        moduleKey,
+        name,
+        denied: true,
+      };
+    }
     const denied = await resolveGuardDenied({
       def,
       ctx,
@@ -335,10 +351,7 @@ export async function resolveConnection(
       routePath,
       moduleKey: moduleKey ?? '',
       name: name ?? '',
-      // Only feed resolved params to the guard; a failed room-key resolution
-      // contributes no params. onOpen still denies on a failed room key, so the
-      // guard never sees a partially-resolved room.
-      pathParams: roomKey.ok ? roomKey.params : {},
+      pathParams: roomKey.params,
     });
     return { kind: 'room', roomDef: def, roomKey, moduleKey, name, denied };
   }

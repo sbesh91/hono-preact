@@ -94,7 +94,7 @@ One source of truth for "which `:param` slots a pattern requires", consumed by t
 - Test: `packages/iso/src/__tests__/param-slots.test.ts` (new)
 
 **Interfaces:**
-- Produces: `requiredParamSlots(pattern: string): string[]` — the required param names (a `:name` segment with no `?`/`*`/`+` suffix), without the leading colon. Exported from `@hono-preact/iso/internal/runtime`.
+- Produces: `requiredParamSlots(pattern: string): string[]`, the required param names (a `:name` segment with no `?`/`*`/`+` suffix), without the leading colon. Exported from `@hono-preact/iso/internal/runtime`.
 
 - [ ] **Step 1: Write the failing test**
 

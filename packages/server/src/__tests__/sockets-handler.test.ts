@@ -1598,16 +1598,19 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     expect(openSpy).not.toHaveBeenCalled();
   });
 
-  it('a failed room-key resolution hands the guard an empty pathParams object', async () => {
+  it('a failed room-key resolution does NOT run the guard chain (its side effects must not fire for a doomed connection)', async () => {
     // roomKey.ok is false (no r= wire, and the channel has a required :id
-    // slot), so resolveGuardDenied falls back to the EMPTY params object: the
-    // guard sees no params at all.
-    const { upgrader } = makeFakeUpgrader();
+    // slot). A failed room key is a protocol-level reject independent of the
+    // guard, so the guard chain must NOT be dispatched: onOpen denies on
+    // `!roomKey.ok` regardless, and running the guard first would fire its side
+    // effects (rate-limit, audit-log) for a connection that is already doomed.
+    // Mirrors the route-bound socket branch, which short-circuits identically.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
-    let observedParams: Record<string, string> | undefined;
-    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
-      observedParams = mwCtx.location.pathParams;
+    let guardRan = false;
+    const captureGuard = defineServerMiddleware(async (_mwCtx, next) => {
+      guardRan = true;
       await next();
     });
 
@@ -1634,9 +1637,13 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     await app2.request(
       `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/room')}&${SOCKET_NAME_PARAM}=feed`
     );
+    // The connection is still denied, but the guard never ran.
+    const ws = lastWs();
+    await lastEvents().onOpen?.(new Event('open'), ws as never);
 
-    expect(observedParams).toBeDefined();
-    expect(Object.keys(observedParams!)).toEqual([]);
+    expect(guardRan).toBe(false);
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
   });
 
   it('a denied bound socket (missing required param) resolves an empty params object', async () => {

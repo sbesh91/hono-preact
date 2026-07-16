@@ -488,6 +488,38 @@ function assertRoomChannelCongruent(
 }
 
 /**
+ * The room-congruence branch shared by the two boot validators
+ * ({@link assertRouteBindingsMatchMount} and
+ * {@link assertRegistryRouteBindingsValid}): for a room export, read its
+ * channel name and, if present, run the route/channel param congruence check.
+ * Single-sourced so the two validators can never diverge on this auth-critical
+ * branch; they differ only in the owning route and whether the room counts as
+ * route-BOUND, which they pass in.
+ */
+function assertRoomExportCongruent(
+  kind: string,
+  name: string,
+  value: unknown,
+  moduleKey: string,
+  owningRoute: string,
+  bound: boolean,
+  ctx: RouteBindingCheckContext
+): void {
+  if (kind !== 'room') return;
+  const channelName = channelNameOf(value);
+  if (channelName === null) return;
+  assertRoomChannelCongruent(
+    name,
+    moduleKey,
+    owningRoute,
+    channelName,
+    defUseOf(value),
+    bound,
+    ctx
+  );
+}
+
+/**
  * Dev-only console advisory for a param-bearing room binding, fired through
  * `RouteBindingCheckContext.onRoomParamBinding`. One per binding for the life
  * of the `warned` set the caller owns.
@@ -742,20 +774,15 @@ export async function assertRouteBindingsMatchMount(
           // A room's effective owning route is its declared __routeId, now
           // validated above to match the mount, or (a colocated room with
           // no __routeId) the mount itself.
-          if (kind === 'room') {
-            const channelName = channelNameOf(value);
-            if (channelName !== null) {
-              assertRoomChannelCongruent(
-                name,
-                moduleKey,
-                typeof routeId === 'string' ? routeId : route.path,
-                channelName,
-                defUseOf(value),
-                typeof routeId === 'string',
-                ctx
-              );
-            }
-          }
+          assertRoomExportCongruent(
+            kind,
+            name,
+            value,
+            moduleKey,
+            typeof routeId === 'string' ? routeId : route.path,
+            typeof routeId === 'string',
+            ctx
+          );
         }
       }
     })
@@ -812,22 +839,17 @@ export async function assertRegistryRouteBindingsValid(
             );
           }
           maybeReportAliasedBinding(kind, name, moduleKey, routeId, ctx);
-          if (kind === 'room') {
-            const channelName = channelNameOf(value);
-            if (channelName !== null) {
-              assertRoomChannelCongruent(
-                name,
-                moduleKey,
-                routeId,
-                channelName,
-                defUseOf(value),
-                // Every room reaching this point is route-bound: a bare
-                // (no __routeId) registry unit was already `continue`d above.
-                true,
-                ctx
-              );
-            }
-          }
+          // Every room reaching this point is route-bound: a bare (no
+          // __routeId) registry unit was already `continue`d above.
+          assertRoomExportCongruent(
+            kind,
+            name,
+            value,
+            moduleKey,
+            routeId,
+            true,
+            ctx
+          );
         }
       }
     })
