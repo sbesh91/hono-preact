@@ -162,6 +162,15 @@ describe('defineChannel reserved-param-name validation (prototype-chain fix)', (
     expect(() => defineChannel('x/:valueOf')).toThrow(/reserved/);
   });
 
+  it('throws for the legacy accessor member names a denylist forgets', () => {
+    expect(() => defineChannel('x/:__lookupGetter__')).toThrow(/reserved/);
+    expect(() => defineChannel('x/:__defineSetter__')).toThrow(/reserved/);
+  });
+
+  it('does NOT throw for :toJSON (not an Object.prototype member, no over-reach)', () => {
+    expect(() => defineChannel('x/:toJSON')).not.toThrow();
+  });
+
   it('throws for a reserved name carrying a modifier (:constructor?)', () => {
     expect(() => defineChannel('x/:constructor?')).toThrow(/reserved/);
   });

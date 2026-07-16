@@ -53,10 +53,9 @@ describe('buildPath', () => {
   });
 
   // (regression) a params value supplied via a PROTOTYPE getter (not an own
-  // property) must still substitute. `Object.hasOwn` -- the previous gate --
+  // property) must still substitute. `Object.hasOwn` -- an earlier gate --
   // only sees own properties, so it dropped a getter-provided value and
-  // buildPath silently truncated the path. See interpolate-pattern.ts's own
-  // doc for the fix (a typeof-'string' gate instead of hasOwn).
+  // buildPath silently truncated the path.
   it('substitutes a param value supplied via a prototype getter', () => {
     class WithGetterId {
       get id() {
@@ -64,5 +63,16 @@ describe('buildPath', () => {
       }
     }
     expect(buildPath('/user/:id', new WithGetterId())).toBe('/user/1');
+  });
+
+  // (regression) a NUMERIC param value must coerce and substitute, not drop.
+  // A `typeof value === 'string'` gate wrongly dropped numbers; the `!value ||
+  // typeof value === 'function'` gate keeps a number (coerced by
+  // encodeURIComponent), matching the pre-hardening behavior. A JS caller can
+  // pass a number even though the type is `string`.
+  it('coerces and substitutes a numeric param value', () => {
+    expect(
+      buildPath('/posts/:id', { id: 123 } as unknown as { id: string })
+    ).toBe('/posts/123');
   });
 });

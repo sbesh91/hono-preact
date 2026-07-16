@@ -27,31 +27,26 @@ export function interpolatePattern(
       if (!m) return seg; // static segment, kept verbatim
       // A plain property read, not an own-property check. `values` may be a
       // class instance whose param is supplied via a PROTOTYPE getter (e.g.
-      // `class M { get id() { return '1' } }`); `Object.hasOwn` only sees
-      // OWN properties, so it wrongly dropped a getter-supplied value (a
-      // real regression: `buildPath('/user/:id', new M())` returned
-      // '/user' instead of '/user/1'). Reading `values[m[1]]` directly and
-      // typeof-gating on `'string'` keeps that getter-provided value while
-      // still dropping an inherited `Object.prototype` MEMBER for an absent
-      // slot of that name: `matchParamSegment`'s grammar accepts any
-      // `[A-Za-z0-9_]+` name, which includes every `Object.prototype`
-      // member name (`constructor`, `toString`, `valueOf`,
-      // `hasOwnProperty`, ...), and a missing slot of one of those names
-      // reads the inherited member, which is a FUNCTION -- its `typeof` is
-      // `'function'`, not `'string'`, so it is dropped rather than spliced
-      // into the path/topic as `function toString() { [native code] }`.
+      // `class M { get id() { return '1' } }`); an own-property check
+      // (`Object.hasOwn`) wrongly dropped a getter-supplied value.
       const value = values[m[1]];
-      // Absent, non-string, or empty -> drop the segment (avoids emitting
-      // `//`). This does NOT enforce that a required param is present;
-      // callers that must reject a missing required value do so
-      // themselves: the strict `buildPath` overload enforces required keys
-      // at the type level, and `rooms-handler` re-checks required channel
-      // segments before trusting the topic. The loose-signature callers
-      // (build-path impl, define-channel) accept that an absent/empty
-      // required value silently truncates the path.
-      return typeof value === 'string' && value !== ''
-        ? encodeURIComponent(value)
-        : null;
+      // Falsy (absent / empty string) -> drop the segment (avoids emitting
+      // `//`). A FUNCTION value is also dropped, as pure insurance: after the
+      // reserved-name rejection at DEFINITION time (`isReservedParamName` in
+      // `defineRoutes` / `assertConformingChannelName`), `m[1]` can never be an
+      // `Object.prototype` member for a real declared route/channel, so
+      // `values[m[1]]` can never resolve an inherited function here; the drop
+      // merely guarantees a function is never spliced into a path/topic even
+      // for a directly-built pattern. Any other value (a string, or a number
+      // coerced by `encodeURIComponent`) is kept, matching the pre-hardening
+      // behavior; an earlier `typeof value === 'string'` gate wrongly dropped
+      // numeric and getter-provided values. This does NOT enforce that a
+      // required param is present; callers that must reject a missing required
+      // value do so themselves (the strict `buildPath` overload at the type
+      // level, `rooms-handler` re-checking required channel segments).
+      return !value || typeof value === 'function'
+        ? null
+        : encodeURIComponent(value);
     })
     .filter((seg): seg is string => seg !== null)
     .join('/');

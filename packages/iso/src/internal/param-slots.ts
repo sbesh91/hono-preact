@@ -63,33 +63,26 @@ export function isConformingParamSegment(segment: string): boolean {
 // resolves through `Object.prototype`, plus the two special property names
 // (`__proto__`, `prototype`) that are not ordinary Object.prototype OWN
 // members but still carry prototype-chain meaning on a plain object. A
-// params object built as (or descended from) a plain `{}` inherits every one
-// of these; a bracket/dot read of a MISSING key by one of these names
-// resolves the inherited member (a function, or for `__proto__` an
-// accessor) instead of `undefined`. A guard written as
-// `if (!pathParams.constructor) deny()` therefore wrongly reads the
-// inherited `Object` constructor (truthy) and passes even though no request
-// ever supplied a `constructor` param.
-const RESERVED_PARAM_NAMES = new Set([
-  '__proto__',
-  'prototype',
-  'constructor',
-  'hasOwnProperty',
-  'isPrototypeOf',
-  'propertyIsEnumerable',
-  'toLocaleString',
-  'toString',
-  'valueOf',
-  'toJSON',
-]);
-
 /**
- * True iff `name` is reserved: it would resolve through the prototype chain
- * of a plain object (every `Object.prototype` member) or otherwise carries
- * prototype-chain meaning (`__proto__`, `prototype`). This is a NAME check,
- * not a segment check (contrast `isConformingParamSegment`, which validates
- * a whole `:name` segment's grammar): callers pass the bare name already
+ * True iff `name` is reserved: reading it off a MISSING key of a plain object
+ * would resolve an inherited `Object.prototype` member (a function, or for
+ * `__proto__` an accessor) instead of `undefined`. A guard written as
+ * `if (!pathParams.constructor) deny()` therefore wrongly reads the inherited
+ * `Object` constructor (truthy) and passes even though no request ever
+ * supplied a `constructor` param. This is a NAME check, not a segment check
+ * (contrast `isConformingParamSegment`): callers pass the bare name already
  * extracted from a `:param` segment or a channel/room key.
+ *
+ * The predicate is `Object.hasOwn(Object.prototype, name)`, deliberately NOT a
+ * hardcoded denylist. It is exactly the set of names a plain-object read
+ * resolves through the prototype chain, so it is BOTH complete (it includes
+ * the legacy accessor members `__defineGetter__` / `__defineSetter__` /
+ * `__lookupGetter__` / `__lookupSetter__` and every other `Object.prototype`
+ * member, present or added by a future engine, that a hardcoded list would
+ * forget) AND minimal (it does NOT reject a safe name like `toJSON` or
+ * `prototype`, which are not `Object.prototype` members, so `({}).toJSON` and
+ * `({}).prototype` already read `undefined`). `__proto__` is an own accessor
+ * of `Object.prototype`, so it is covered too.
  *
  * This is the convergent fix for the prototype-chain param-read hazard: a
  * route or channel is rejected at DEFINITION time (`defineRoutes`'s
@@ -106,7 +99,7 @@ const RESERVED_PARAM_NAMES = new Set([
  * construction sites and kept missing one on review.
  */
 export function isReservedParamName(name: string): boolean {
-  return RESERVED_PARAM_NAMES.has(name);
+  return Object.hasOwn(Object.prototype, name);
 }
 
 /**

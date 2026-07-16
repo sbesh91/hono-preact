@@ -77,23 +77,31 @@ describe('declaredParamSlots', () => {
 });
 
 describe('isReservedParamName', () => {
-  it('is true for every Object.prototype own member name PARAM_SEGMENT would otherwise admit', () => {
+  it('is true for EVERY Object.prototype own member (the exact set a plain-object read resolves)', () => {
+    // The predicate is `Object.hasOwn(Object.prototype, name)`, so it must
+    // match Object.getOwnPropertyNames(Object.prototype) exactly, no hand
+    // maintenance. Pin the standard members plus the four LEGACY ACCESSORS a
+    // hardcoded denylist forgot (a real bypass: a `:__lookupGetter__` param
+    // reads the inherited accessor for a missing key).
+    for (const name of Object.getOwnPropertyNames(Object.prototype)) {
+      expect(isReservedParamName(name)).toBe(true);
+    }
+    expect(isReservedParamName('__defineGetter__')).toBe(true);
+    expect(isReservedParamName('__defineSetter__')).toBe(true);
+    expect(isReservedParamName('__lookupGetter__')).toBe(true);
+    expect(isReservedParamName('__lookupSetter__')).toBe(true);
     expect(isReservedParamName('constructor')).toBe(true);
     expect(isReservedParamName('toString')).toBe(true);
-    expect(isReservedParamName('valueOf')).toBe(true);
-    expect(isReservedParamName('hasOwnProperty')).toBe(true);
-    expect(isReservedParamName('isPrototypeOf')).toBe(true);
-    expect(isReservedParamName('propertyIsEnumerable')).toBe(true);
-    expect(isReservedParamName('toLocaleString')).toBe(true);
-    expect(isReservedParamName('toJSON')).toBe(true);
-  });
-
-  it('is true for the two prototype-chain-meaningful names that are not ordinary own members', () => {
     expect(isReservedParamName('__proto__')).toBe(true);
-    expect(isReservedParamName('prototype')).toBe(true);
   });
 
-  it('is false for ordinary param names', () => {
+  it('is FALSE for names that are NOT Object.prototype members (no over-reach)', () => {
+    // `({}).toJSON` and `({}).prototype` already read `undefined` (neither is an
+    // Object.prototype member), so a guard reading a missing `:toJSON` /
+    // `:prototype` param is already safe. Rejecting them would be a needless
+    // boot break, so the predicate must allow them.
+    expect(isReservedParamName('toJSON')).toBe(false);
+    expect(isReservedParamName('prototype')).toBe(false);
     expect(isReservedParamName('id')).toBe(false);
     expect(isReservedParamName('projectId')).toBe(false);
     expect(isReservedParamName('userId')).toBe(false);
