@@ -725,6 +725,16 @@ export async function assertRouteBindingsMatchMount(
         const exports = readExports(mod[container]);
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
+          // A null/primitive export value cannot be a route-bound unit and
+          // would throw an opaque TypeError on the `.__routeId` read below;
+          // skip it. A ref may be an object OR a callable (a loader/action ref
+          // can be a function carrying `__routeId`), so both are kept.
+          if (
+            value === null ||
+            (typeof value !== 'object' && typeof value !== 'function')
+          ) {
+            continue;
+          }
           const routeId = (value as RouteBoundExport).__routeId;
           // Validate the mount binding FIRST, before any room congruence
           // check: a unit misbound to the wrong route should report that
@@ -824,6 +834,15 @@ export async function assertRegistryRouteBindingsValid(
         const exports = readExports(mod[container]);
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
+          // Skip a null/primitive export (cannot be a route-bound unit); see
+          // the mount walker for the rationale. Objects and callables (a ref
+          // may be a function carrying `__routeId`) are kept.
+          if (
+            value === null ||
+            (typeof value !== 'object' && typeof value !== 'function')
+          ) {
+            continue;
+          }
           const routeId = (value as RouteBoundExport).__routeId;
           if (typeof routeId !== 'string') continue;
           assertConformingBoundRouteId(kind, name, routeId);

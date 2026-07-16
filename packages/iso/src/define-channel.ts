@@ -2,8 +2,7 @@ import type { RouteParams } from './internal/typed-routes.js';
 import { interpolatePattern } from './internal/interpolate-pattern.js';
 import {
   isHazardousColonSegment,
-  isReservedParamName,
-  matchParamSegment,
+  reservedParamNamesIn,
   optionalOrRestParamSlots,
 } from './internal/param-slots.js';
 
@@ -134,20 +133,20 @@ export function assertConformingChannelName(
   }
   // Reject a conforming ':param' segment whose name is RESERVED (resolves
   // through Object.prototype, or otherwise carries prototype-chain meaning):
-  // see this function's own doc and `isReservedParamName` (param-slots.ts).
-  // A non-conforming spelling of the same name (e.g. ':constructor-id') is
-  // not caught here -- it is a different, ordinary name -- and a
-  // non-`:`-prefixed hazard was already rejected by the loop above.
-  for (const segment of name.split('/')) {
-    const m = matchParamSegment(segment);
-    if (!m || !isReservedParamName(m[1])) continue;
+  // see this function's own doc and `reservedParamNamesIn` (param-slots.ts,
+  // the same scan `defineRoutes`/`serverRoute` run). A non-conforming spelling
+  // of the same name (e.g. ':constructor-id') is not caught here (it is a
+  // different, ordinary name), and a non-`:`-prefixed hazard was already
+  // rejected by the loop above.
+  const reserved = reservedParamNamesIn(name);
+  if (reserved.length > 0) {
     throw new Error(
-      `${constructorLabel}('${name}'): the param ':${m[1]}' is reserved -- ` +
+      `${constructorLabel}('${name}'): the param ':${reserved[0]}' is reserved -- ` +
         `it resolves through Object.prototype (or otherwise carries ` +
         `prototype-chain meaning) on a plain params object, so a guard ` +
         `reading an ABSENT param of this name would read the inherited ` +
         `member instead of undefined and wrongly treat it as present. ` +
-        `Rename the param to something that is not '${m[1]}'.`
+        `Rename the param to something that is not '${reserved[0]}'.`
     );
   }
   const ambiguousSlots = optionalOrRestParamSlots(name);

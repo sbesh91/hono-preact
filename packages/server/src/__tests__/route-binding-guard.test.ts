@@ -86,6 +86,24 @@ describe('assertRouteBindingsMatchMount', () => {
     );
   });
 
+  it('skips a null/primitive export value rather than throwing an opaque TypeError', async () => {
+    // A malformed export (e.g. `export const serverSockets = { x: null }`, or a
+    // stray primitive) is not a route-bound unit and must not crash the boot
+    // walker on the `.__routeId` read. It is skipped, matching how the registry
+    // builder skips non-object socket values.
+    const routes = [
+      routeOf('/x', {
+        __moduleKey: 'm',
+        serverSockets: { broken: null },
+        serverRooms: { alsoBroken: 42 },
+        serverLoaders: { default: 'not-a-ref' },
+      }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(routes, ctxOf([['/x', []]]))
+    ).resolves.toBeUndefined();
+  });
+
   it('ignores modules with no server units', async () => {
     const routes = [routeOf('/x', { __moduleKey: 'm' })];
     await expect(
