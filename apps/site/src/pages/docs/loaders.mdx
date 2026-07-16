@@ -440,7 +440,7 @@ A route-bound loader (`serverRoute(r).loader(fn)`) receives:
 
 A route-independent loader (`defineLoader(fn)`) receives the same fields except `location`.
 
-`location.pathParams` and `location.searchParams` are ordinary objects: read them however you like, by destructuring, `pathParams.id`, `'id' in pathParams`, `Object.keys(pathParams)`, `Object.hasOwn(pathParams, 'id')`, or `pathParams.hasOwnProperty(...)`. A guard like `if (!pathParams.id) return deny()` is safe from the prototype-chain read hazard (an absent key named after an `Object.prototype` member like `constructor` resolving the inherited member instead of `undefined`) because a route cannot **declare** a param named after one of those: `serverRoute('/plugin/:constructor')` throws at definition. With the name rejected at the source, no param a route provides ever collides with an inherited member. The same contract applies to a socket's `data` factory params and a room's `onJoin` params; see [WebSockets](/docs/websockets) and [Rooms](/docs/rooms).
+`location.pathParams` and `location.searchParams` are plain objects, so read them any way you like: `pathParams.id`, `'id' in pathParams`, `Object.keys(pathParams)`, and the rest all work. You never have to worry about a param name clashing with a built-in like `constructor` or `toString`, because a route can't declare one in the first place: `serverRoute('/plugin/:constructor')` throws at definition. The same holds for a socket's `data` params and a room's `onJoin` params; see [WebSockets](/docs/websockets) and [Rooms](/docs/rooms).
 
 Pass the signal to upstream `fetch` calls and subscriptions so they clean up promptly:
 
