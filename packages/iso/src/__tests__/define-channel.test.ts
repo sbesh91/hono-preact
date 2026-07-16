@@ -139,6 +139,39 @@ describe('defineChannel param-name validation', () => {
   });
 });
 
+describe('defineChannel reserved-param-name validation (prototype-chain fix)', () => {
+  // (security, P0) a channel must never DECLARE a param named after an
+  // Object.prototype member: a guard reading `onJoin`'s resolved params
+  // for an ABSENT param of that name would otherwise read the inherited
+  // member (truthy) instead of undefined and wrongly treat it as present.
+  // See isReservedParamName (param-slots.ts).
+
+  it('throws for a channel param named after an Object.prototype member', () => {
+    expect(() => defineChannel('x/:toString')).toThrow(/x\/:toString/);
+    expect(() => defineChannel('x/:toString')).toThrow(/reserved/);
+  });
+
+  it('throws for :constructor specifically', () => {
+    expect(() => defineChannel('x/:constructor')).toThrow(/:constructor/);
+    expect(() => defineChannel('x/:constructor')).toThrow(/reserved/);
+  });
+
+  it('throws for other reserved names (__proto__, hasOwnProperty, valueOf)', () => {
+    expect(() => defineChannel('x/:__proto__')).toThrow(/reserved/);
+    expect(() => defineChannel('x/:hasOwnProperty')).toThrow(/reserved/);
+    expect(() => defineChannel('x/:valueOf')).toThrow(/reserved/);
+  });
+
+  it('throws for a reserved name carrying a modifier (:constructor?)', () => {
+    expect(() => defineChannel('x/:constructor?')).toThrow(/reserved/);
+  });
+
+  it('does not throw for an ordinary channel param name', () => {
+    expect(() => defineChannel('x/:id')).not.toThrow();
+    expect(() => defineChannel('board/:projectId')).not.toThrow();
+  });
+});
+
 describe('defineChannel multi-optional-slot validation (F2)', () => {
   it('throws for a channel with two optional slots (topic-collapse hazard)', () => {
     // room/:a?/:b? -- key {a:'x'} and key {b:'x'} both drop the OTHER

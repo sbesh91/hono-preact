@@ -13,6 +13,10 @@ import { RouteManifestContext } from './internal/route-manifest.js';
 import { makeRouterLoadTracker } from './internal/route-change.js';
 import { PageMiddlewareHost } from './internal/page-middleware-host.js';
 import type { PageUse } from './internal/use-types.js';
+import {
+  isReservedParamName,
+  matchParamSegment,
+} from './internal/param-slots.js';
 
 function wrapWithRouteLocations(
   serverMod: unknown,
@@ -208,6 +212,20 @@ const ROUTE_RULES: ReadonlyArray<{
   },
 ];
 
+// Every reserved (`isReservedParamName`) name declared by a conforming
+// `:param` segment of `path`, in segment order. `path` is a single node's
+// OWN path (may itself carry more than one segment, e.g. 'user/:id'), not
+// the full joined route -- the caller reports each offender against the
+// node's full joined path (`here`) instead.
+function reservedParamNamesIn(path: string): string[] {
+  const names: string[] = [];
+  for (const seg of path.split('/')) {
+    const m = matchParamSegment(seg);
+    if (m && isReservedParamName(m[1])) names.push(m[1]);
+  }
+  return names;
+}
+
 function collectRouteViolations(
   routes: ReadonlyArray<RouteDef>,
   parentPath: string,
@@ -229,6 +247,23 @@ function collectRouteViolations(
         errors.push(rule.message(here));
         break;
       }
+    }
+    // Reserved-param-name check (the convergent prototype-chain fix, see
+    // isReservedParamName's own doc): orthogonal to the shape rules above
+    // (a node can violate both a shape rule and this one), so it is not
+    // folded into ROUTE_RULES's break-after-first-match table. A route can
+    // never DECLARE a param named after an Object.prototype member; a guard
+    // reading `ctx.location.pathParams` for a request that OMITS such a
+    // param would otherwise misread the inherited member as present.
+    for (const name of reservedParamNamesIn(r.path)) {
+      errors.push(
+        `Route ${here}: the param ':${name}' is reserved -- it resolves ` +
+          `through Object.prototype (or otherwise carries prototype-chain ` +
+          `meaning) on a plain params object, so a guard reading an ABSENT ` +
+          `param of this name would read the inherited member instead of ` +
+          `undefined and wrongly treat it as present. Rename the param to ` +
+          `something that is not '${name}'.`
+      );
     }
     if (ctx.hasChildren) {
       collectRouteViolations(r.children!, here === '/' ? '' : here, errors);

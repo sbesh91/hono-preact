@@ -97,4 +97,15 @@ describe('defineRoom (runtime def)', () => {
     };
     expect(() => defineRoom(badChannel, {})).toThrow(/unambiguous topic/);
   });
+
+  it('throws for a hand-rolled channel with a param named after an Object.prototype member', () => {
+    // Same re-validation as the F2 check above, for the prototype-chain fix:
+    // a hand-rolled Channel that bypassed defineChannel must not slip a
+    // reserved param name past defineRoom either.
+    const badChannel: Channel<'x/:constructor', unknown> = {
+      name: 'x/:constructor',
+      key: () => 'x' as never,
+    };
+    expect(() => defineRoom(badChannel, {})).toThrow(/reserved/);
+  });
 });

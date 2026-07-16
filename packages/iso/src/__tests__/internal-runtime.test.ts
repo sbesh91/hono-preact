@@ -100,6 +100,14 @@ describe('iso /internal/runtime door', () => {
       // check, so it and defineChannel's own definition-time check can
       // never disagree on which ':'-segment spellings are a real hazard.
       'isHazardousColonSegment',
+      // The reserved-param-name predicate: true for any name that would
+      // resolve through Object.prototype (or __proto__/prototype). Shared
+      // by defineRoutes's route-tree validator and
+      // defineChannel/defineRoom's definition-time checks so a route or
+      // channel can never DECLARE a param named after a prototype member,
+      // closing the prototype-chain param-read hazard on every guard tier
+      // structurally.
+      'isReservedParamName',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());

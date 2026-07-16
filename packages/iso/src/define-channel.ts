@@ -2,6 +2,8 @@ import type { RouteParams } from './internal/typed-routes.js';
 import { interpolatePattern } from './internal/interpolate-pattern.js';
 import {
   isHazardousColonSegment,
+  isReservedParamName,
+  matchParamSegment,
   optionalOrRestParamSlots,
 } from './internal/param-slots.js';
 
@@ -48,6 +50,16 @@ export interface Channel<Name extends string, Payload> {
  * fails the same `[A-Za-z0-9_]+` class), so the type layer and
  * `interpolatePattern` already agree the segment is a literal. This is an
  * ordinary, working colon-namespaced constant name, not a hazard.
+ *
+ * Also rejects a `:param` segment whose name `isReservedParamName`
+ * (param-slots.ts): a name that resolves through `Object.prototype`
+ * (`constructor`, `toString`, ...) or otherwise carries prototype-chain
+ * meaning (`__proto__`, `prototype`). This is the convergent fix for the
+ * prototype-chain param-read hazard: a channel can never DECLARE a param of
+ * one of these names, so no guard reading `onJoin`'s resolved params can
+ * ever misread a missing param of that name as the inherited (truthy)
+ * member instead of `undefined`, regardless of whether the params object at
+ * a given tier happens to be null-prototyped.
  *
  * Also rejects a name carrying MORE THAN ONE optional/rest slot
  * (`optionalOrRestParamSlots`, param-slots.ts): with two or more, two
@@ -118,6 +130,24 @@ export function assertConformingChannelName(
         `${claimedParam}' instead of '${segment}') so the value actually ` +
         `substitutes, or remove the colon from the constant name so it reads ` +
         `as an ordinary literal.`
+    );
+  }
+  // Reject a conforming ':param' segment whose name is RESERVED (resolves
+  // through Object.prototype, or otherwise carries prototype-chain meaning):
+  // see this function's own doc and `isReservedParamName` (param-slots.ts).
+  // A non-conforming spelling of the same name (e.g. ':constructor-id') is
+  // not caught here -- it is a different, ordinary name -- and a
+  // non-`:`-prefixed hazard was already rejected by the loop above.
+  for (const segment of name.split('/')) {
+    const m = matchParamSegment(segment);
+    if (!m || !isReservedParamName(m[1])) continue;
+    throw new Error(
+      `${constructorLabel}('${name}'): the param ':${m[1]}' is reserved -- ` +
+        `it resolves through Object.prototype (or otherwise carries ` +
+        `prototype-chain meaning) on a plain params object, so a guard ` +
+        `reading an ABSENT param of this name would read the inherited ` +
+        `member instead of undefined and wrongly treat it as present. ` +
+        `Rename the param to something that is not '${m[1]}'.`
     );
   }
   const ambiguousSlots = optionalOrRestParamSlots(name);

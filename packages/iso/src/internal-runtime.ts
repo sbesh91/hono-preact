@@ -67,6 +67,12 @@ export { subtreePatternOf } from './define-routes.js';
 // isHazardousColonSegment is shared with the same boot binding guard's
 // route-id conformance check, so it and defineChannel's own definition-time
 // check can never disagree on which ':'-segment spellings are a real hazard.
+// isReservedParamName is the convergent prototype-chain fix: shared by
+// defineRoutes's route-tree validator and defineChannel/defineRoom's own
+// definition-time checks, so a route or channel can never DECLARE a param
+// named after an Object.prototype member, closing the prototype-chain
+// param-read hazard on every guard tier structurally rather than per
+// construction site.
 // guardReadableParamSlots is shared with the same boot binding guard's
 // colocated-unit advisory and its room/channel congruence check: it answers
 // "what param could a guard actually read" per preact-iso's own (wider)
@@ -89,6 +95,7 @@ export {
   isPresentParamSlot,
   isHazardousColonSegment,
   emptyParams,
+  isReservedParamName,
 } from './internal/param-slots.js';
 export * from './internal/contract.js';
 export {

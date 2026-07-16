@@ -51,4 +51,18 @@ describe('buildPath', () => {
   it('substitutes a valid sibling param while keeping a hyphenated literal', () => {
     expect(buildPath('/x/:foo-bar/y/:id', { id: '7' })).toBe('/x/:foo-bar/y/7');
   });
+
+  // (regression) a params value supplied via a PROTOTYPE getter (not an own
+  // property) must still substitute. `Object.hasOwn` -- the previous gate --
+  // only sees own properties, so it dropped a getter-provided value and
+  // buildPath silently truncated the path. See interpolate-pattern.ts's own
+  // doc for the fix (a typeof-'string' gate instead of hasOwn).
+  it('substitutes a param value supplied via a prototype getter', () => {
+    class WithGetterId {
+      get id() {
+        return '1';
+      }
+    }
+    expect(buildPath('/user/:id', new WithGetterId())).toBe('/user/1');
+  });
 });

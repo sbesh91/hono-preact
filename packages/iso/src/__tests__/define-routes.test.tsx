@@ -251,6 +251,51 @@ describe('defineRoutes validation', () => {
       defineRoutes([{ path: '/', view: noopView, layout: noopLayout }])
     ).toThrow(/^Route \/: cannot declare both `view` and `layout`\.$/);
   });
+
+  // (security, P0) the convergent prototype-chain fix: a route can never
+  // DECLARE a `:param` named after an Object.prototype member. See
+  // isReservedParamName (param-slots.ts) for why: a guard reading
+  // ctx.location.pathParams for a request that OMITS such a param would
+  // otherwise read the inherited member instead of undefined.
+
+  it('throws at boot for a :constructor route param', () => {
+    expect(() =>
+      defineRoutes([{ path: '/x/:constructor', view: noopView }])
+    ).toThrow(/:constructor/);
+    expect(() =>
+      defineRoutes([{ path: '/x/:constructor', view: noopView }])
+    ).toThrow(/reserved/);
+  });
+
+  it('throws at boot for a reserved param name nested under a layout', () => {
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/plugin',
+          layout: noopLayout,
+          children: [{ path: ':toString', view: noopView }],
+        },
+      ])
+    ).toThrow(/:toString/);
+  });
+
+  it('names the full joined route path for the offending nested param', () => {
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/plugin',
+          layout: noopLayout,
+          children: [{ path: ':toString', view: noopView }],
+        },
+      ])
+    ).toThrow(/Route \/plugin\/:toString:/);
+  });
+
+  it('does not throw for an ordinary route param', () => {
+    expect(() =>
+      defineRoutes([{ path: '/x/:id', view: noopView }])
+    ).not.toThrow();
+  });
 });
 
 describe('serverImports collection', () => {

@@ -59,6 +59,56 @@ export function isConformingParamSegment(segment: string): boolean {
   return matchParamSegment(segment) !== null;
 }
 
+// Every name `PARAM_SEGMENT`'s `[A-Za-z0-9_]+` class admits that also
+// resolves through `Object.prototype`, plus the two special property names
+// (`__proto__`, `prototype`) that are not ordinary Object.prototype OWN
+// members but still carry prototype-chain meaning on a plain object. A
+// params object built as (or descended from) a plain `{}` inherits every one
+// of these; a bracket/dot read of a MISSING key by one of these names
+// resolves the inherited member (a function, or for `__proto__` an
+// accessor) instead of `undefined`. A guard written as
+// `if (!pathParams.constructor) deny()` therefore wrongly reads the
+// inherited `Object` constructor (truthy) and passes even though no request
+// ever supplied a `constructor` param.
+const RESERVED_PARAM_NAMES = new Set([
+  '__proto__',
+  'prototype',
+  'constructor',
+  'hasOwnProperty',
+  'isPrototypeOf',
+  'propertyIsEnumerable',
+  'toLocaleString',
+  'toString',
+  'valueOf',
+  'toJSON',
+]);
+
+/**
+ * True iff `name` is reserved: it would resolve through the prototype chain
+ * of a plain object (every `Object.prototype` member) or otherwise carries
+ * prototype-chain meaning (`__proto__`, `prototype`). This is a NAME check,
+ * not a segment check (contrast `isConformingParamSegment`, which validates
+ * a whole `:name` segment's grammar): callers pass the bare name already
+ * extracted from a `:param` segment or a channel/room key.
+ *
+ * This is the convergent fix for the prototype-chain param-read hazard: a
+ * route or channel is rejected at DEFINITION time (`defineRoutes`'s
+ * `validate`, `assertConformingChannelName`) if it declares a `:param` named
+ * after one of these, so no guard on ANY tier -- SSR app-use, page/layout
+ * `use`, action re-render, loader RPC, realtime socket/room, server-caller,
+ * prefetch, or any future tier -- can ever read a prototype-member param: a
+ * legitimately DECLARED param of that name can never exist, independent of
+ * whether the params object at that particular tier happens to be
+ * null-prototyped. This replaces the earlier per-construction-site
+ * null-prototyping approach (still kept for `searchParams`, which is
+ * undeclared query input and so cannot be name-rejected; see
+ * `toNullProtoParams`), which needed a null-proto object at every one of 8+
+ * construction sites and kept missing one on review.
+ */
+export function isReservedParamName(name: string): boolean {
+  return RESERVED_PARAM_NAMES.has(name);
+}
+
 /**
  * The required `:param` slot names in a route or channel pattern: a `:name`
  * segment with no modifier or with the `+` (rest-one-or-more) modifier,

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   requiredParamSlots,
   declaredParamSlots,
+  isReservedParamName,
 } from '../internal/param-slots.js';
 
 describe('requiredParamSlots', () => {
@@ -72,5 +73,31 @@ describe('declaredParamSlots', () => {
     // (a hyphen is outside [A-Za-z0-9_]+) is not a declared slot either, so
     // it is never restricted-into a resolved params object.
     expect(declaredParamSlots('/a/:b-c')).toEqual([]);
+  });
+});
+
+describe('isReservedParamName', () => {
+  it('is true for every Object.prototype own member name PARAM_SEGMENT would otherwise admit', () => {
+    expect(isReservedParamName('constructor')).toBe(true);
+    expect(isReservedParamName('toString')).toBe(true);
+    expect(isReservedParamName('valueOf')).toBe(true);
+    expect(isReservedParamName('hasOwnProperty')).toBe(true);
+    expect(isReservedParamName('isPrototypeOf')).toBe(true);
+    expect(isReservedParamName('propertyIsEnumerable')).toBe(true);
+    expect(isReservedParamName('toLocaleString')).toBe(true);
+    expect(isReservedParamName('toJSON')).toBe(true);
+  });
+
+  it('is true for the two prototype-chain-meaningful names that are not ordinary own members', () => {
+    expect(isReservedParamName('__proto__')).toBe(true);
+    expect(isReservedParamName('prototype')).toBe(true);
+  });
+
+  it('is false for ordinary param names', () => {
+    expect(isReservedParamName('id')).toBe(false);
+    expect(isReservedParamName('projectId')).toBe(false);
+    expect(isReservedParamName('userId')).toBe(false);
+    expect(isReservedParamName('rest')).toBe(false);
+    expect(isReservedParamName('data')).toBe(false);
   });
 });
