@@ -12,7 +12,11 @@ import {
   ActionResultContext,
   type ActionResultContextValue,
 } from '@hono-preact/iso';
-import { env } from '@hono-preact/iso/internal/runtime';
+import {
+  env,
+  toNullProtoParams,
+  emptyParams,
+} from '@hono-preact/iso/internal/runtime';
 import {
   HonoRequestContext,
   runRequestScope,
@@ -120,11 +124,18 @@ export async function renderPage(
         const reqUrl = new URL(c.req.url);
         const location = {
           path: reqUrl.pathname,
-          searchParams: Object.fromEntries(reqUrl.searchParams),
+          // Null-prototype so an app-use guard reading a missing query param
+          // gets `undefined` for ANY key name, not an inherited Object member.
+          // searchParams is attacker-controlled (the URL query), so a guard
+          // like `if (!searchParams.constructor) deny()` would otherwise read
+          // the truthy Object constructor and pass. Same contract the loader
+          // RPC and realtime upgrade paths hold; this is the SSR guard tier.
+          searchParams: toNullProtoParams(reqUrl.searchParams),
           // Path params are route-match output; the root layer runs before
           // route matching, so they're empty here. Page-layer middleware
-          // (added in a follow-up) will have them populated.
-          pathParams: {},
+          // (added in a follow-up) will have them populated. Null-prototype
+          // for the same reason as searchParams.
+          pathParams: emptyParams(),
         };
 
         const rootUse = options?.appConfig?.use ?? [];

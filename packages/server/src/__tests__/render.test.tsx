@@ -161,6 +161,41 @@ describe('renderPage', () => {
     expect(body).toContain('render outcome');
   });
 
+  // Security: the app-use guard tier reads ctx.location.searchParams (the
+  // attacker-controlled URL query) and pathParams. These must be null-prototype
+  // so a guard reading a param NAMED after an Object.prototype member (e.g.
+  // `constructor`) that the request omits sees `undefined`, not the truthy
+  // inherited function. Otherwise `if (!searchParams.constructor) deny()` is
+  // silently bypassable on every page render.
+  it('hands the app-use guard null-prototype searchParams/pathParams (no prototype-chain read)', async () => {
+    const seen: Record<string, unknown> = {};
+    const appConfig = defineApp({
+      use: [
+        defineServerMiddleware<'page'>(async (ctx) => {
+          seen.searchConstructor = ctx.location.searchParams.constructor;
+          seen.searchToString = ctx.location.searchParams.toString;
+          seen.pathConstructor = ctx.location.pathParams.constructor;
+          seen.searchProto = Object.getPrototypeOf(ctx.location.searchParams);
+          seen.pathProto = Object.getPrototypeOf(ctx.location.pathParams);
+          // A real query param still reads through.
+          seen.realQuery = ctx.location.searchParams.token;
+        }),
+      ],
+    });
+
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <UntitledPage />, { appConfig }));
+    // URL OMITS `constructor`/`toString` but sends a real `token`.
+    await app.request('http://localhost/?token=abc');
+
+    expect(seen.searchConstructor).toBeUndefined();
+    expect(seen.searchToString).toBeUndefined();
+    expect(seen.pathConstructor).toBeUndefined();
+    expect(seen.searchProto).toBeNull();
+    expect(seen.pathProto).toBeNull();
+    expect(seen.realQuery).toBe('abc');
+  });
+
   it('escapes special characters in <title> content', async () => {
     const res = await makeApp(XssTitle).request('http://localhost/');
     const html = await res.text();
