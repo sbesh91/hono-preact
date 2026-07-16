@@ -34,6 +34,32 @@ function readExports(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+// A route-bound unit ref is an object OR a callable (a loader/action ref can be
+// a function carrying `__routeId`). A null or primitive value under a
+// serverLoaders/serverActions/serverSockets/serverRooms export is a malformed
+// module (a typo or a codegen glitch), never a unit. Fail the boot with a clear
+// message rather than crash opaquely on the `.__routeId` read below, or silently
+// drop the unit (which would resurface only as an "unknown socket" close at
+// connect time, with no hint at the real cause). Shared by both boot walkers so
+// they cannot diverge on what counts as a unit candidate.
+function assertUnitExportShape(
+  kind: string,
+  name: string,
+  value: unknown
+): void {
+  if (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function')
+  ) {
+    return;
+  }
+  throw new Error(
+    `Malformed '${kind}' export '${name}': a ${kind} must be a def (an object, ` +
+      `or a ref from serverRoute(...) or define*()), but this export is ` +
+      `${value === null ? 'null' : typeof value}. Fix or remove it.`
+  );
+}
+
 // The module's `__moduleKey` (the build-injected, path-derived key every
 // `.server.*` file carries; see moduleKeyPlugin), read structurally, or `''`
 // when absent (a hand-built test fixture, or a module the plugin never
@@ -725,16 +751,7 @@ export async function assertRouteBindingsMatchMount(
         const exports = readExports(mod[container]);
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
-          // A null/primitive export value cannot be a route-bound unit and
-          // would throw an opaque TypeError on the `.__routeId` read below;
-          // skip it. A ref may be an object OR a callable (a loader/action ref
-          // can be a function carrying `__routeId`), so both are kept.
-          if (
-            value === null ||
-            (typeof value !== 'object' && typeof value !== 'function')
-          ) {
-            continue;
-          }
+          assertUnitExportShape(kind, name, value);
           const routeId = (value as RouteBoundExport).__routeId;
           // Validate the mount binding FIRST, before any room congruence
           // check: a unit misbound to the wrong route should report that
@@ -834,15 +851,7 @@ export async function assertRegistryRouteBindingsValid(
         const exports = readExports(mod[container]);
         if (!exports) continue;
         for (const [name, value] of Object.entries(exports)) {
-          // Skip a null/primitive export (cannot be a route-bound unit); see
-          // the mount walker for the rationale. Objects and callables (a ref
-          // may be a function carrying `__routeId`) are kept.
-          if (
-            value === null ||
-            (typeof value !== 'object' && typeof value !== 'function')
-          ) {
-            continue;
-          }
+          assertUnitExportShape(kind, name, value);
           const routeId = (value as RouteBoundExport).__routeId;
           if (typeof routeId !== 'string') continue;
           assertConformingBoundRouteId(kind, name, routeId);

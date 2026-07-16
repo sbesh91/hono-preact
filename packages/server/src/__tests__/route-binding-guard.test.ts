@@ -86,17 +86,33 @@ describe('assertRouteBindingsMatchMount', () => {
     );
   });
 
-  it('skips a null/primitive export value rather than throwing an opaque TypeError', async () => {
+  it('fails the boot with a clear message for a malformed (null/primitive) unit export', async () => {
     // A malformed export (e.g. `export const serverSockets = { x: null }`, or a
-    // stray primitive) is not a route-bound unit and must not crash the boot
-    // walker on the `.__routeId` read. It is skipped, matching how the registry
-    // builder skips non-object socket values.
+    // stray primitive) is not a route-bound unit. Rather than crash opaquely on
+    // the `.__routeId` read, or silently drop the unit (resurfacing only as an
+    // "unknown socket" close at connect time), the boot walker fails fast with a
+    // message naming the export, matching the framework's fail-loud-on-config
+    // philosophy.
+    const nullSocket = [
+      routeOf('/x', { __moduleKey: 'm', serverSockets: { broken: null } }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(nullSocket, ctxOf([['/x', []]]))
+    ).rejects.toThrow(/Malformed 'socket' export 'broken'.*null/);
+
+    const primitiveLoader = [
+      routeOf('/x', { __moduleKey: 'm', serverLoaders: { default: 'nope' } }),
+    ];
+    await expect(
+      assertRouteBindingsMatchMount(primitiveLoader, ctxOf([['/x', []]]))
+    ).rejects.toThrow(/Malformed 'loader' export 'default'.*string/);
+  });
+
+  it('accepts a function-valued unit ref (a bare loader/action is a callable, not malformed)', async () => {
     const routes = [
       routeOf('/x', {
         __moduleKey: 'm',
-        serverSockets: { broken: null },
-        serverRooms: { alsoBroken: 42 },
-        serverLoaders: { default: 'not-a-ref' },
+        serverLoaders: { default: async () => 'ok' },
       }),
     ];
     await expect(
