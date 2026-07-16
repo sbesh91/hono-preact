@@ -50,16 +50,18 @@ export const serverRooms = {
   // absent -> undefined" branch. onMessage replies to the SENDER (conn.send =
   // sendTo self) so a single connected client observes its own probe result.
   //
-  // onJoin also reports whether the room-key `params` object it receives has
-  // no prototype: on Cloudflare `params` is rehydrated from the `x-hp-params`
-  // header via `JSON.parse`, which (unlike Node's own
-  // `toNullProtoParams`-built object) would normally come back
-  // Object.prototype-bearing, reopening the prototype-chain guard-read
-  // hazard. This is the cross-isolate, real-workerd version of that
-  // assertion (the unit-testable half lives in server's own tests).
+  // onJoin also reports that the room-key `params` object it receives is an
+  // ORDINARY object on Cloudflare (rehydrated from the `x-hp-params` header via
+  // `JSON.parse`), matching the Node path: the prototype-chain param-read
+  // hazard is closed structurally (no channel/route can declare a reserved
+  // param name), so params does not need a null prototype and stays a normal
+  // object across both isolates. This is the cross-isolate, real-workerd
+  // version of that parity (the unit-testable half lives in server's own tests).
   probe: defineRoom(probeChannel, {
     onJoin(conn, { params }) {
-      conn.send({ paramsProtoIsNull: Object.getPrototypeOf(params) === null });
+      conn.send({
+        paramsProtoIsObject: Object.getPrototypeOf(params) === Object.prototype,
+      });
     },
     onMessage(conn) {
       conn.send({ dataIsUndefined: conn.data === undefined });

@@ -161,38 +161,41 @@ describe('renderPage', () => {
     expect(body).toContain('render outcome');
   });
 
-  // Security: the app-use guard tier reads ctx.location.searchParams (the
-  // attacker-controlled URL query) and pathParams. These must be null-prototype
-  // so a guard reading a param NAMED after an Object.prototype member (e.g.
-  // `constructor`) that the request omits sees `undefined`, not the truthy
-  // inherited function. Otherwise `if (!searchParams.constructor) deny()` is
-  // silently bypassable on every page render.
-  it('hands the app-use guard null-prototype searchParams/pathParams (no prototype-chain read)', async () => {
+  // The app-use guard tier reads ctx.location.searchParams (the URL query) and
+  // pathParams as ORDINARY objects: the prototype-chain param-read hazard is
+  // closed structurally (no route can DECLARE a param named after an
+  // Object.prototype member), so these do not need to be null-prototype. This
+  // test pins that they behave like normal objects: Object.prototype methods
+  // (`hasOwnProperty`) work, `Object.hasOwn`/`Object.keys` see only the real
+  // query keys, and a real query param reads through.
+  it('hands the app-use guard ordinary searchParams/pathParams (hasOwnProperty works, no phantom keys)', async () => {
     const seen: Record<string, unknown> = {};
     const appConfig = defineApp({
       use: [
         defineServerMiddleware<'page'>(async (ctx) => {
-          seen.searchConstructor = ctx.location.searchParams.constructor;
-          seen.searchToString = ctx.location.searchParams.toString;
-          seen.pathConstructor = ctx.location.pathParams.constructor;
-          seen.searchProto = Object.getPrototypeOf(ctx.location.searchParams);
-          seen.pathProto = Object.getPrototypeOf(ctx.location.pathParams);
-          // A real query param still reads through.
-          seen.realQuery = ctx.location.searchParams.token;
+          const sp = ctx.location.searchParams;
+          // `.hasOwnProperty` must not throw (it did when these were
+          // null-prototype): the regression this test guards against.
+          seen.hasToken = sp.hasOwnProperty('token');
+          seen.hasConstructor = Object.hasOwn(sp, 'constructor');
+          seen.keys = Object.keys(sp);
+          seen.pathKeys = Object.keys(ctx.location.pathParams);
+          seen.realQuery = sp.token;
         }),
       ],
     });
 
     const app = new Hono();
     app.get('*', (c) => renderPage(c, <UntitledPage />, { appConfig }));
-    // URL OMITS `constructor`/`toString` but sends a real `token`.
+    // URL OMITS `constructor` but sends a real `token`.
     await app.request('http://localhost/?token=abc');
 
-    expect(seen.searchConstructor).toBeUndefined();
-    expect(seen.searchToString).toBeUndefined();
-    expect(seen.pathConstructor).toBeUndefined();
-    expect(seen.searchProto).toBeNull();
-    expect(seen.pathProto).toBeNull();
+    expect(seen.hasToken).toBe(true);
+    // The request never supplied `constructor`, so it is not an OWN key even
+    // though a plain object inherits `Object.prototype.constructor`.
+    expect(seen.hasConstructor).toBe(false);
+    expect(seen.keys).toEqual(['token']);
+    expect(seen.pathKeys).toEqual([]);
     expect(seen.realQuery).toBe('abc');
   });
 

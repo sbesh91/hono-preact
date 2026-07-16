@@ -276,13 +276,13 @@ function isProbeEnvelope(v: unknown): v is ProbeEnvelope {
   );
 }
 
-// The probe room's onJoin reply: reports whether the room-key `params`
-// object it received (rehydrated from `x-hp-params` on Cloudflare) has no
-// prototype. Sent unconditionally on join, before any client message.
+// The probe room's onJoin reply: reports that the room-key `params` object it
+// received (rehydrated from `x-hp-params` on Cloudflare) is an ordinary
+// object. Sent unconditionally on join, before any client message.
 type ParamsProbeEnvelope = {
   t: 'msg';
   from: string;
-  msg: { paramsProtoIsNull: boolean };
+  msg: { paramsProtoIsObject: boolean };
 };
 
 function isParamsProbeEnvelope(v: unknown): v is ParamsProbeEnvelope {
@@ -290,8 +290,8 @@ function isParamsProbeEnvelope(v: unknown): v is ParamsProbeEnvelope {
     typeof v === 'object' &&
     v !== null &&
     (v as { t?: unknown }).t === 'msg' &&
-    typeof (v as { msg?: { paramsProtoIsNull?: unknown } }).msg
-      ?.paramsProtoIsNull === 'boolean'
+    typeof (v as { msg?: { paramsProtoIsObject?: unknown } }).msg
+      ?.paramsProtoIsObject === 'boolean'
   );
 }
 
@@ -417,22 +417,22 @@ describe('Cloudflare adapter: DO room (two ws clients, intra-DO fan-out)', () =>
     probe.ws.close(1000);
   }, 60_000);
 
-  it("onJoin's room-key params have no prototype on the real Cloudflare DO (prototype-chain bypass closed cross-isolate)", async () => {
+  it("onJoin's room-key params are an ordinary object on the real Cloudflare DO (parity with Node)", async () => {
     const port = serverPort(server);
     // On Cloudflare the room-key params the connector resolved at the edge
     // ride the wire as `x-hp-params` and are rehydrated inside the DO via
-    // `JSON.parse` (realtime-do.ts). A plain `JSON.parse` result inherits
-    // Object.prototype, which would reopen the prototype-chain guard-read
-    // hazard `toNullProtoParams` closes on the Node path; the DO must run the
-    // rehydrated params back through `toNullProtoParams` before onJoin (and
-    // the attachment) ever sees them. The probe room's onJoin reports this
-    // directly, driven through real workerd (not a mock).
+    // `JSON.parse` (realtime-do.ts). They are handed to onJoin as an ORDINARY
+    // object, matching the Node path: the prototype-chain param-read hazard is
+    // closed structurally (no channel/route can DECLARE a reserved param name),
+    // so the params object does not need a null prototype on either isolate.
+    // The probe room's onJoin reports this directly, driven through real
+    // workerd (not a mock).
     const probe = connectWs(probeRoomUrl(port));
     await waitForOpen(probe.ws);
 
     const reply = await drainUntil(probe.waitForMessage, isParamsProbeEnvelope);
     expect(reply).toBeDefined();
-    expect(reply?.msg.paramsProtoIsNull).toBe(true);
+    expect(reply?.msg.paramsProtoIsObject).toBe(true);
 
     probe.ws.close(1000);
   }, 60_000);

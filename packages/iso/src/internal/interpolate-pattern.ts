@@ -30,21 +30,26 @@ export function interpolatePattern(
       // `class M { get id() { return '1' } }`); an own-property check
       // (`Object.hasOwn`) wrongly dropped a getter-supplied value.
       const value = values[m[1]];
-      // Falsy (absent / empty string) -> drop the segment (avoids emitting
-      // `//`). A FUNCTION value is also dropped, as pure insurance: after the
-      // reserved-name rejection at DEFINITION time (`isReservedParamName` in
-      // `defineRoutes` / `assertConformingChannelName`), `m[1]` can never be an
-      // `Object.prototype` member for a real declared route/channel, so
-      // `values[m[1]]` can never resolve an inherited function here; the drop
-      // merely guarantees a function is never spliced into a path/topic even
-      // for a directly-built pattern. Any other value (a string, or a number
-      // coerced by `encodeURIComponent`) is kept, matching the pre-hardening
-      // behavior; an earlier `typeof value === 'string'` gate wrongly dropped
-      // numeric and getter-provided values. This does NOT enforce that a
-      // required param is present; callers that must reject a missing required
-      // value do so themselves (the strict `buildPath` overload at the type
-      // level, `rooms-handler` re-checking required channel segments).
-      return !value || typeof value === 'function'
+      // Drop the segment (avoids emitting `//`) only when the value is truly
+      // absent (`null`/`undefined`) or an empty string. A numeric `0` is a
+      // real, distinct value and MUST be kept (`encodeURIComponent(0)` ->
+      // `'0'`): dropping it would silently collapse `/item/0` to `/item` (and
+      // a channel topic onto a sibling), the same collapse hazard the room
+      // work guards against. An earlier `!value` gate dropped `0` along with
+      // '' and absent; a still earlier `typeof value === 'string'` gate
+      // dropped every number. A FUNCTION value is dropped as pure insurance:
+      // after the reserved-name rejection at DEFINITION time
+      // (`isReservedParamName` in `defineRoutes` / `assertConformingChannelName`),
+      // `m[1]` can never be an `Object.prototype` member for a real declared
+      // route/channel, so `values[m[1]]` can never resolve an inherited
+      // function here; the drop merely guarantees a function is never spliced
+      // into a path/topic even for a directly-built pattern. Any other value
+      // (a string, or a number coerced by `encodeURIComponent`) is kept. This
+      // does NOT enforce that a required param is present; callers that must
+      // reject a missing required value do so themselves (the strict
+      // `buildPath` overload at the type level, `rooms-handler` re-checking
+      // required channel segments).
+      return value == null || value === '' || typeof value === 'function'
         ? null
         : encodeURIComponent(value);
     })

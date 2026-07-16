@@ -75,4 +75,12 @@ describe('buildPath', () => {
       buildPath('/posts/:id', { id: 123 } as unknown as { id: string })
     ).toBe('/posts/123');
   });
+
+  // (regression) numeric 0 is a real, distinct value and must NOT be dropped:
+  // a `!value` gate treated 0 as absent and collapsed '/posts/0' to '/posts'.
+  it('keeps a numeric 0 param value rather than dropping the segment', () => {
+    expect(
+      buildPath('/posts/:id', { id: 0 } as unknown as { id: string })
+    ).toBe('/posts/0');
+  });
 });

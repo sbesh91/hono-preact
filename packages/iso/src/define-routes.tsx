@@ -13,10 +13,7 @@ import { RouteManifestContext } from './internal/route-manifest.js';
 import { makeRouterLoadTracker } from './internal/route-change.js';
 import { PageMiddlewareHost } from './internal/page-middleware-host.js';
 import type { PageUse } from './internal/use-types.js';
-import {
-  isReservedParamName,
-  matchParamSegment,
-} from './internal/param-slots.js';
+import { reservedParamNamesIn } from './internal/param-slots.js';
 
 function wrapWithRouteLocations(
   serverMod: unknown,
@@ -211,20 +208,6 @@ const ROUTE_RULES: ReadonlyArray<{
     message: (here) => `Route ${here}: child path must not start with \`/\`.`,
   },
 ];
-
-// Every reserved (`isReservedParamName`) name declared by a conforming
-// `:param` segment of `path`, in segment order. `path` is a single node's
-// OWN path (may itself carry more than one segment, e.g. 'user/:id'), not
-// the full joined route -- the caller reports each offender against the
-// node's full joined path (`here`) instead.
-function reservedParamNamesIn(path: string): string[] {
-  const names: string[] = [];
-  for (const seg of path.split('/')) {
-    const m = matchParamSegment(seg);
-    if (m && isReservedParamName(m[1])) names.push(m[1]);
-  }
-  return names;
-}
 
 function collectRouteViolations(
   routes: ReadonlyArray<RouteDef>,

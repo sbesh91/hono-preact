@@ -1550,22 +1550,22 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     expect(guardSeenParams).toEqual({});
   });
 
-  it('a colocated socket on /plugin/:constructor DENIES when a guard reads pathParams.constructor (prototype-chain bypass)', async () => {
-    // The param-name grammar admits every Object.prototype member name
-    // (constructor, toString, valueOf, hasOwnProperty, ...). A colocated
-    // socket's guard params previously fell back to a plain `{}` object
-    // literal, which inherits Object.prototype: a guard reading
-    // `pathParams.constructor` for a route mounted at '/plugin/:constructor'
-    // would resolve the INHERITED (truthy) Object constructor function
-    // instead of `undefined`, so `if (!id) deny()` wrongly PASSES. This test
-    // pins the fix: the params object must have no prototype at all, so the
-    // read resolves to `undefined` and the guard denies.
+  it('a colocated socket guard requiring a route param DENIES (colocated sockets resolve no param wire, so the guard sees an empty object)', async () => {
+    // A colocated (bare `defineSocket`, no __routeId) socket resolves NO param
+    // wire: its guard always gets an empty `{}` (the /__sockets endpoint is
+    // query-string only). So a guard requiring a route param reads `undefined`
+    // and denies. The prototype-chain variant of this (a mount route named
+    // `/plugin/:constructor`, where a plain `{}` would read the inherited
+    // truthy Object member for `pathParams.constructor`) is closed at its
+    // source instead of by a null prototype: `defineRoutes` rejects a route
+    // that DECLARES a reserved param name, so such a mount route can never
+    // exist and no colocated guard can read a prototype-member param.
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
-    let observedId: unknown;
+    let observedId: unknown = 'not-yet-observed';
     const requireId = defineServerMiddleware(async (mwCtx, next) => {
-      const id = mwCtx.location.pathParams.constructor;
+      const id = mwCtx.location.pathParams.id;
       observedId = id;
       if (!id) {
         const { deny } = await import('@hono-preact/iso');
@@ -1575,17 +1575,15 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     });
 
     const openSpy = vi.fn();
-    // Colocated (bare defineSocket, no __routeId) mounted under a route whose
-    // own pattern happens to be '/plugin/:constructor'.
     const def = defineSocket<never, never>({
       open: openSpy,
     }) as unknown as SocketDef<never, never, undefined>;
 
     const registry = new Map([['pages/plugin::feed', def]]);
     const resolvePageUse = (path: string) =>
-      path === '/plugin/:constructor' ? [requireId] : [];
+      path === '/plugin/:id' ? [requireId] : [];
     const resolveRoutePath = (mk: string) =>
-      mk === 'pages/plugin' ? '/plugin/:constructor' : undefined;
+      mk === 'pages/plugin' ? '/plugin/:id' : undefined;
     app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
 
     await getRequest('pages/plugin', 'feed');
@@ -1600,11 +1598,10 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     expect(openSpy).not.toHaveBeenCalled();
   });
 
-  it('a failed room-key resolution hands the guard a null-proto pathParams object', async () => {
+  it('a failed room-key resolution hands the guard an empty pathParams object', async () => {
     // roomKey.ok is false (no r= wire, and the channel has a required :id
-    // slot), so resolveGuardDenied falls back to the EMPTY params object.
-    // That fallback must be prototype-less like every other params object,
-    // not a plain `{}`.
+    // slot), so resolveGuardDenied falls back to the EMPTY params object: the
+    // guard sees no params at all.
     const { upgrader } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
@@ -1639,13 +1636,14 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     );
 
     expect(observedParams).toBeDefined();
-    expect(Object.getPrototypeOf(observedParams)).toBeNull();
+    expect(Object.keys(observedParams!)).toEqual([]);
   });
 
-  it('a denied bound socket (missing required param) resolves a null-proto params object', async () => {
+  it('a denied bound socket (missing required param) resolves an empty params object', async () => {
     // The early-return deny path (missing required :id on a route-bound
     // socket) never runs the guard, but the resolved connection's own
-    // `params` field must still be prototype-less for any downstream reader.
+    // `params` field must still be a well-formed empty object for any
+    // downstream reader.
     const def = _defineRouteSocket<never, never>(
       '/board/:id',
       {}
@@ -1675,7 +1673,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
 
     expect(capturedDenied).toBe(true);
     expect(capturedParams).toBeDefined();
-    expect(Object.getPrototypeOf(capturedParams)).toBeNull();
+    expect(Object.keys(capturedParams!)).toEqual([]);
   });
 
   it('a colocated socket data factory can mutate its (empty) params argument without throwing', async () => {
@@ -1684,14 +1682,13 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     // Object.freeze'd singleton shared across every connection. A factory
     // doing `params.derived = computeFrom(c)` threw
     // `TypeError: Cannot add property derived, object is not extensible`.
-    // The fix (emptyParams()) hands each call a FRESH, extensible,
-    // null-proto object, so the mutation must succeed silently.
+    // The empty params object is a fresh, extensible `{}` per call, so the
+    // mutation must succeed silently.
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
     let mutationThrew = false;
     let readBack: unknown;
-    let missingProtoKey: unknown;
     const def = defineSocket<never, never, { derived: string }>({
       data: (_c, rawParams) => {
         const params = rawParams as Record<string, unknown>;
@@ -1706,9 +1703,6 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
           mutationThrew = true;
         }
         readBack = params.derived;
-        // A missing Object.prototype-named key must still read undefined:
-        // mutability must not have reopened the prototype-chain hole.
-        missingProtoKey = params.constructor;
         return { derived: 'computed' };
       },
     }) as unknown as SocketDef<never, never, { derived: string }>;
@@ -1724,15 +1718,14 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
 
     expect(mutationThrew).toBe(false);
     expect(readBack).toBe('computed');
-    expect(missingProtoKey).toBeUndefined();
   });
 
   it('two connections to a colocated socket get DIFFERENT (non-aliased) empty params objects', async () => {
     // A shared frozen singleton meant every connection's data factory saw
     // the SAME object; a mutation by one connection would have been visible
     // to every other connection that hit the same empty-params call site.
-    // emptyParams() returns a fresh object per call, so no two connections
-    // should ever observe each other's mutation.
+    // Each site builds a fresh `{}` per call, so no two connections should
+    // ever observe each other's mutation.
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 

@@ -702,57 +702,21 @@ describe('loadersHandler: location validation', () => {
     expect(res.status).toBe(400);
   });
 
-  it('a route-bound loader on /plugin/:constructor DENIES when a guard reads pathParams.constructor (prototype-chain bypass, pre-existing bug closed here)', async () => {
-    // Same bug class as the realtime socket/room paths (see
-    // sockets-handler.test.ts's identical /plugin/:constructor pin):
-    // `pathParams` on the loader RPC body is a plain client-JSON object
-    // (`JSON.parse` result), which inherits `Object.prototype`. The param-name
-    // grammar admits every Object.prototype member name (constructor,
-    // toString, valueOf, hasOwnProperty, ...), so a guard reading
+  it('rejects a route-bound loader whose route declares a reserved param name at definition (structural prototype-chain fix)', () => {
+    // The prototype-chain bypass class (a guard reading
     // `ctx.location.pathParams.constructor` for a route bound to
-    // '/plugin/:constructor' would resolve the INHERITED (truthy) Object
-    // constructor function instead of `undefined` for the absent slot, so
-    // `if (!id) deny()` would wrongly PASS. Pre-existing on `main` (identical
-    // to the realtime bug), fixed here on the loader RPC dispatch path by
-    // running validated pathParams/searchParams through `toNullProtoParams`.
-    let observedId: unknown = 'not-yet-observed';
-    const requireId = defineServerMiddleware(async (mwCtx, next) => {
-      observedId = (mwCtx.location.pathParams as Record<string, unknown>)
-        .constructor;
-      if (!observedId) {
-        const { deny } = await import('@hono-preact/iso');
-        throw deny(403, 'missing id');
-      }
-      await next();
-    });
-    const app = new Hono();
-    app.post(
-      '/__loaders',
-      loadersHandler(
-        {
-          './pages/plugin.server.ts': {
-            __moduleKey: 'pages/plugin',
-            serverLoaders: {
-              default: serverRoute('/plugin/:constructor').loader(async () => ({
-                ok: true,
-              })),
-            },
-          },
-        },
-        { resolvePageUse: async () => [requireId] }
-      )
-    );
-    const res = await app.request('http://localhost/__loaders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        module: 'pages/plugin',
-        loader: 'default',
-        location: { path: '/plugin/x', pathParams: {}, searchParams: {} },
-      }),
-    });
-    expect(observedId).toBeUndefined();
-    expect(res.status).toBe(403);
+    // '/plugin/:constructor' resolving the INHERITED truthy Object constructor
+    // for an absent slot, so `if (!id) deny()` wrongly PASSES) is closed at its
+    // source rather than by null-prototyping the loader RPC params: serverRoute
+    // rejects a reserved param name at DEFINITION (`reservedParamNamesIn`, the
+    // same check defineRoutes runs on the route tree), so no such loader can
+    // exist and no guard can ever read a prototype-member param. The loader RPC
+    // pathParams/searchParams therefore stay ordinary objects.
+    expect(() => serverRoute('/plugin/:constructor')).toThrow(/reserved/);
+    expect(() => serverRoute('/plugin/:toString')).toThrow(/reserved/);
+    expect(() => serverRoute('/plugin/:hasOwnProperty')).toThrow(/reserved/);
+    // An ordinary param name is unaffected.
+    expect(() => serverRoute('/plugin/:id')).not.toThrow();
   });
 });
 

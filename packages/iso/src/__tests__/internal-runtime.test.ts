@@ -79,22 +79,11 @@ describe('iso /internal/runtime door', () => {
       // boot binding guard, which rejects a route-bound socket/room whose
       // __routeId carries a non-conforming ':'-segment.
       'isConformingParamSegment',
-      // Prototype-less params-record builder and own-property presence
-      // check shared with @hono-preact/server's room-key resolver and
-      // socket param resolver, so both close the prototype-chain auth
-      // bypass (a required slot named e.g. 'constructor' or 'toString')
-      // identically.
-      'toNullProtoParams',
+      // The own-property presence check shared with @hono-preact/server's
+      // room-key resolver and route-bound socket param parse, so both agree
+      // on "present" (`Object.hasOwn AND non-empty`, never a bare index read
+      // that could resolve an inherited member).
       'isPresentParamSlot',
-      // A fresh, prototype-less, MUTABLE EMPTY params record builder for
-      // every "no params to resolve" call site (a colocated socket,
-      // resolveGuardDenied's default, a failed room-key resolution, a denied
-      // socket's resolved params): the completion of the prototype-chain fix
-      // for sites that previously fell back to a plain `{}` literal instead
-      // of running the parsed-params pipeline. Returns a fresh object per
-      // call (not a shared singleton) so a userland-mutable position (the
-      // socket `data` edge factory's params argument) stays extensible.
-      'emptyParams',
       // The hazardous-colon-segment predicate shared with
       // @hono-preact/server's boot binding guard's route-id conformance
       // check, so it and defineChannel's own definition-time check can
@@ -108,6 +97,10 @@ describe('iso /internal/runtime door', () => {
       // closing the prototype-chain param-read hazard on every guard tier
       // structurally.
       'isReservedParamName',
+      // The reserved-name scan over a slash-joined pattern's segments, shared
+      // by defineRoutes's route-tree validator and serverRoute's binder so a
+      // route-bound loader/action/socket/room is rejected on the same rule.
+      'reservedParamNamesIn',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());

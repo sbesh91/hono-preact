@@ -60,10 +60,10 @@ export { subtreePatternOf } from './define-routes.js';
 // guard, which rejects a route-bound socket/room whose __routeId carries a
 // non-conforming ':'-segment (the route-side twin of defineChannel's own
 // definition-time check).
-// toNullProtoParams/isPresentParamSlot are shared with the same package's
-// room-key resolver and socket param resolver, so both build and check their
-// untrusted-wire params objects identically (the prototype-chain auth-bypass
-// fix: see param-slots.ts's own docs).
+// isPresentParamSlot is shared with the same package's room-key resolver and
+// route-bound socket param parse, so both check their untrusted-wire params
+// objects identically (`Object.hasOwn`, never a bare index read; see
+// param-slots.ts's own docs).
 // isHazardousColonSegment is shared with the same boot binding guard's
 // route-id conformance check, so it and defineChannel's own definition-time
 // check can never disagree on which ':'-segment spellings are a real hazard.
@@ -78,24 +78,15 @@ export { subtreePatternOf } from './define-routes.js';
 // "what param could a guard actually read" per preact-iso's own (wider)
 // `exec` matcher, so a hyphenated route param is no longer invisible to
 // those two detections the way it is to declaredParamSlots.
-// emptyParams() returns a FRESH, prototype-less, mutable EMPTY params record
-// for every "no params to resolve" call site (see param-slots.ts's own doc):
-// the completion of the prototype-chain auth-bypass fix for sites that
-// previously fell back to a plain `{}` literal instead of running the
-// parsed-params pipeline at all. A fresh object per call, not a shared
-// singleton, so a userland-mutable position (the socket `data(ctx, params)`
-// edge factory's params argument) stays extensible and no two connections
-// alias the same object.
 export {
   requiredParamSlots,
   declaredParamSlots,
   guardReadableParamSlots,
   isConformingParamSegment,
-  toNullProtoParams,
   isPresentParamSlot,
   isHazardousColonSegment,
-  emptyParams,
   isReservedParamName,
+  reservedParamNamesIn,
 } from './internal/param-slots.js';
 export * from './internal/contract.js';
 export {

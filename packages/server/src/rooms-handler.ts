@@ -91,9 +91,10 @@ export type RoomKeyResolution =
  * `createRoomWsEvents` without a re-parse.
  *
  * The parse+validate half is the shared `parseKeyParams` pipeline
- * (param-parse.ts), the same one `resolveSocketParams` (socket-resolution.ts)
- * runs for a route-bound socket: both resolve a pattern's `:param` slots off
- * the identical `SOCKET_KEY_PARAM` wire shape. This function layers topic
+ * (param-parse.ts), the same one the route-bound socket branch of
+ * `resolveConnection` (socket-resolution.ts) runs: both resolve a pattern's
+ * `:param` slots off the identical `SOCKET_KEY_PARAM` wire shape. This
+ * function layers topic
  * computation on top: `params` collapses into a discriminated `ok: false` on
  * ANY parse/required-slot failure (the reason itself is not surfaced here,
  * since a room denies uniformly regardless of which pipeline step failed).

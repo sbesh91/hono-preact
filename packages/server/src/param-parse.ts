@@ -1,15 +1,14 @@
 import {
   requiredParamSlots,
   declaredParamSlots,
-  toNullProtoParams,
   isPresentParamSlot,
 } from '@hono-preact/iso/internal/runtime';
 
 /**
  * The outcome of parsing a route or channel PATTERN's `:param` slots off the
- * untrusted `SOCKET_KEY_PARAM` wire (`r=<JSON>`). Shared by
- * `resolveSocketParams` (socket-resolution.ts, for a route-BOUND socket) and
- * `resolveRoomKey` (rooms-handler.ts, for a room channel): both resolvers
+ * untrusted `SOCKET_KEY_PARAM` wire (`r=<JSON>`). Shared by the route-BOUND
+ * socket branch of `resolveConnection` (socket-resolution.ts) and
+ * `resolveRoomKey` (rooms-handler.ts, for a room channel): both call sites
  * parse the SAME wire shape (a query-string `r=` carrying a JSON object of
  * string values) against a pattern's declared/required `:param` slots, so
  * `parseKeyParams` below is the ONE copy of that pipeline. Two hand-written
@@ -38,31 +37,38 @@ export type ParamsParseResult =
  *     lie, not a missing param, so it is rejected outright rather than
  *     coerced to `{}` (a coercion would let a garbage payload through
  *     whenever the pattern happens to have no required slots).
- *  3. Any non-string value anywhere in the parsed object is also an
- *     `invalid-payload` deny, not a silent per-entry drop: a non-string
- *     value is a contract lie the same as a non-object payload.
- *  4. Restrict to `pattern`'s DECLARED slots (`declaredParamSlots`): a real
+ *  3. Restrict to `pattern`'s DECLARED slots (`declaredParamSlots`): a real
  *     HTTP request or channel key can never populate an undeclared key, so a
  *     wire key outside the pattern's own slots is dropped rather than
- *     trusted.
+ *     trusted. This restriction runs BEFORE the non-string check below, so an
+ *     undeclared extra (e.g. a stray `count: 3` carried in from a wider
+ *     record the caller passed) is dropped, not treated as a contract
+ *     violation: a payload is only rejected for a bad value under a slot the
+ *     pattern actually declares.
+ *  4. Any non-string value under a DECLARED slot is an `invalid-payload`
+ *     deny, not a silent per-entry drop: a non-string value for a slot the
+ *     pattern cares about is a contract lie the same as a non-object payload.
  *  5. Every one of `pattern`'s REQUIRED slots (`requiredParamSlots`) must be
  *     an OWN property (`isPresentParamSlot`, never one resolved through the
  *     prototype chain) with a non-empty value, or the whole parse denies
  *     with `missing-params` naming the absent slots.
  *
- * The resulting `params` is built with `toNullProtoParams` (no prototype at
- * all, not even `Object.prototype`) and its presence check uses
- * `isPresentParamSlot` (`Object.hasOwn`, never a bare index read): together
- * they close the prototype-chain auth bypass where a route/channel bound to
- * e.g. `:constructor` or `:toString` would otherwise read the inherited
- * (truthy) `Object.prototype` member for an ABSENT slot and wrongly resolve
- * it as present.
+ * The resulting `params` is an ordinary object restricted to the pattern's
+ * declared slots. Its own presence check uses `isPresentParamSlot`
+ * (`Object.hasOwn`, never a bare index read), so an ABSENT slot never
+ * resolves an inherited `Object.prototype` member. The prototype-chain auth
+ * bypass a guard could hit (reading a missing `:constructor`/`:toString` slot
+ * and getting the inherited truthy member) is closed at its source: no
+ * route/channel can DECLARE a reserved param name (`isReservedParamName`, at
+ * `defineRoutes`/`assertConformingChannelName`), and this parse restricts the
+ * wire to those same declared slots, so a reserved name can never be a key
+ * here regardless of the object's prototype.
  */
 export function parseKeyParams(
   pattern: string,
   rawR: string | undefined
 ): ParamsParseResult {
-  let params: Record<string, string> = toNullProtoParams([]);
+  let params: Record<string, string> = {};
   if (rawR !== undefined && rawR !== '') {
     let parsed: unknown;
     try {
@@ -84,18 +90,25 @@ export function parseKeyParams(
     ) {
       return { ok: false, reason: 'invalid-payload' };
     }
-    const entries = Object.entries(parsed);
-    if (entries.some(([, v]) => typeof v !== 'string')) {
+    // Restrict to the pattern's DECLARED slots (required + optional/rest)
+    // FIRST, so an undeclared extra never influences the payload verdict.
+    const declared = new Set(declaredParamSlots(pattern));
+    const declaredEntries = Object.entries(parsed).filter(([key]) =>
+      declared.has(key)
+    );
+    // Now reject only a non-string value under a slot the pattern declares.
+    if (declaredEntries.some(([, v]) => typeof v !== 'string')) {
       return { ok: false, reason: 'invalid-payload' };
     }
-    // Every value is a string (checked above), so this is a sound narrowing,
-    // not a cast over an unvalidated shape. Restrict to the pattern's
-    // DECLARED slots (required + optional/rest).
-    const declared = new Set(declaredParamSlots(pattern));
-    params = toNullProtoParams(
-      entries
-        .filter((e): e is [string, string] => typeof e[1] === 'string')
-        .filter(([key]) => declared.has(key))
+    // Every declared value is a string (checked above), so the predicate
+    // filter is a sound narrowing to `[string, string][]`, not a cast over an
+    // unvalidated shape. `declared` excludes every reserved name (no route or
+    // channel can declare one), so no key here can be `__proto__` or an
+    // `Object.prototype` member: an ordinary object is safe.
+    params = Object.fromEntries(
+      declaredEntries.filter(
+        (e): e is [string, string] => typeof e[1] === 'string'
+      )
     );
   }
   const missing = requiredParamSlots(pattern).filter(

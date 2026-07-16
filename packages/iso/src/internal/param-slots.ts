@@ -90,16 +90,42 @@ export function isConformingParamSegment(segment: string): boolean {
  * after one of these, so no guard on ANY tier -- SSR app-use, page/layout
  * `use`, action re-render, loader RPC, realtime socket/room, server-caller,
  * prefetch, or any future tier -- can ever read a prototype-member param: a
- * legitimately DECLARED param of that name can never exist, independent of
- * whether the params object at that particular tier happens to be
- * null-prototyped. This replaces the earlier per-construction-site
- * null-prototyping approach (still kept for `searchParams`, which is
- * undeclared query input and so cannot be name-rejected; see
- * `toNullProtoParams`), which needed a null-proto object at every one of 8+
- * construction sites and kept missing one on review.
+ * legitimately DECLARED param of that name can never exist. Because the
+ * hazard is closed at the one DEFINITION boundary, the params objects
+ * themselves stay ORDINARY objects (a guard can read `params.hasOwnProperty`,
+ * `Object.keys(params)`, etc. normally); an earlier approach null-prototyped
+ * the params object at every one of 8+ construction sites and kept missing
+ * one on review, so it did not converge and it broke ordinary
+ * `Object.prototype`-method reads on a public location object. searchParams
+ * is undeclared query input and so cannot be name-rejected, but it is not a
+ * boundary either: the hazardous read (an absent query key named after a
+ * prototype member resolving a truthy inherited member) requires a guard that
+ * treats that read as authorization, which fails open for EVERY request
+ * (including the author's own testing) rather than being an attacker-only
+ * bypass, and an attacker can in any case set the key directly.
  */
 export function isReservedParamName(name: string): boolean {
   return Object.hasOwn(Object.prototype, name);
+}
+
+/**
+ * Every reserved (`isReservedParamName`) name declared by a conforming
+ * `:param` segment of `pattern`, in segment order. `pattern` may carry more
+ * than one segment (e.g. `user/:id/:constructor`). Shared by the two
+ * definition-boundary checks that reject a route or route-bound unit
+ * declaring such a param: `defineRoutes`'s route-tree validator and
+ * `serverRoute`'s binder (`defineChannel`/`defineRoom` run their own segment
+ * scan because a channel name is not a slash-joined route path). Keeping the
+ * scan in one place means those checks can never disagree on which segments
+ * count as a reserved-named param.
+ */
+export function reservedParamNamesIn(pattern: string): string[] {
+  const names: string[] = [];
+  for (const seg of pattern.split('/')) {
+    const m = matchParamSegment(seg);
+    if (m && isReservedParamName(m[1])) names.push(m[1]);
+  }
+  return names;
 }
 
 /**
@@ -111,8 +137,8 @@ export function isReservedParamName(name: string): boolean {
  * (preact-iso's `exec`, which refuses to match a `+` segment with no value)
  * treat a `+` slot as required.
  *
- * Single-sourced so the room-key resolver (`resolveRoomKey`), the socket param
- * resolver (`resolveSocketParams`), and the boot route/channel congruence
+ * Single-sourced so the room-key resolver (`resolveRoomKey`), the route-bound
+ * socket param parse (`parseKeyParams`), and the boot route/channel congruence
  * check all agree on what "required" means.
  */
 export function requiredParamSlots(pattern: string): string[] {
@@ -186,77 +212,21 @@ export function guardReadableParamSlots(pattern: string): string[] {
 }
 
 /**
- * Build a params record with NO prototype (not even `Object.prototype`),
- * from a list of `[key, value]` entries. Used by `resolveSocketParams`
- * (`@hono-preact/server`'s socket-resolution.ts) and `resolveRoomKey`
- * (rooms-handler.ts) to build the params object they parse off the
- * untrusted wire.
- *
- * `requiredParamSlots` accepts any `[A-Za-z0-9_]+` slot name, which includes
- * every `Object.prototype` member name (`constructor`, `toString`,
- * `valueOf`, `hasOwnProperty`, `isPrototypeOf`, `propertyIsEnumerable`,
- * `toLocaleString`). A params object built with `Object.fromEntries`
- * inherits `Object.prototype`, so a bracket/dot read for an ABSENT slot of
- * one of those names (e.g. `params.constructor` on a route bound to
- * `/plugin/:constructor`) resolves the inherited member instead of
- * `undefined`. A prototype-less object closes that off at the source: no
- * inherited member exists to read, present or not. This is belt-and-braces
- * alongside `isPresentParamSlot`'s own-property check below (either alone
- * is fragile: this function protects every consumer of the resulting
- * object, including guard code this framework does not control; the
- * own-property check protects the one call site that forgets to build a
- * prototype-less object).
- */
-export function toNullProtoParams(
-  entries: Iterable<[string, string]>
-): Record<string, string> {
-  const params: Record<string, string> = Object.create(null);
-  for (const [key, value] of entries) {
-    params[key] = value;
-  }
-  return params;
-}
-
-/**
- * Build a FRESH, prototype-less, mutable EMPTY params record: called by every
- * call site that previously fell back to a plain `{}` object literal for "no
- * params to resolve" (a colocated/bare socket's guard params, the `data` edge
- * factory's params argument, `resolveGuardDenied`'s default, a failed
- * room-key resolution's guard params, a denied socket's
- * `ResolvedConnection.params`). A bare `{}` inherits `Object.prototype`, which
- * reopens exactly the prototype-chain read hazard `toNullProtoParams` closes
- * for the PARSED case (see that function's doc): a guard reading e.g.
- * `pathParams.constructor` on one of these EMPTY sites would resolve the
- * inherited `Object` constructor function (truthy) instead of `undefined`.
- *
- * A FRESH object per call, not a shared singleton: an earlier version of this
- * helper returned one `Object.freeze`d instance shared across every call
- * site. That reached userland-mutable positions -- most notably the socket
- * `data(ctx, params)` edge factory's `params` argument -- so a factory that
- * did `params.derived = computeFrom(c)` threw `TypeError: Cannot add
- * property, object is not extensible`, and every connection that hit an
- * EMPTY-params site shared the SAME object, a latent cross-connection
- * aliasing hazard. Returning a fresh, extensible object per call keeps the
- * null-prototype guarantee (a missing key still reads `undefined` for ANY
- * key name) while letting userland code treat it like any other params
- * object.
- */
-export function emptyParams(): Record<string, string> {
-  return Object.create(null);
-}
-
-/**
  * True iff `slot` is present in `params`: an OWN property (`Object.hasOwn`,
  * never one resolved through the prototype chain) whose value is a
- * non-empty string. Shared by `resolveSocketParams` and `resolveRoomKey`'s
- * required-slot presence checks, so both resolvers agree on what "present"
- * means.
+ * non-empty string. Shared by the route-bound socket parse and
+ * `resolveRoomKey`'s required-slot presence checks, so both agree on what
+ * "present" means.
  *
- * `Object.hasOwn` is the check that actually closes the prototype-chain
- * auth bypass (see `toNullProtoParams`'s doc): a bare `!params[slot]`
- * truthiness check reads an inherited `Object.prototype` member for an
- * ABSENT slot named e.g. `constructor`, and that member is a function
- * (truthy), so the slot would wrongly resolve as present. An empty string
+ * `Object.hasOwn` (never a bare `!params[slot]` truthiness read) is what
+ * keeps this presence check correct on an ORDINARY params object: a bare
+ * read for an ABSENT slot named e.g. `constructor` would resolve the
+ * inherited `Object.prototype` member (a truthy function) and wrongly report
+ * the slot as present. `Object.hasOwn` reports own properties only, so the
+ * result does not depend on the object's prototype. (The guard-facing half
+ * of the prototype-chain hazard is closed structurally by
+ * `isReservedParamName`: no route or channel can DECLARE a reserved param
+ * name, so a guard can never read a prototype-member param.) An empty string
  * is still treated as missing (both resolvers pin this in their tests: a
  * well-formed but empty value denies, it is not merely "present but
  * blank"), so this is `hasOwn AND non-empty`, not just `hasOwn`.

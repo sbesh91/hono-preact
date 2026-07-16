@@ -33,6 +33,7 @@ import {
   type ActionRef,
   type DefineActionOptions,
 } from './action.js';
+import { reservedParamNamesIn } from './internal/param-slots.js';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
 /**
@@ -220,6 +221,25 @@ export interface RouteBinder<RouteId extends string> {
 export function serverRoute<
   const RouteId extends RegisteredPaths | RegisteredSubtrees,
 >(route: RouteId): RouteBinder<RouteId> {
+  // Reject a reserved param name at DEFINITION, the same convergent check
+  // `defineRoutes` runs on the route tree (`reservedParamNamesIn`). A
+  // registered route with such a param is already rejected there, but a
+  // `serverRoute`-bound loader/action/socket/room can name its own pattern
+  // directly, so this closes the same prototype-chain param-read hazard on
+  // that surface too: with no route-bound unit able to DECLARE a reserved
+  // param name, no guard on ANY tier can read one, so the params objects the
+  // guard sees stay ordinary objects (no null-prototype needed).
+  const reserved = reservedParamNamesIn(route);
+  if (reserved.length > 0) {
+    throw new Error(
+      `serverRoute('${route}'): the param ':${reserved[0]}' is reserved -- ` +
+        `it resolves through Object.prototype (or otherwise carries ` +
+        `prototype-chain meaning) on a plain params object, so a guard ` +
+        `reading an ABSENT param of this name would read the inherited ` +
+        `member instead of undefined and wrongly treat it as present. ` +
+        `Rename the param to a name that is not an Object.prototype member.`
+    );
+  }
   return {
     loader: (fn: Loader<unknown>, opts?: DefineLoaderOptions<unknown>) =>
       _defineRouteLoader(route, fn, opts),

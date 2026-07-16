@@ -934,8 +934,8 @@ describe('resolveRoomKey', () => {
   // the `parseKeyParams` extraction, `resolveRoomKey` coerced a non-object
   // parse result (e.g. `r="hello"`, valid JSON, a string) to `{}` and only
   // failed if a required slot then ended up missing, so a param-less channel
-  // resolved `ok: true` for a garbage payload. `resolveSocketParams` already
-  // denied this case outright. Both now share the same fail-closed reading:
+  // resolved `ok: true` for a garbage payload. The socket path's own parse
+  // already denied this case outright. Both now share the same fail-closed reading:
   // an unusable payload is a contract lie, not a missing param, regardless of
   // whether the pattern has any required slots.
   // -------------------------------------------------------------------------

@@ -10,7 +10,6 @@ import {
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import {
   coerceLoaderLocation,
-  toNullProtoParams,
   type LooseLoaderFn,
 } from '@hono-preact/iso/internal/runtime';
 import { composeServerChainOrFailClosed } from './compose-server-chain.js';
@@ -110,23 +109,18 @@ function validateLocation(loc: unknown): SerializedLocation | null {
     return null;
   return {
     path: o.path,
-    // Pre-existing prototype-chain auth-bypass gap, same class as the one
-    // closed on the realtime socket/room paths (param-slots.ts's
-    // `toNullProtoParams`): pathParams/searchParams come straight off the
-    // untrusted client-JSON RPC body, so a plain-`{}`-inheriting object here
-    // would let a route-bound loader's guard read e.g.
-    // `ctx.location.pathParams.constructor` on a route like
-    // `/plugin/:constructor` and resolve the inherited (truthy)
-    // `Object.prototype` member instead of `undefined` for an absent slot.
-    // `ctx.location` below is built directly from this return value and
-    // reaches the guard chain (`dispatchServer`) BEFORE `coerceLoaderLocation`
-    // runs, so this is the one place on the loader RPC path that needs it.
-    pathParams: toNullProtoParams(
-      Object.entries(o.pathParams as Record<string, string>)
-    ),
-    searchParams: toNullProtoParams(
-      Object.entries(o.searchParams as Record<string, string>)
-    ),
+    // pathParams/searchParams come straight off the untrusted client-JSON RPC
+    // body: their KEYS are entirely client-controlled here (unlike a route
+    // match or a declared-slot-filtered channel key). A guard must therefore
+    // not treat loader-RPC location as authoritative; a client can set or omit
+    // any key. The prototype shape is not a boundary on this surface (an
+    // attacker who could exploit an absent reserved-named key reading an
+    // inherited member can simply INCLUDE that key to make it truthy on any
+    // object), so these are ordinary objects. The prototype-chain hazard for
+    // route-bound params is closed structurally: no route can DECLARE a
+    // reserved param name (`isReservedParamName`).
+    pathParams: { ...(o.pathParams as Record<string, string>) },
+    searchParams: { ...(o.searchParams as Record<string, string>) },
   };
 }
 

@@ -8,7 +8,6 @@
 // vitest; this file is only importable in workerd.
 
 import { DurableObject } from 'cloudflare:workers';
-import { toNullProtoParams } from '@hono-preact/iso/internal/runtime';
 import type { RoomDef, SocketDef } from '@hono-preact/iso/internal';
 import {
   engineJoin,
@@ -227,22 +226,19 @@ export class HonoPreactRealtimeDO extends DurableObject {
     // Sanctioned cast: x-hp-params is stamped server-side by the forward
     // connector but rides the wire, so it is parsed at the untrusted-JSON
     // boundary; it is a string-valued record. x-hp-data is the edge data bag.
-    // Rehydrated through toNullProtoParams: `JSON.parse` (inside
-    // parseHeaderJson) returns a normal Object.prototype-bearing object, which
-    // would reopen the prototype-chain guard-read hazard `toNullProtoParams`
-    // closes on the Node path (the params object it rebuilds here is the SAME
-    // one `onJoin` receives, so Node and Cloudflare must agree on its shape).
-    // parseHeaderJson returns null for an absent/empty/malformed header. The
-    // forward connector always stamps x-hp-params, but guard the null defensively
-    // (matching the x-hp-data read above), so a missing header degrades to an
-    // empty params record rather than throwing `Object.entries(null)` and
-    // failing the upgrade with a 500.
+    // The connector stamps these from the origin-resolved room key, which
+    // `parseKeyParams` already restricted to the channel's DECLARED slots (and
+    // no channel can declare a reserved param name), so an ordinary object is
+    // safe: this is the SAME params object `onJoin` receives, so Node and
+    // Cloudflare must agree on its shape (both plain). parseHeaderJson returns
+    // null for an absent/empty/malformed header. The forward connector always
+    // stamps x-hp-params, but guard the null defensively (matching the x-hp-data
+    // read above) so a missing header degrades to an empty params record rather
+    // than failing the upgrade with a 500.
     const rawParams = parseHeaderJson(
       request.headers.get('x-hp-params')
     ) as Record<string, string> | null;
-    const params = toNullProtoParams(
-      rawParams ? Object.entries(rawParams) : []
-    );
+    const params: Record<string, string> = rawParams ? { ...rawParams } : {};
     // An ABSENT x-hp-data means no room data factory ran -> `undefined` (parity
     // with Node, where conn.data defaults to undefined). A present 'null' (an
     // intentional null factory result) still parses to null.

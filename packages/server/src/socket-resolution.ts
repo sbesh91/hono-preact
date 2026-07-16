@@ -4,7 +4,6 @@ import {
   SOCKET_NAME_PARAM,
   SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
-  emptyParams,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
 import type { AppConfig, ServerLoaderCtx } from '@hono-preact/iso';
@@ -13,7 +12,6 @@ import { composeServerChain } from './compose-server-chain.js';
 import { resolveRoomKey } from './rooms-handler.js';
 import type { RoomKeyResolution } from './rooms-handler.js';
 import { parseKeyParams } from './param-parse.js';
-import type { ParamsParseResult } from './param-parse.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -177,7 +175,7 @@ export async function resolveGuardDenied(opts: {
     routePath,
     moduleKey,
     name,
-    pathParams = emptyParams(),
+    pathParams = {},
   } = opts;
 
   // Chain order is outer -> inner: app-use, page/route-node use, def.use.
@@ -202,8 +200,8 @@ export async function resolveGuardDenied(opts: {
     // searchParams: a realtime upgrade is query-string-only on `/__sockets`
     // itself and carries no client-supplied search params to the guard, but
     // the field is still guard-readable (`ctx.location.searchParams`), so it
-    // gets a fresh prototype-less `emptyParams()` rather than a plain `{}`.
-    location: { path: routePath, pathParams, searchParams: emptyParams() },
+    // gets an empty object.
+    location: { path: routePath, pathParams, searchParams: {} },
     module: moduleKey,
     loader: name,
   };
@@ -278,35 +276,6 @@ export type ResolvedConnection =
     };
 
 /**
- * The outcome of resolving a route-bound socket's params from the wire. A
- * failure carries WHY it failed: an unusable payload is not the same as a
- * well-formed payload that omits a slot, and the dev warning must not tell an
- * author to supply params they already sent.
- *
- * This is `ParamsParseResult` (param-parse.ts) under the socket-specific
- * name: `resolveSocketParams` below is a thin wrapper over the shared
- * `parseKeyParams` pipeline, the topic-less twin of `resolveRoomKey`
- * (rooms-handler.ts), which layers topic computation on the same result.
- */
-export type SocketParamsResolution = ParamsParseResult;
-
-/**
- * Parse + validate a route-bound socket's route params from the untrusted
- * `SOCKET_KEY_PARAM` wire, via the shared `parseKeyParams` pipeline
- * (param-parse.ts). On success returns the validated string params; on a
- * `missing-params` failure returns the missing required slot names so the
- * caller can deny 4403 and name them in a dev warning; on an
- * `invalid-payload` failure there is no slot list, only the payload-shape
- * reason.
- */
-export function resolveSocketParams(
-  routePattern: string,
-  rawR: string | undefined
-): SocketParamsResolution {
-  return parseKeyParams(routePattern, rawR);
-}
-
-/**
  * Resolve a `/__sockets` connection's def, owning route path, room key, and
  * guard outcome from the request Context. This is the shared resolution that
  * BOTH the in-worker Node path (`createEvents`) and the CF connector branch run,
@@ -369,7 +338,7 @@ export async function resolveConnection(
       // Only feed resolved params to the guard; a failed room-key resolution
       // contributes no params. onOpen still denies on a failed room key, so the
       // guard never sees a partially-resolved room.
-      pathParams: roomKey.ok ? roomKey.params : emptyParams(),
+      pathParams: roomKey.ok ? roomKey.params : {},
     });
     return { kind: 'room', roomDef: def, roomKey, moduleKey, name, denied };
   }
@@ -380,9 +349,9 @@ export async function resolveConnection(
   // its route params on the shared key wire, mirroring a room's channel key:
   // resolve + validate them here so the page-use guard reads them and the edge
   // `data` factory receives them. A missing required slot denies 4403.
-  let socketParams: Record<string, string> = emptyParams();
+  let socketParams: Record<string, string> = {};
   if (def.__routeId !== undefined) {
-    const resolved = resolveSocketParams(
+    const resolved = parseKeyParams(
       def.__routeId,
       ctx.req.query(SOCKET_KEY_PARAM)
     );
@@ -408,7 +377,7 @@ export async function resolveConnection(
         moduleKey,
         name,
         denied: true,
-        params: emptyParams(),
+        params: {},
       };
     }
     socketParams = resolved.params;

@@ -550,7 +550,7 @@ export function warnRoomParamExemption(
 // `__routeId`) whose mount route declares a param a guard could read
 // (`guardReadableParamSlots`, preact-iso's own WIDE `exec` grammar), guarded
 // by at least one live server-middleware tier, resolves NO param wire at all
-// (`resolveSocketParams`/`resolveConnection` only run for a route-BOUND
+// (`resolveConnection`'s param parse only runs for a route-BOUND
 // socket). A guard on such a socket's chain reads those route params as
 // `undefined` forever, silently. This is the socket analog of
 // `assertRoomChannelCongruent`'s tier-liveness gate; unlike a BOUND room it
