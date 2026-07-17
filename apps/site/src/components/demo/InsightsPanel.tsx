@@ -23,15 +23,11 @@ const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
   if (state.status === 'loading') {
     return <p class="text-xs text-muted">Computing insights…</p>;
   }
-  if (state.status === 'error') {
-    // Stale-error arm: a revalidation failed after data was shown; the
-    // Boundary keeps children mounted, so report inline.
-    return (
-      <p class="text-xs text-danger">
-        Insights refresh failed: {state.error.message}
-      </p>
-    );
-  }
+  // A cold failure never reaches here: it routes to the Boundary's
+  // errorFallback instead. So the 'error' status on this arm is always a
+  // stale error over the last good stats, and `state.data` is present on
+  // every remaining status. Keep the stats mounted and report the failure
+  // inline via useError() below, rather than unmounting them.
   const d = state.data;
   return (
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
@@ -65,7 +61,9 @@ const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
           Back to quick insights
         </a>
       )}
-      {staleError && <span class="text-danger">({staleError.message})</span>}
+      {staleError && (
+        <span class="text-danger">(refresh failed: {staleError.message})</span>
+      )}
     </div>
   );
 };
