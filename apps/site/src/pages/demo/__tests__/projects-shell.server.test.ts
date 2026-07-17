@@ -109,6 +109,14 @@ describe('activity live loader', () => {
   });
 });
 
+// ActionRef's public type has no __routeId field (only AnyLoaderRef exposes
+// it structurally); serverRoute(r).action still stamps it onto the raw
+// function at runtime, the same way the server's extractActions reads it.
+// Narrow structurally instead of casting.
+function hasRouteId(x: object): x is { __routeId: string } {
+  return '__routeId' in x && typeof x.__routeId === 'string';
+}
+
 describe('shell loaders are subtree-bound to the projects layout', () => {
   it('binds default and activity to /demo/projects/*', () => {
     // Route binding is what attaches the layout's own composed use chain
@@ -117,6 +125,13 @@ describe('shell loaders are subtree-bound to the projects layout', () => {
     expect(serverLoaders.default.__routeBound).toBe(true);
     expect(serverLoaders.activity.__routeId).toBe('/demo/projects/*');
     expect(serverLoaders.activity.__routeBound).toBe(true);
+    // The digest action is built off the same bound `route`, so it inherits
+    // requireSession too; pin it so a regressed binding fails here instead
+    // of surfacing as a silent 401 in the digest streaming test below.
+    expect(hasRouteId(serverActions.digest)).toBe(true);
+    if (hasRouteId(serverActions.digest)) {
+      expect(serverActions.digest.__routeId).toBe('/demo/projects/*');
+    }
   });
 
   it('default loader returns the shell data shape via the server caller', async () => {

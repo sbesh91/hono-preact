@@ -5140,8 +5140,10 @@ html:active-view-transition-type(demo-within)::view-transition-new(
   animation-timing-function: var(--spring-soft);
 }
 
-/* Board columns (ViewTransitionGroup class="board-column") reflow when the
-   priority filter changes; a short duration keeps the shuffle snappy. */
+/* Board columns (ViewTransitionName groupClass="board-column") morph on
+   project-to-project navigation (the demo-within transition); the filter
+   chips are transition={false} and never reach this rule. A short duration
+   keeps the shuffle snappy. */
 ::view-transition-group(*.board-column) {
   animation-duration: 160ms;
 }

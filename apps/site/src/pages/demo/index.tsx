@@ -16,8 +16,10 @@ const RecentServerActivity = auditLoaders.recent.View(({ status, data }) => (
       </p>
     ) : (
       <ul class="mt-2 space-y-1 font-mono text-[11px] text-muted">
-        {data.entries.slice(0, 8).map((line) => (
-          <li key={line}>{line}</li>
+        {/* The list is a wholesale-replaced snapshot on every load, so index
+            keys are stable enough and immune to duplicate lines colliding. */}
+        {data.entries.slice(0, 8).map((line, i) => (
+          <li key={i}>{line}</li>
         ))}
       </ul>
     )}

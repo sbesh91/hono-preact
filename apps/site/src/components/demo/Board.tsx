@@ -5,7 +5,7 @@ import {
   useAction,
   useOptimistic,
   useOptimisticAction,
-  ViewTransitionGroup,
+  ViewTransitionName,
 } from 'hono-preact';
 import { toast } from 'hono-preact-ui';
 import { groupTasks, STATUS_COLUMNS } from '../../demo/group-tasks.js';
@@ -159,8 +159,9 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
       {columns.map((column) => (
         // The wrapper (not Column) is the grid item now, so it needs
         // display: grid to stretch its one child to the row height.
-        <ViewTransitionGroup
-          class="board-column"
+        <ViewTransitionName
+          name={`board-col-${column.status}`}
+          groupClass="board-column"
           key={column.status}
           render={<div class="grid" />}
         >
@@ -177,7 +178,7 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
             draggingId={drag.draggingId}
             isOver={drag.overStatus === column.status}
           />
-        </ViewTransitionGroup>
+        </ViewTransitionName>
       ))}
     </div>
   );
