@@ -35,6 +35,7 @@ import {
   insightsTiming,
   type ProjectInsights,
 } from './board-insights.js';
+import { sleepMs } from '../../demo/sleep.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
 // `ctx.location.pathParams` (projectId) from the route's pattern.
@@ -53,20 +54,6 @@ export type BoardData = {
 const InsightsSearchSchema = v.object({
   insights: v.optional(v.picklist(['quick', 'deep']), 'quick'),
 });
-
-// Abort-aware sleep so the timeout abort actually stops the deep path.
-const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
-  new Promise((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(t);
-      reject(new Error('aborted'));
-    };
-    const t = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
 
 export const serverLoaders = {
   default: route.loader(
@@ -106,7 +93,7 @@ export const serverLoaders = {
         // Deliberately exceeds the loader's 1s timeoutMs below. This is the
         // demo's visible TimeoutError path: the handler aborts the loader and
         // the client error boundary receives a TimeoutError instance.
-        await sleep(5_000, signal);
+        await sleepMs(5_000, signal);
       }
       const tasks = listTasksForProject(project.id);
       const byStatus: Record<TaskStatus, number> = {

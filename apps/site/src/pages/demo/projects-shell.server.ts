@@ -12,6 +12,8 @@ import {
   type ActivityEvent,
 } from '../../demo/activity-stream.js';
 import { acquireSimHeartbeat } from '../../demo/activity-sim.js';
+import { projectDigestLine } from '../../demo/digest.js';
+import { sleepMs } from '../../demo/sleep.js';
 
 export type ShellData = {
   user: User | null;
@@ -53,4 +55,24 @@ export const serverLoaders = {
     return { user, projects } satisfies ShellData;
   }),
   activity: route.loader(activityStream, { live: true }),
+};
+
+export const serverActions = {
+  // Streaming action: an async generator whose yields arrive on the client
+  // through useAction's onChunk, with the return value as the final result.
+  // Route-bound to the projects subtree, so it inherits requireSession.
+  digest: route.action(async function* (ctx, _payload: Record<string, never>) {
+    const user = await currentUser(ctx.c);
+    const projects = listProjects();
+    let tasks = 0;
+    for (const p of projects) {
+      const t = listTasksForProject(p.id);
+      tasks += t.length;
+      yield projectDigestLine(p, t);
+      // Visible streaming: without a beat between lines the whole digest
+      // arrives as one paint.
+      await sleepMs(150, ctx.signal);
+    }
+    return { projects: projects.length, tasks, by: user?.name ?? 'someone' };
+  }),
 };
