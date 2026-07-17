@@ -284,7 +284,7 @@ function nonConformingRouteSegment(routeId: string): string | undefined {
  * existing app may have a perfectly ordinary HTTP route like
  * `/board/:board-id`; only a `serverRoute(r).socket`/`.room` binding on such
  * a route is rejected. `serverRoute(r).socket`/`.room` shipped in
- * `hono-preact@0.10.1`, so this throw is a recorded breaking change (see the
+ * `hono-preact@0.8.0`, so this throw is a recorded breaking change (see the
  * v0.11 release-notes breaking-change record), not a pre-release tightening:
  * a released app that bound a socket/room to a non-conforming route param
  * now fails its boot instead of silently running that unit with an empty

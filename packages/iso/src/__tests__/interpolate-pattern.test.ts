@@ -61,10 +61,10 @@ describe('interpolatePattern', () => {
   // sees own properties, so a class instance whose param is a getter (e.g.
   // `class M { get id() { return '1' } }`) had its value silently dropped:
   // `buildPath('/user/:id', new M())` returned '/user' instead of
-  // '/user/1'. The fix reads the value directly and gates on
-  // `typeof value === 'string'`, which both keeps a getter-provided string
-  // AND still drops an inherited Object.prototype member for an absent slot
-  // (that member is a function, not a string).
+  // '/user/1'. The fix reads the value directly and drops only `null` /
+  // `undefined` / '' / a FUNCTION value, which keeps a getter-provided string
+  // (and a number) AND still drops an inherited Object.prototype member for an
+  // absent slot (that member is a function).
   // ---------------------------------------------------------------------
 
   it('substitutes a param value supplied via a prototype getter, not just an own property', () => {

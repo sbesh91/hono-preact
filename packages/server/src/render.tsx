@@ -225,8 +225,8 @@ export async function renderPage(
     : (selectRoutePreload(routeCss, routePath) ?? []);
   const globalStyleSheets = devGlobalCss ? [...devGlobalCss] : globalCss;
   // Only the entry closure goes in the `Link` header. The header is honored
-  // before body parse (and promotable to 103 Early Hints), but it cannot carry
-  // `fetchpriority`, so a route chunk placed there would preload at default
+  // before body parse, but it cannot carry `fetchpriority`, so a route chunk
+  // placed there would preload at default
   // priority and defeat the head tag's `fetchpriority="low"`. The closure is
   // the small, universal boot runtime (worth the earliest hint); the route
   // chunks are hinted low-priority via the head tags only.

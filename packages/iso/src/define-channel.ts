@@ -51,14 +51,14 @@ export interface Channel<Name extends string, Payload> {
  * ordinary, working colon-namespaced constant name, not a hazard.
  *
  * Also rejects a `:param` segment whose name `isReservedParamName`
- * (param-slots.ts): a name that resolves through `Object.prototype`
- * (`constructor`, `toString`, ...) or otherwise carries prototype-chain
- * meaning (`__proto__`, `prototype`). This is the convergent fix for the
- * prototype-chain param-read hazard: a channel can never DECLARE a param of
- * one of these names, so no guard reading `onJoin`'s resolved params can
- * ever misread a missing param of that name as the inherited (truthy)
- * member instead of `undefined`, regardless of whether the params object at
- * a given tier happens to be null-prototyped.
+ * (param-slots.ts): a name that resolves through `Object.prototype`, i.e. an
+ * own member of it (`constructor`, `toString`, `__proto__`, ...). `toJSON` and
+ * `prototype` are NOT members and stay valid. This is the convergent fix for
+ * the prototype-chain param-read hazard: a channel can never DECLARE a param
+ * of one of these names, so no guard reading `onJoin`'s resolved params can
+ * ever misread a missing param of that name as the inherited (truthy) member
+ * instead of `undefined`. Because the hazard is closed here, at the definition
+ * boundary, the params objects themselves stay ordinary objects.
  *
  * Also rejects a name carrying MORE THAN ONE optional/rest slot
  * (`optionalOrRestParamSlots`, param-slots.ts): with two or more, two
@@ -131,8 +131,8 @@ export function assertConformingChannelName(
         `as an ordinary literal.`
     );
   }
-  // Reject a conforming ':param' segment whose name is RESERVED (resolves
-  // through Object.prototype, or otherwise carries prototype-chain meaning):
+  // Reject a conforming ':param' segment whose name is RESERVED (an own member
+  // of Object.prototype, so it resolves through the prototype chain):
   // see this function's own doc and `reservedParamNamesIn` (param-slots.ts,
   // the same scan `defineRoutes`/`serverRoute` run). A non-conforming spelling
   // of the same name (e.g. ':constructor-id') is not caught here (it is a
@@ -142,11 +142,10 @@ export function assertConformingChannelName(
   if (reserved.length > 0) {
     throw new Error(
       `${constructorLabel}('${name}'): the param ':${reserved[0]}' is reserved -- ` +
-        `it resolves through Object.prototype (or otherwise carries ` +
-        `prototype-chain meaning) on a plain params object, so a guard ` +
-        `reading an ABSENT param of this name would read the inherited ` +
-        `member instead of undefined and wrongly treat it as present. ` +
-        `Rename the param to something that is not '${reserved[0]}'.`
+        `it is an Object.prototype member, so on a plain params object a ` +
+        `guard reading an ABSENT param of this name would read the ` +
+        `inherited member instead of undefined and wrongly treat it as ` +
+        `present. Rename the param to something that is not '${reserved[0]}'.`
     );
   }
   const ambiguousSlots = optionalOrRestParamSlots(name);
