@@ -3,7 +3,12 @@
 // children, a cold failure (including the deep-mode TimeoutError) routes to
 // errorFallback with a reset, and a stale error after data surfaces through
 // useError() without unmounting the stats.
-import { TimeoutError, useRoute, type LoaderState } from 'hono-preact';
+import {
+  TimeoutError,
+  useRoute,
+  useReload,
+  type LoaderState,
+} from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { serverLoaders } from '../../pages/demo/project-board.server.js';
 import type { ProjectInsights } from '../../pages/demo/board-insights.js';
@@ -27,7 +32,9 @@ export function renderInsightsBody(
   state: LoaderState<ProjectInsights>,
   staleError: Error | null,
   slug: string,
-  searchParams: Record<string, string>
+  searchParams: Record<string, string>,
+  onRecompute: () => void,
+  recomputing: boolean
 ) {
   if (state.status === 'loading') {
     return <p class="text-xs text-muted">Computing insights…</p>;
@@ -73,6 +80,13 @@ export function renderInsightsBody(
           Back to quick insights
         </a>
       )}
+      <button
+        class="font-medium underline hover:text-foreground disabled:opacity-60"
+        onClick={onRecompute}
+        disabled={recomputing}
+      >
+        {recomputing ? 'Recompute…' : 'Recompute'}
+      </button>
       {staleError && (
         <span class="text-danger">(refresh failed: {staleError.message})</span>
       )}
@@ -84,7 +98,22 @@ const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
   const state = insightsLoader.useData();
   const staleError = insightsLoader.useError();
   const { searchParams } = useRoute();
-  return renderInsightsBody(state, staleError, slug, searchParams);
+  const { reload, reloading } = useReload();
+  // Direct cache invalidation + reload: invalidate() alone only clears the
+  // cache entry; pairing it with useReload's reload() re-runs the active
+  // loader immediately instead of waiting for the next navigation.
+  const recompute = () => {
+    insightsLoader.invalidate();
+    reload();
+  };
+  return renderInsightsBody(
+    state,
+    staleError,
+    slug,
+    searchParams,
+    recompute,
+    reloading
+  );
 };
 
 export const InsightsPanel: FunctionComponent<{ slug: string }> = ({
