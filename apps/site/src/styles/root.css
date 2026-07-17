@@ -541,6 +541,10 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   ::view-transition-group(.task-card) {
     animation-duration: 0s;
   }
+  ::view-transition-group(*.board-column),
+  ::view-transition-group(demo-sidebar-active) {
+    animation-duration: 0s;
+  }
 }
 
 /* ---- formerly home.css (route-scoped by the auto-splitter) ---- */

@@ -157,7 +157,13 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
   return (
     <div ref={boardRef} class="grid grid-cols-4 gap-3 overflow-x-auto p-4">
       {columns.map((column) => (
-        <ViewTransitionGroup class="board-column" key={column.status}>
+        // The wrapper (not Column) is the grid item now, so it needs
+        // display: grid to stretch its one child to the row height.
+        <ViewTransitionGroup
+          class="board-column"
+          key={column.status}
+          render={<div class="grid" />}
+        >
           <Column
             column={column}
             projectSlug={projectSlug}
