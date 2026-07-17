@@ -4,6 +4,8 @@ import type { FunctionComponent } from 'preact';
 import { serverLoaders } from './project-board.server.js';
 import Board from '../../components/demo/Board.js';
 import NewTaskDialog from '../../components/demo/NewTaskDialog.js';
+import { PRIORITY_LABEL } from '../../components/demo/priority.js';
+import { PRIORITIES } from '../../demo/data.js';
 
 const boardLoader = serverLoaders.default;
 
@@ -11,12 +13,40 @@ const ProjectBoardPage: FunctionComponent = () => {
   const { status, data } = boardLoader.useData();
   if (status === 'loading') return <BoardSkeleton />;
   if (!data) return <BoardSkeleton />;
-  const { project, tasks, users } = data;
+  const { project, tasks, users, priority, totalCount } = data;
   return (
     <div class="flex h-screen flex-col">
       <div class="flex items-center gap-3 border-b border-border px-4 py-3.5">
         <h1 class="text-[17px] font-bold">{project.name}</h1>
-        <span class="text-[12px] text-muted">{tasks.length} tasks</span>
+        <span class="text-[12px] text-muted">
+          {priority === 'all'
+            ? `${tasks.length} tasks`
+            : `${tasks.length} of ${totalCount} tasks`}
+        </span>
+        <nav
+          class="flex items-center gap-1 text-[12px]"
+          aria-label="Filter by priority"
+        >
+          {(['all', ...PRIORITIES] as const).map((p) => (
+            <a
+              key={p}
+              href={
+                p === 'all'
+                  ? `/demo/projects/${project.slug}`
+                  : `/demo/projects/${project.slug}?priority=${p}`
+              }
+              aria-current={priority === p ? 'page' : undefined}
+              class={[
+                'rounded-full px-2 py-0.5 font-medium',
+                priority === p
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted hover:text-foreground',
+              ].join(' ')}
+            >
+              {p === 'all' ? 'All' : PRIORITY_LABEL[p]}
+            </a>
+          ))}
+        </nav>
         <div class="ml-auto">
           <NewTaskDialog projectId={project.id} users={users} />
         </div>

@@ -60,3 +60,10 @@ export const TaskRouteParamsSchema = v.object({
   projectId: projectSlug,
   taskId: taskIdShape,
 });
+
+// Board filter: searchSchema validates and defaults ?priority=. An unknown
+// value responds 400 through the framework (LoaderValidationError on the
+// client); unrelated query keys pass through untouched.
+export const BoardSearchSchema = v.object({
+  priority: v.optional(v.picklist(['all', ...PRIORITIES]), 'all'),
+});

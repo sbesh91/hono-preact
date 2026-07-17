@@ -11,6 +11,7 @@ import {
   type Task,
   type Project,
   type User,
+  type TaskPriority,
 } from '../../demo/data.js';
 import {
   activityChannel,
@@ -24,6 +25,7 @@ import {
   PatchTaskSchema,
   DeleteTaskSchema,
   ProjectRouteParamsSchema,
+  BoardSearchSchema,
 } from './task-schema.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
@@ -34,6 +36,10 @@ export type BoardData = {
   project: Project;
   users: User[];
   tasks: Task[];
+  /** The validated, defaulted ?priority= filter this data was computed for. */
+  priority: 'all' | TaskPriority;
+  /** Unfiltered task count, so the UI can show "n of m". */
+  totalCount: number;
 };
 
 export const serverLoaders = {
@@ -42,15 +48,26 @@ export const serverLoaders = {
       const slug = location.pathParams.projectId;
       const project = getProjectBySlug(slug);
       if (!project) throw deny(404, `No project named '${slug}'.`);
+      const all = listTasksForProject(project.id);
+      const priority = location.searchParams.priority;
       return {
         project,
         users: [getUser('u-1'), getUser('u-2')].filter(
           (u): u is User => u !== null
         ),
-        tasks: listTasksForProject(project.id),
+        tasks:
+          priority === 'all' ? all : all.filter((t) => t.priority === priority),
+        priority,
+        totalCount: all.length,
       };
     },
-    { paramsSchema: ProjectRouteParamsSchema }
+    {
+      paramsSchema: ProjectRouteParamsSchema,
+      searchSchema: BoardSearchSchema,
+      // The cache key must include the filter, or every ?priority= value
+      // shares one cache slot and navigation between filters serves stale data.
+      params: ['priority'],
+    }
   ),
 };
 
