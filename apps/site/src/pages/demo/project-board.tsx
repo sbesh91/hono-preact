@@ -4,6 +4,7 @@ import type { FunctionComponent } from 'preact';
 import { serverLoaders } from './project-board.server.js';
 import Board from '../../components/demo/Board.js';
 import NewTaskDialog from '../../components/demo/NewTaskDialog.js';
+import { BoardInfoPopover } from '../../components/demo/BoardInfoPopover.js';
 import { InsightsPanel } from '../../components/demo/InsightsPanel.js';
 import { PRIORITY_LABEL } from '../../components/demo/priority.js';
 import { PRIORITIES } from '../../demo/data.js';
@@ -52,6 +53,7 @@ const ProjectBoardPage: FunctionComponent = () => {
             </NavLink>
           ))}
         </nav>
+        <BoardInfoPopover />
         <div class="ml-auto">
           <NewTaskDialog projectId={project.id} users={users} />
         </div>
