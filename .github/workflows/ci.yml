@@ -81,6 +81,11 @@ jobs:
   # spawn cannot launch without a shell, so a scaffold+install fails with ENOENT
   # unless the shell:true fix is present. Linux runs the identical script so the
   # coverage is equal, not Windows-only.
+  #
+  # The install resolves against a LOCAL registry holding this commit's own
+  # packages, not the public one (see the smoke step for why). That is what lets
+  # the job cover the framework under review, and what lets a release PR (whose
+  # template pin names a not-yet-published version) run at all.
   scaffold-smoke:
     name: Scaffold smoke (${{ matrix.os }})
     needs: test
@@ -103,23 +108,116 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `pnpm pack` (in the smoke step) runs prepack, NOT prepublishOnly, and
+      # these packages carry their build only on prepublishOnly. So dist has to
+      # be built here or the packed tarball ships an empty one. This is also the
+      # step that makes the smoke cover THIS commit's framework rather than
+      # whatever is on the public registry.
+      - name: Build framework packages
+        run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
+
       # The scaffold copies templates/agents/llms-full.txt, which is generated.
       - name: Generate bundled agents corpus
         run: pnpm gen:agents-corpus
 
-      # One script, identical across OSes (bash is available on the Windows
-      # runner via Git for Windows). Force the npm branch of the pm detector so
-      # the smoke runs the exact `npm install` from the issue everywhere, then
-      # assert both spawned steps actually happened (node_modules + .git).
-      - name: Scaffold a node app, letting the CLI install and git-init
+      # The scaffolded app's `npm install` has to resolve the template's
+      # `hono-preact` pin. Resolving it from the PUBLIC registry is wrong twice
+      # over: it installs whatever was last published rather than THIS commit's
+      # framework (so the smoke never covered the code under review), and a
+      # release PR bumps that pin to a version that does not exist yet (the
+      # lockstep policy in CLAUDE.md requires the bump in the same commit as the
+      # version bump), which cannot install at all. So: run a local registry,
+      # publish the workspace's own packages into it, and point npm there.
+      # Everything else proxies through to npmjs via the uplink.
+      #
+      # Start + publish + scaffold live in ONE step deliberately: the registry
+      # is a background process, and keeping it inside a single step means it is
+      # guaranteed alive for the commands that need it and is torn down with the
+      # step, on both runners, with no cross-step process-survival assumptions.
+      #
+      # The scaffold script itself is identical across OSes (bash is available
+      # on the Windows runner via Git for Windows). Force the npm branch of the
+      # pm detector so the smoke runs the exact `npm install` from the issue
+      # everywhere, then assert both spawned steps actually happened
+      # (node_modules + .git).
+      - name: Scaffold a node app against a local registry, letting the CLI install and git-init
         shell: bash
-        working-directory: ${{ runner.temp }}
         env:
+          # NOTE: npm_config_registry is deliberately NOT set here, at step
+          # scope. Only the scaffold's own install may target the local
+          # registry, and it is exported for that command alone below. Setting
+          # it step-wide makes `npx` try to download verdaccio ITSELF from
+          # localhost:4873, i.e. from the registry verdaccio has not started
+          # yet, which dies with ECONNREFUSED and never boots. A warm npx cache
+          # hides this locally: the fetch only happens on a cold runner.
           npm_config_user_agent: 'npm/10 node/v22 ${{ runner.os }} x64'
         run: |
+          echo "::group::Start local registry"
+          # Pinned exactly, like the wrangler pins in the preview workflows: a
+          # floating range would refetch a different registry on some future run
+          # and turn this job into a supply-chain surface plus a flake source.
+          npx --yes verdaccio@6.8.0 --config "$GITHUB_WORKSPACE/.github/verdaccio.yaml" &
+          # Poll rather than pull in a wait-for-it dependency; curl is on both
+          # runners. Quiet in the loop (a connect refusal per second is just
+          # noise), loud on the final check.
+          for _ in $(seq 1 90); do
+            curl -fs -o /dev/null http://localhost:4873/ && break
+            sleep 1
+          done
+          curl -fsS -o /dev/null http://localhost:4873/ || {
+            echo 'FAIL: local registry did not come up'
+            exit 1
+          }
+          # verdaccio's `publish: $all` permits anonymous publishing, but the npm
+          # CLI refuses to even try without a token, so hand it a throwaway. The
+          # registry never validates it. Written to the USER npmrc: the repo's
+          # own .npmrc is tracked (and empty), so a project-location write would
+          # dirty the tree.
+          npm config set //localhost:4873/:_authToken "ci-smoke" --location user
+          echo "::endgroup::"
+
+          echo "::group::Publish the workspace framework into it"
+          # Pack, then `npm publish <tarball>`, deliberately NOT `pnpm publish`.
+          # pnpm publish first asks "is this version already published?" and that
+          # check does not honor --registry: it queries the PUBLIC registry, sees
+          # the released version, prints "There are no new packages that should
+          # be published", and exits 0. That silently publishes nothing and
+          # leaves the scaffold to fail later with a confusing ETARGET.
+          # `npm publish <tarball>` has no such skip logic: it publishes the
+          # exact bytes or fails loudly.
+          #
+          # Packing does not run prepublishOnly, so the dist built by the build
+          # step above is what gets packed. That is the same artifact the real
+          # release publishes (its prepublishOnly is that same build).
+          rm -rf "$RUNNER_TEMP/tgz" && mkdir -p "$RUNNER_TEMP/tgz"
+          pnpm --filter hono-preact pack --pack-destination "$RUNNER_TEMP/tgz"
+          pnpm --filter hono-preact-ui pack --pack-destination "$RUNNER_TEMP/tgz"
+          for tgz in "$RUNNER_TEMP"/tgz/*.tgz; do
+            npm publish "$tgz" --registry http://localhost:4873
+          done
+          echo "::endgroup::"
+
+          echo "::group::Scaffold"
+          cd "$RUNNER_TEMP"
+          # Point npm at the local registry for THIS command only (see the step
+          # env note). The CLI spawns `npm install` as a child, so it inherits
+          # this, which is the whole mechanism under test.
+          export npm_config_registry=http://localhost:4873
           node "$GITHUB_WORKSPACE/packages/create-hono-preact/bin/index.mjs" smoke-app --adapter=node
+          echo "::endgroup::"
+
           test -d smoke-app/node_modules || { echo 'FAIL: npm install did not run (spawn ENOENT?)'; exit 1; }
           test -d smoke-app/.git || { echo 'FAIL: git init did not run'; exit 1; }
+
+          # Prove the framework came from the local registry, i.e. that the
+          # smoke actually exercised this commit's build. Without this, a
+          # misconfigured registry would silently fall back to the public one
+          # and quietly restore the very gap this job exists to close.
+          grep -q '"resolved": "http://localhost:4873/hono-preact/-/' smoke-app/package-lock.json || {
+            echo 'FAIL: hono-preact did not resolve from the local registry'
+            grep -A1 '"node_modules/hono-preact"' smoke-app/package-lock.json || true
+            exit 1
+          }
 
   client-size:
     name: Framework JS size
