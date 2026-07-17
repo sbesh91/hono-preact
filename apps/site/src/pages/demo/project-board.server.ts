@@ -1,4 +1,12 @@
-import { defineAction, deny, publish, serverRoute } from 'hono-preact';
+import * as v from 'valibot';
+import {
+  createCache,
+  defineAction,
+  defineServerMiddleware,
+  deny,
+  publish,
+  serverRoute,
+} from 'hono-preact';
 import {
   getProjectBySlug,
   listTasksForProject,
@@ -12,6 +20,7 @@ import {
   type Project,
   type User,
   type TaskPriority,
+  type TaskStatus,
 } from '../../demo/data.js';
 import {
   activityChannel,
@@ -42,6 +51,61 @@ export type BoardData = {
   totalCount: number;
 };
 
+// ---- Project insights (issue #282 P1: loader options showcase) ----
+
+export type ProjectInsights = {
+  total: number;
+  byStatus: Record<TaskStatus, number>;
+  /** Age in whole days of the oldest task not yet done. 0 when none. */
+  oldestOpenDays: number;
+  mode: 'quick' | 'deep';
+};
+
+// Explicit cache instance (the `cache` loader option): exported so tests and
+// future controls can address the cache directly instead of only through
+// ref.invalidate().
+export const insightsCache = createCache<ProjectInsights>();
+
+// The measurable body of the per-loader timing middleware, extracted so unit
+// tests can drive it directly: a hand-built ServerCtx<'loader'> can't
+// structurally satisfy Hono's Context (private fields make it effectively
+// nominal), so the middleware's real work takes a plain setHeader callback
+// instead of reaching into ctx.c itself.
+export const timeLoader = async (
+  setHeader: (name: string, value: string) => void,
+  next: () => Promise<unknown>
+): Promise<void> => {
+  const started = performance.now();
+  await next();
+  const dur = Math.round(performance.now() - started);
+  setHeader('Server-Timing', `insights;dur=${dur}`);
+};
+
+// Per-loader middleware (the `use` loader option): times the loader body and
+// reports it as a Server-Timing entry on the RPC response, visible in the
+// browser's network panel.
+export const insightsTiming = defineServerMiddleware<'loader'>((ctx, next) =>
+  timeLoader((name, value) => ctx.c.header(name, value), next)
+);
+
+const InsightsSearchSchema = v.object({
+  insights: v.optional(v.picklist(['quick', 'deep']), 'quick'),
+});
+
+// Abort-aware sleep so the timeout abort actually stops the deep path.
+const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(t);
+        reject(new Error('aborted'));
+      },
+      { once: true }
+    );
+  });
+
 export const serverLoaders = {
   default: route.loader(
     async ({ location }): Promise<BoardData> => {
@@ -67,6 +131,51 @@ export const serverLoaders = {
       // The cache key must include the filter, or every ?priority= value
       // shares one cache slot and navigation between filters serves stale data.
       params: ['priority'],
+    }
+  ),
+
+  insights: route.loader(
+    async ({ location, signal }): Promise<ProjectInsights> => {
+      const slug = location.pathParams.projectId;
+      const project = getProjectBySlug(slug);
+      if (!project) throw deny(404, `No project named '${slug}'.`);
+      const mode = location.searchParams.insights;
+      if (mode === 'deep') {
+        // Deliberately exceeds the loader's 1s timeoutMs below. This is the
+        // demo's visible TimeoutError path: the handler aborts the loader and
+        // the client error boundary receives a TimeoutError instance.
+        await sleep(5_000, signal);
+      }
+      const tasks = listTasksForProject(project.id);
+      const byStatus: Record<TaskStatus, number> = {
+        backlog: 0,
+        in_progress: 0,
+        in_review: 0,
+        done: 0,
+      };
+      for (const t of tasks) byStatus[t.status] += 1;
+      const oldestOpen = tasks
+        .filter((t) => t.status !== 'done')
+        .reduce<
+          number | null
+        >((min, t) => (min === null ? t.createdAt : Math.min(min, t.createdAt)), null);
+      return {
+        total: tasks.length,
+        byStatus,
+        oldestOpenDays:
+          oldestOpen === null
+            ? 0
+            : Math.floor((Date.now() - oldestOpen) / 86_400_000),
+        mode,
+      };
+    },
+    {
+      timeoutMs: 1_000,
+      cache: insightsCache,
+      use: [insightsTiming],
+      paramsSchema: ProjectRouteParamsSchema,
+      searchSchema: InsightsSearchSchema,
+      params: ['insights'],
     }
   ),
 };

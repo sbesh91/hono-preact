@@ -4,6 +4,7 @@ import type { FunctionComponent } from 'preact';
 import { serverLoaders } from './project-board.server.js';
 import Board from '../../components/demo/Board.js';
 import NewTaskDialog from '../../components/demo/NewTaskDialog.js';
+import { InsightsPanel } from '../../components/demo/InsightsPanel.js';
 import { PRIORITY_LABEL } from '../../components/demo/priority.js';
 import { PRIORITIES } from '../../demo/data.js';
 
@@ -51,6 +52,7 @@ const ProjectBoardPage: FunctionComponent = () => {
           <NewTaskDialog projectId={project.id} users={users} />
         </div>
       </div>
+      <InsightsPanel slug={project.slug} />
       <Board tasks={tasks} projectSlug={project.slug} users={users} />
     </div>
   );
