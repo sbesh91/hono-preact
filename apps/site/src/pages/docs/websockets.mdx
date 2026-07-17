@@ -332,7 +332,7 @@ Returns:
 
 ### `upgradeWebSocket(createEvents)`
 
-Wraps `hono/ws` upgradeWebSocket, resolved at request time so the same handler works across adapters.
+Wraps Hono's `upgradeWebSocket` pattern, resolved lazily at request time; only the Node adapter installs an upgrader, so this is a Node-adapter API.
 
 | Parameter      | Type                                            | Description                                     |
 | -------------- | ----------------------------------------------- | ----------------------------------------------- |
