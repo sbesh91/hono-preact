@@ -4,6 +4,7 @@ import { defineRoutes, contentRoutes } from 'hono-preact';
 // so the subscriber is installed once at startup.
 import './docs-transition.js';
 import { requireSession } from './demo/guard.js';
+import { archivedGate } from './demo/archived-gate.js';
 import { MdxArticle } from './components/MdxArticle.js';
 
 // The tree is its own `as const` binding (not just inlined into defineRoutes)
@@ -40,6 +41,7 @@ const routeTree = [
           {
             path: ':projectId',
             layout: () => import('./pages/demo/project-header.js'),
+            use: archivedGate,
             children: [
               {
                 path: '',
