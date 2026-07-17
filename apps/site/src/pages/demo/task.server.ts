@@ -19,6 +19,7 @@ import {
   commentAddedEvent,
   taskMovedEvent,
 } from '../../demo/activity-stream.js';
+import { previewOf, type DraftPreview } from '../../demo/draft-preview.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
 // `ctx.location.pathParams` (taskId/projectId) from the route's pattern.
@@ -114,4 +115,30 @@ export const serverActions = {
     },
     { input: SetStatusSchema }
   ),
+};
+
+type DraftMsg = { draft: string };
+
+// The handler is its own named binding so the unit test can drive
+// open/message directly with a stub socket (the SocketRef type the client
+// sees hides the handler methods).
+export const draftPreviewHandler = {
+  // Per-connection setup: seed the preview line immediately so the client
+  // renders stats before the first keystroke.
+  open(socket: { send(msg: DraftPreview): void }) {
+    socket.send(previewOf(''));
+  },
+  // Pure request/response per message: hibernation-safe on Cloudflare (no
+  // in-memory state between events).
+  message(socket: { send(msg: DraftPreview): void }, msg: DraftMsg) {
+    socket.send(previewOf(msg.draft));
+  },
+};
+
+export const serverSockets = {
+  // Route-bound duplex socket (issue #282 P1): binding selects this route's
+  // page-use chain (the requireSession gate inherited from /demo/projects)
+  // for the upgrade guard, and requires the client to supply the route
+  // params, validated at the upgrade (a missing slot denies 4403).
+  draftPreview: route.socket<DraftMsg, DraftPreview>(draftPreviewHandler),
 };

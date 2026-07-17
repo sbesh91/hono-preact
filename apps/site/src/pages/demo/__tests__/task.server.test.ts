@@ -10,6 +10,7 @@ import {
 import {
   serverActions,
   serverLoaders,
+  draftPreviewHandler,
   type TaskDetail,
 } from '../task.server.js';
 import {
@@ -158,5 +159,42 @@ describe('task loader', () => {
 
   it('returns null for an unknown task id', async () => {
     expect(await loadTask('does-not-exist')).toBeNull();
+  });
+});
+
+// The draft-preview socket is a route-bound duplex socket: the handler only
+// touches its own connection, so it is testable by driving the def's
+// lifecycle methods directly with a stub ServerSocket.
+describe('draftPreview socket', () => {
+  beforeEach(() => resetDemoData());
+
+  type Sent = { chars: number; words: number; mentions: string[] };
+  const makeSocket = () => {
+    const sent: Sent[] = [];
+    return {
+      sent,
+      socket: {
+        send: (msg: Sent) => {
+          sent.push(msg);
+        },
+        close: () => {},
+        data: undefined,
+        raw: null,
+      },
+    };
+  };
+
+  it('sends a zero preview on open', async () => {
+    const { socket, sent } = makeSocket();
+    await draftPreviewHandler.open?.(socket);
+    expect(sent).toEqual([{ chars: 0, words: 0, mentions: [] }]);
+  });
+
+  it('answers each draft message with its preview', async () => {
+    const { socket, sent } = makeSocket();
+    await draftPreviewHandler.message?.(socket, {
+      draft: 'ask @bob to review',
+    });
+    expect(sent).toEqual([{ chars: 18, words: 4, mentions: ['Bob'] }]);
   });
 });

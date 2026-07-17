@@ -297,6 +297,7 @@ export const listComments = (taskId: string): Comment[] =>
 
 export const getUser = (id: string): User | null =>
   store.users.find((u) => u.id === id) ?? null;
+export const listUsers = (): User[] => store.users.slice();
 export const findUserByEmail = (email: string): User | null =>
   store.users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ??
   null;

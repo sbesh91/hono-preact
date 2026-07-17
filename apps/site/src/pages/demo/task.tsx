@@ -14,6 +14,7 @@ import { ArrowLeft } from 'lucide-preact';
 import {
   serverLoaders,
   serverActions,
+  serverSockets,
   type TaskDetail,
 } from './task.server.js';
 import { serverLoaders as boardLoaders } from './project-board.server.js';
@@ -222,6 +223,18 @@ const CommentsSection: FunctionComponent<{
   });
   const { pending } = useFormStatus(serverActions.addComment);
 
+  // Live draft preview over the route-bound duplex socket. The params are
+  // required by the binding and validated at the upgrade; the upgrade also
+  // runs the requireSession gate this route inherits, so signed-out users
+  // simply never connect (status stays 'connecting').
+  const { projectId, taskId: taskIdParam } = useParams(
+    '/demo/projects/:projectId/tasks/:taskId'
+  );
+  const preview = serverSockets.draftPreview.useSocket({
+    params: { projectId, taskId: taskIdParam },
+    lastMessage: true,
+  });
+
   return (
     <section class={`${PANEL} space-y-4`}>
       <h3 class="text-base font-semibold text-foreground">
@@ -243,9 +256,40 @@ const CommentsSection: FunctionComponent<{
           rows={3}
           required
           placeholder="Add a comment"
+          onInput={(e) => {
+            if (preview.status === 'open') {
+              preview.send({ draft: e.currentTarget.value });
+            }
+          }}
           class="block w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
         />
-        <div class="flex justify-end">
+        <div class="flex items-center justify-between gap-3">
+          <p class="flex items-center gap-1.5 text-xs text-muted">
+            <span
+              class={[
+                'inline-block h-1.5 w-1.5 rounded-full',
+                preview.status === 'open' ? 'bg-green-500' : 'bg-amber-400',
+              ].join(' ')}
+              aria-hidden
+            />
+            {preview.status === 'open' && preview.lastMessage ? (
+              <>
+                {preview.lastMessage.chars} chars &middot;{' '}
+                {preview.lastMessage.words} words
+                {preview.lastMessage.mentions.length > 0 && (
+                  <>
+                    {' '}
+                    &middot; mentions{' '}
+                    <strong class="font-medium text-foreground">
+                      {preview.lastMessage.mentions.join(', ')}
+                    </strong>
+                  </>
+                )}
+              </>
+            ) : (
+              'Live preview connecting…'
+            )}
+          </p>
           <button
             type="submit"
             class="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
