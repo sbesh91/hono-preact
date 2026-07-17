@@ -53,6 +53,10 @@ type Store = {
     at: number;
     userId: string | null;
   }[];
+  // Deleted tasks parked for undo. Per-process, like the rest of the store:
+  // on Workers a restore may land on a different isolate and legitimately
+  // find nothing (the restore action denies 404 in that case).
+  trash: Map<string, { task: Task; comments: Comment[] }>;
   nextId: number;
 };
 
@@ -297,7 +301,15 @@ function freshStore(): Store {
     ]),
   ];
 
-  return { users, projects, tasks, comments, moves: [], nextId: 100 };
+  return {
+    users,
+    projects,
+    tasks,
+    comments,
+    moves: [],
+    trash: new Map(),
+    nextId: 100,
+  };
 }
 
 export function resetDemoData(): void {
@@ -384,9 +396,24 @@ export function setTaskPriority(taskId: string, priority: TaskPriority): void {
 }
 
 export function deleteTask(taskId: string): void {
+  const task = store.tasks.find((t) => t.id === taskId);
+  if (!task) return;
+  store.trash.set(taskId, {
+    task,
+    comments: store.comments.filter((c) => c.taskId === taskId),
+  });
   store.tasks = store.tasks.filter((t) => t.id !== taskId);
   store.comments = store.comments.filter((c) => c.taskId !== taskId);
   store.moves = store.moves.filter((m) => m.taskId !== taskId);
+}
+
+export function restoreTask(taskId: string): Task | null {
+  const entry = store.trash.get(taskId);
+  if (!entry) return null;
+  store.trash.delete(taskId);
+  store.tasks.push(entry.task);
+  store.comments.push(...entry.comments);
+  return entry.task;
 }
 
 export function addComment(

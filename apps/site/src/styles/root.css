@@ -5204,6 +5204,59 @@ html:active-view-transition-type(demo-within)::view-transition-new(
   }
 }
 
+/* ----- Demo: delete-with-undo Toast (Toaster region + item) ----- */
+/* The Toaster region is a top-layer `popover="manual"` element; without
+   explicit positioning it falls back to the UA's centered popover box, so
+   the region itself (not just the item) needs a rule here. */
+.demo-toaster {
+  position: fixed;
+  inset: auto 1rem 1rem auto;
+  width: min(20rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+.demo-toaster ol {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.demo-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  background: var(--background);
+  box-shadow: var(--shadow-subtle);
+  opacity: 1;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+@starting-style {
+  .demo-toast[data-state='open'] {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+.demo-toast[data-state='closed'] {
+  animation: demo-toast-out 160ms ease-in forwards;
+}
+@keyframes demo-toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .demo-popup,
   .demo-popup[data-state='open'],
@@ -5211,7 +5264,9 @@ html:active-view-transition-type(demo-within)::view-transition-new(
   .demo-dialog,
   .demo-dialog[data-state='closed'],
   .demo-dialog::backdrop,
-  .demo-dialog[data-state='closed']::backdrop {
+  .demo-dialog[data-state='closed']::backdrop,
+  .demo-toast,
+  .demo-toast[data-state='closed'] {
     transition: none;
     animation: none;
   }

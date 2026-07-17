@@ -9,6 +9,7 @@ import {
   setTaskStatus,
   setTaskPriority,
   deleteTask,
+  restoreTask,
   type Task,
   type Project,
   type User,
@@ -186,6 +187,23 @@ export const serverActions = {
       if (!user) throw deny(401, 'Sign in to delete tasks.');
       deleteTask(input.taskId);
       return { ok: true };
+    },
+    { input: DeleteTaskSchema }
+  ),
+
+  // Undo for deleteTask. The trash is per-process (like the whole demo store),
+  // so on Workers a restore may land on a fresh isolate and find nothing;
+  // denying 404 lets the client surface "undo expired" honestly. Reuses
+  // DeleteTaskSchema: the payload is the same single taskId.
+  restoreTask: defineAction(
+    async (ctx, input) => {
+      const user = await currentUser(ctx.c);
+      if (!user) throw deny(401, 'Sign in to restore tasks.');
+      const restored = restoreTask(input.taskId);
+      if (!restored) {
+        throw deny(404, 'Nothing to restore: the undo window expired.');
+      }
+      return { id: restored.id };
     },
     { input: DeleteTaskSchema }
   ),

@@ -1,13 +1,38 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { createCaller, isDeny, type CallResult } from 'hono-preact';
-import { serverLoaders, type BoardData } from '../project-board.server.js';
+import {
+  serverLoaders,
+  serverActions,
+  type BoardData,
+} from '../project-board.server.js';
 import {
   insightsCache,
   timeLoader,
   type ProjectInsights,
 } from '../board-insights.js';
-import { resetDemoData } from '../../../demo/data.js';
+import { resetDemoData, deleteTask, getTask } from '../../../demo/data.js';
+import { signIn } from '../../../demo/session.js';
+
+// A cookie set on the response is not readable on the same request, so the
+// session cookie is minted in a first round-trip and replayed as a request
+// header on the action call (currentUser reads it off c.req).
+async function mintSessionCookie(user: {
+  id: string;
+  email: string;
+  name: string;
+}): Promise<string> {
+  const app = new Hono();
+  app.post('/login', async (c) => {
+    await signIn(c, user);
+    return c.text('ok');
+  });
+  const res = await app.request('/login', { method: 'POST' });
+  const setCookie = res.headers.get('set-cookie');
+  if (!setCookie) throw new Error('expected a session cookie');
+  // Strip attributes (Path, HttpOnly, ...); keep just `name=value`.
+  return setCookie.split(';')[0];
+}
 
 const callBoard = async (projectId: string): Promise<CallResult<BoardData>> => {
   const app = new Hono();
@@ -156,5 +181,64 @@ describe('project insights loader', () => {
     const [name, value] = header.mock.calls[0];
     expect(name).toBe('Server-Timing');
     expect(String(value)).toMatch(/insights;dur=\d/);
+  });
+});
+
+describe('restoreTask action', () => {
+  beforeEach(() => resetDemoData());
+
+  const runRestore = async (
+    taskId: string,
+    cookie: string | null
+  ): Promise<CallResult<{ id: string }>> => {
+    const app = new Hono();
+    let result!: CallResult<{ id: string }>;
+    app.post('/', async (c) => {
+      result = await createCaller(c).call(serverActions.restoreTask, {
+        taskId,
+      });
+      return c.text('ok');
+    });
+    await app.request('/', {
+      method: 'POST',
+      headers: cookie ? { Cookie: cookie } : {},
+    });
+    return result;
+  };
+
+  it('restores a just-deleted task for a signed-in user', async () => {
+    const cookie = await mintSessionCookie({
+      id: 'u-1',
+      email: 'alice@example.com',
+      name: 'Alice',
+    });
+    deleteTask('t-1');
+    const r = await runRestore('t-1', cookie);
+    expect(r.ok).toBe(true);
+    expect(getTask('t-1')).not.toBeNull();
+  });
+
+  it('denies 404 when the trash has no entry', async () => {
+    const cookie = await mintSessionCookie({
+      id: 'u-1',
+      email: 'alice@example.com',
+      name: 'Alice',
+    });
+    const r = await runRestore('t-1', cookie);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) expect(r.outcome.status).toBe(404);
+    }
+  });
+
+  it('denies 401 when signed out', async () => {
+    deleteTask('t-1');
+    const r = await runRestore('t-1', null);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) expect(r.outcome.status).toBe(401);
+    }
   });
 });
