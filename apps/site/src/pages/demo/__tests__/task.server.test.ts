@@ -184,6 +184,39 @@ describe('task loader', () => {
   });
 });
 
+// The comments loader is streaming (an async generator), so it is called
+// like projects-shell.server.test.ts's activity loader: paramsSchema
+// coercion runs when the generator is PRODUCED, before any chunk is drawn,
+// so a malformed id denies before iteration rather than mid-stream.
+describe('comments loader (streaming)', () => {
+  beforeEach(() => resetDemoData());
+
+  const callComments = async (pathParams: {
+    projectId: string;
+    taskId: string;
+  }): Promise<CallResult<unknown>> => {
+    const app = new Hono();
+    let result!: CallResult<unknown>;
+    app.get('/', async (c) => {
+      result = await createCaller(c).call(serverLoaders.comments, {
+        location: { pathParams },
+      });
+      return c.text('ok');
+    });
+    await app.request('/');
+    return result;
+  };
+
+  it('rejects a malformed task id via paramsSchema (framework 404)', async () => {
+    const r = await callComments({ projectId: 'inf', taskId: 'DROP TABLE' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) expect(r.outcome.status).toBe(404);
+    }
+  });
+});
+
 // The draft-preview socket is a route-bound duplex socket: the handler only
 // touches its own connection, so it is testable by driving the def's
 // lifecycle methods directly with a stub ServerSocket.

@@ -3,9 +3,11 @@
 // children, a cold failure (including the deep-mode TimeoutError) routes to
 // errorFallback with a reset, and a stale error after data surfaces through
 // useError() without unmounting the stats.
-import { TimeoutError } from 'hono-preact';
+import { TimeoutError, useRoute, type LoaderState } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { serverLoaders } from '../../pages/demo/project-board.server.js';
+import type { ProjectInsights } from '../../pages/demo/board-insights.js';
+import { boardHref } from '../../demo/board-links.js';
 import { STATUSES, type TaskStatus } from '../../demo/data.js';
 
 const insightsLoader = serverLoaders.insights;
@@ -17,9 +19,16 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   done: 'Done',
 };
 
-const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
-  const state = insightsLoader.useData();
-  const staleError = insightsLoader.useError();
+// Pure render body, extracted so it can be exercised with canned loader
+// state in a DOM test without mounting the real loader (mirrors
+// ActivityBar's renderActivityBar). No behavior change from the inline
+// version this replaces.
+export function renderInsightsBody(
+  state: LoaderState<ProjectInsights>,
+  staleError: Error | null,
+  slug: string,
+  searchParams: Record<string, string>
+) {
   if (state.status === 'loading') {
     return <p class="text-xs text-muted">Computing insights…</p>;
   }
@@ -48,14 +57,17 @@ const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
       </span>
       {d.mode === 'quick' ? (
         <a
-          href={`/demo/projects/${slug}?insights=deep`}
+          href={boardHref(slug, {
+            insights: 'deep',
+            priority: searchParams.priority,
+          })}
           class="font-medium underline hover:text-foreground"
         >
           Run deep analysis (times out on purpose)
         </a>
       ) : (
         <a
-          href={`/demo/projects/${slug}`}
+          href={boardHref(slug, { priority: searchParams.priority })}
           class="font-medium underline hover:text-foreground"
         >
           Back to quick insights
@@ -66,6 +78,13 @@ const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
       )}
     </div>
   );
+}
+
+const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
+  const state = insightsLoader.useData();
+  const staleError = insightsLoader.useError();
+  const { searchParams } = useRoute();
+  return renderInsightsBody(state, staleError, slug, searchParams);
 };
 
 export const InsightsPanel: FunctionComponent<{ slug: string }> = ({
@@ -81,6 +100,10 @@ export const InsightsPanel: FunctionComponent<{ slug: string }> = ({
           <button class="font-medium underline" onClick={reset}>
             Try again
           </button>{' '}
+          {/* Hooks are illegal in the errorFallback closure (it renders
+              outside the loader's component tree), so useRoute() isn't
+              available here: this deliberately drops the current
+              ?priority= filter rather than reaching for it. */}
           <a href={`/demo/projects/${slug}`} class="font-medium underline">
             Back to quick insights
           </a>

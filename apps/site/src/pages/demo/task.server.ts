@@ -56,28 +56,31 @@ export const serverLoaders = {
     { paramsSchema: TaskRouteParamsSchema }
   ),
 
-  comments: route.loader(async function* ({
-    location,
-    signal,
-  }): AsyncGenerator<WithAuthor<Comment>[]> {
-    const id = location.pathParams.taskId;
-    if (!id) {
-      yield [];
-      return;
-    }
-    const all = listComments(id).map(withAuthor);
-    // Demo throttle: trickle comments one at a time. Removes any feeling of
-    // "wait for the whole loader" and is the visible proof of streaming.
-    const cumulative: WithAuthor<Comment>[] = [];
-    for (const c of all) {
-      if (signal.aborted) return;
-      cumulative.push(c);
-      yield cumulative;
-      await new Promise((r) => setTimeout(r, 300));
-    }
-    // Final yield to flush state when there are zero comments.
-    if (cumulative.length === 0) yield [];
-  }),
+  comments: route.loader(
+    async function* ({
+      location,
+      signal,
+    }): AsyncGenerator<WithAuthor<Comment>[]> {
+      const id = location.pathParams.taskId;
+      if (!id) {
+        yield [];
+        return;
+      }
+      const all = listComments(id).map(withAuthor);
+      // Demo throttle: trickle comments one at a time. Removes any feeling of
+      // "wait for the whole loader" and is the visible proof of streaming.
+      const cumulative: WithAuthor<Comment>[] = [];
+      for (const c of all) {
+        if (signal.aborted) return;
+        cumulative.push(c);
+        yield cumulative;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      // Final yield to flush state when there are zero comments.
+      if (cumulative.length === 0) yield [];
+    },
+    { paramsSchema: TaskRouteParamsSchema }
+  ),
 
   activity: route.loader(
     async ({ location }): Promise<ActivityItem[]> => {

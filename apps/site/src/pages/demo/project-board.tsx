@@ -1,5 +1,5 @@
 // apps/site/src/pages/demo/project-board.tsx
-import { definePage } from 'hono-preact';
+import { definePage, useRoute } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { serverLoaders } from './project-board.server.js';
 import Board from '../../components/demo/Board.js';
@@ -7,10 +7,14 @@ import NewTaskDialog from '../../components/demo/NewTaskDialog.js';
 import { InsightsPanel } from '../../components/demo/InsightsPanel.js';
 import { PRIORITY_LABEL } from '../../components/demo/priority.js';
 import { PRIORITIES } from '../../demo/data.js';
+import { boardHref } from '../../demo/board-links.js';
 
 const boardLoader = serverLoaders.default;
 
 const ProjectBoardPage: FunctionComponent = () => {
+  // Hoisted once (not per chip): hooks are illegal in a loop/map callback,
+  // and every chip needs the current ?insights= value to preserve it.
+  const { searchParams } = useRoute();
   const { status, data } = boardLoader.useData();
   if (status === 'loading') return <BoardSkeleton />;
   if (!data) return <BoardSkeleton />;
@@ -31,11 +35,10 @@ const ProjectBoardPage: FunctionComponent = () => {
           {(['all', ...PRIORITIES] as const).map((p) => (
             <a
               key={p}
-              href={
-                p === 'all'
-                  ? `/demo/projects/${project.slug}`
-                  : `/demo/projects/${project.slug}?priority=${p}`
-              }
+              href={boardHref(project.slug, {
+                priority: p,
+                insights: searchParams.insights,
+              })}
               aria-current={priority === p ? 'page' : undefined}
               class={[
                 'rounded-full px-2 py-0.5 font-medium',
