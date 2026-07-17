@@ -8,7 +8,11 @@ import * as hp from 'hono-preact';
 // entry must either be imported somewhere in the demo surface or carry an
 // explicit allowlist reason. Type-only exports are invisible to Object.keys
 // and are out of scope by design. A stale allowlist entry (the symbol got
-// covered) fails too, so the list cannot rot in either direction.
+// covered) fails too, so the list cannot rot in either direction. The scan
+// also matches the `hono-preact/page` subpath so dual-exported symbols count
+// as covered when the demo reaches them only that way; subpath-only symbols
+// that are not main-entry exports (like `render`) simply never appear in
+// Object.keys(hp) and are ignored by the diff.
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SCAN_ROOTS = [
@@ -92,7 +96,7 @@ function collectFiles(root: string): string[] {
 function importedNames(source: string): string[] {
   const names: string[] = [];
   // Value imports only: `import type {...}` exercises nothing at runtime.
-  const re = /import\s+\{([^}]+)\}\s+from\s+'hono-preact'/g;
+  const re = /import\s+\{([^}]+)\}\s+from\s+'hono-preact(?:\/page)?'/g;
   for (const m of source.matchAll(re)) {
     for (const raw of m[1].split(',')) {
       const item = raw.trim();
