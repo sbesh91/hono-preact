@@ -174,10 +174,10 @@ A room's route and its channel must be **congruent**: every `:param` the route p
 
 Whether a mismatch fails the boot depends on how the room reaches its route:
 
-- An **explicitly bound** room (`serverRoute(r).room`, or the equivalent `serverRoute(r).socket`) opted into the route contract, so a mismatch is a bug in that binding. It **fails the boot closed**, but only when a guard could actually read the mismatched param, that is, when at least one of the three tiers is non-empty: app-level `use` from `defineApp`, the route-node `use` chain, or the room's own `use`. If all three are empty, no guard could misread the param today, so the boot proceeds and prints a console advisory naming the mismatch instead. Either way the gap is never silent.
-- A **colocated** room (no `serverRoute` binding) **never fails the boot** for a mismatch, whether or not a guard tier is live. Its effective route is just its module's mount, an accident of file layout rather than a contract you authored, and the framework has no param wire to give it either way. Failing the boot here would break an app the moment it added a guard anywhere in the chain, so the room prints the same console advisory instead: the guard chain reads the missing param as `undefined`, whether a guard reads it now or you add one later. That advisory (like the socket one below) prints in production too, not just in dev. It is the only signal you get that the mismatch is live.
+- An **explicitly bound** room (`serverRoute(r).room`, or the equivalent `serverRoute(r).socket`) **fails the boot closed** on a mismatch, but only when a guard could actually read the mismatched param, that is, when at least one of the three tiers is non-empty: app-level `use` from `defineApp`, the route-node `use` chain, or the room's own `use`. With all three empty, no guard can read the param, so the boot proceeds and prints a console advisory naming the mismatch instead. Either way the mismatch is never silent.
+- A **colocated** room (no `serverRoute` binding) **never fails the boot** for a mismatch. Its route is its module's mount, and it carries no param wire, so its guard chain reads the missing param as `undefined`. It prints the same console advisory instead, whether a guard reads that param today or you add one later. That advisory (like the socket one below) prints in production too, not just in dev: it is your only signal that the mismatch is live.
 
-When congruence holds (names line up correctly), a separate dev-only advisory names each correspondence (which route param is satisfied by which channel key), so the pairing is never silent even when the names happen to match. Either way, the underlying reason is the same: the room's guard chain reads its params from the resolved **channel** key, not the route, so a route param the channel doesn't guarantee would leave a guard reading it as `undefined`.
+When congruence holds (names line up correctly), a separate dev-only advisory names each correspondence (which route param is satisfied by which channel key), so the pairing is never silent even when the names happen to match. A room's guard chain reads its params from the resolved **channel** key, not the route, so a route param the channel doesn't carry reads as `undefined`.
 
 The requirement applies to a colocated room the same as an explicitly bound one: a colocated room's effective route is the module's mount, so its params are checked against that mount even with no declared `__routeId`. A bare `defineRoom` with no route binding and no colocation is route-independent and is not checked.
 
@@ -227,9 +227,9 @@ honoPreact({
 
 `realtimeBinding` must match the binding `name`; `realtimeClass` must match both the binding `class_name` and the `new_sqlite_classes` migration tag. `realtimeClass` must be a valid JavaScript identifier (it is emitted as a `class` declaration in the generated entry).
 
-Two behaviors differ between Node and Cloudflare:
+A few behaviors differ between Node and Cloudflare:
 
-- **Plain sockets (`defineSocket`/`useSocket`) now work on Cloudflare.** The worker guards the upgrade at the edge and forwards it to a per-connection Durable Object running under the Hibernation API. See [WebSockets](/docs/websockets) for setup details.
+- **Plain sockets (`defineSocket`/`useSocket`) run in a Durable Object.** On Cloudflare, the worker guards the upgrade at the edge and forwards it to a per-connection Durable Object running under the Hibernation API; on Node they run in-process. See [WebSockets](/docs/websockets) for setup details.
 - **`onJoin` teardown functions run only on Node.** A function returned from `onJoin` is called on connection close in the Node runtime. On Cloudflare a Durable Object can hibernate between messages, so the teardown cannot be preserved. Use `onLeave` for cleanup that must run on both runtimes.
 - **`conn.data` is read-only edge metadata.** `conn.data` is typed `Readonly<Data>` and seeded by the `data()` factory at upgrade time. For state that evolves and must broadcast, use `setPresence`. For Node-only mutable per-connection state, capture a closure variable in `onJoin()` instead.
 
