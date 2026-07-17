@@ -1,0 +1,48 @@
+# Local registry for the scaffold smoke job (.github/workflows/ci.yml).
+#
+# The smoke scaffolds an app and lets the CLI run a real `npm install`. That
+# install has to resolve the template's `hono-preact` pin. Against the public
+# registry that pin is whatever was last published, which means the smoke never
+# exercised THIS commit's framework, and it means a release PR (which bumps the
+# pin to a version that does not exist yet, per the lockstep policy in
+# CLAUDE.md) could not install at all.
+#
+# So the job publishes the workspace's own packages here and points npm at this
+# registry instead. Everything else proxies through to npmjs via the uplink.
+storage: ./.verdaccio-storage
+# Anonymous publish: this registry lives and dies with one CI job on a private
+# runner, so there is no auth story worth having. `$all` on publish/unpublish
+# keeps the job from needing a token dance.
+packages:
+  'hono-preact':
+    access: $all
+    publish: $all
+    unpublish: $all
+  'hono-preact-ui':
+    access: $all
+    publish: $all
+    unpublish: $all
+  'create-hono-preact':
+    access: $all
+    publish: $all
+    unpublish: $all
+  '**':
+    access: $all
+    proxy: npmjs
+
+uplinks:
+  npmjs:
+    url: https://registry.npmjs.org/
+    # The scaffold install pulls a full dependency tree through this uplink on a
+    # cold runner; the defaults are tight enough to flake under that.
+    timeout: 60s
+    maxage: 60m
+    max_fails: 5
+    fail_timeout: 10m
+    cache: true
+
+# Nothing here should ever be reachable off-box.
+listen: localhost:4873
+
+logs:
+  - { type: stdout, format: pretty, level: warn }
