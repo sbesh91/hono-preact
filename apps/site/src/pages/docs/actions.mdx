@@ -358,7 +358,7 @@ const Movies = () => {
 };
 ```
 
-`useAction` posts to the page URL with `Accept: application/json` and returns a discriminated result. The action body runs identically whether called from `<Form>` or `useAction`. `useAction` also accepts an opt-in `schema` option for client-side pre-validation; see [Validation](/docs/validation#pre-validating-an-imperative-action).
+`useAction` posts to the page URL with `Accept: application/json, text/event-stream;q=0.9` and returns a discriminated result. The dual header lets json-returning actions negotiate a plain JSON response while still accepting a streaming one: when the action streams, the response arrives as `text/event-stream` and is delivered chunk by chunk to `onChunk` instead. The action body runs identically whether called from `<Form>` or `useAction`. `useAction` also accepts an opt-in `schema` option for client-side pre-validation; see [Validation](/docs/validation#pre-validating-an-imperative-action).
 
 ### Options
 

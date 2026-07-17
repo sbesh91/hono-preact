@@ -26,9 +26,10 @@ const EXTRA_FILES = ['../routes.ts', '../app-config.ts', '../api.ts'].map((p) =>
 );
 
 const ALLOWLIST: Record<string, string> = {
-  // Seed entries; the implementer completes this empirically (see Step 2).
-  // Every entry needs a one-line reason tied to WHY the demo cannot or need
-  // not exercise it.
+  // Every entry needs a one-line reason tied to why the demo cannot or need
+  // not exercise the export; the stale/ghost assertions below keep this list
+  // honest in both directions, so don't add an entry without a reason or
+  // leave one behind once the demo starts covering it.
   bootClient: 'custom client entries only; the demo uses the generated entry',
   ClientScript: 'document plumbing emitted by the framework layout',
   Head: 'document plumbing used by the site root Layout.tsx, not demo code',

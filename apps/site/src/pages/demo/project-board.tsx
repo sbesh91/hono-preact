@@ -41,7 +41,11 @@ const ProjectBoardPage: FunctionComponent = () => {
                 insights: searchParams.insights,
               })}
               transition={false}
-              aria-current={priority === p ? 'page' : undefined}
+              // NavLink's own active detection is path-only, so it would
+              // mark the query-less All chip current too; pin aria-current
+              // explicitly here ('false' suppresses NavLink's fallback,
+              // since undefined would not).
+              aria-current={priority === p ? 'page' : 'false'}
               class={[
                 'rounded-full px-2 py-0.5 font-medium',
                 priority === p

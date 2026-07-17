@@ -70,6 +70,10 @@ export function renderInsightsBody(
             priority: searchParams.priority,
           })}
           transition={false}
+          // These are mode toggles, not location links: suppress NavLink's
+          // own path-active fallback (aria-current="false", since undefined
+          // would not suppress it) rather than let it mark either arm current.
+          aria-current="false"
           class="font-medium underline hover:text-foreground"
         >
           Run deep analysis (times out on purpose)
@@ -78,6 +82,7 @@ export function renderInsightsBody(
         <NavLink
           href={boardHref(slug, { priority: searchParams.priority })}
           transition={false}
+          aria-current="false"
           class="font-medium underline hover:text-foreground"
         >
           Back to quick insights
