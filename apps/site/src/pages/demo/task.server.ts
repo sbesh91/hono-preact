@@ -61,12 +61,7 @@ export const serverLoaders = {
       location,
       signal,
     }): AsyncGenerator<WithAuthor<Comment>[]> {
-      const id = location.pathParams.taskId;
-      if (!id) {
-        yield [];
-        return;
-      }
-      const all = listComments(id).map(withAuthor);
+      const all = listComments(location.pathParams.taskId).map(withAuthor);
       // Demo throttle: trickle comments one at a time. Removes any feeling of
       // "wait for the whole loader" and is the visible proof of streaming.
       const cumulative: WithAuthor<Comment>[] = [];

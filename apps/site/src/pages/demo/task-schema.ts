@@ -63,7 +63,9 @@ export const TaskRouteParamsSchema = v.object({
 
 // Board filter: searchSchema validates and defaults ?priority=. An unknown
 // value responds 400 through the framework (LoaderValidationError on the
-// client); unrelated query keys pass through untouched.
+// client); v.object strips any undeclared key from the schema's output, so
+// unrelated query keys are dropped from the loader's searchParams view, even
+// though the request URL itself is unaffected.
 export const BoardSearchSchema = v.object({
   priority: v.optional(v.picklist(['all', ...PRIORITIES]), 'all'),
 });

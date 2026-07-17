@@ -52,4 +52,33 @@ describe('renderInsightsBody', () => {
 
     expect(screen.getByText(/Computing insights/)).toBeTruthy();
   });
+
+  // Pin for the query-knob composition in boardHref: the deep-analysis link
+  // must carry the current ?priority= filter forward alongside ?insights=deep,
+  // not drop it.
+  it('threads the current priority filter into the deep-analysis link', () => {
+    const state: LoaderState<ProjectInsights> = {
+      status: 'success',
+      data: stats,
+    };
+    render(renderInsightsBody(state, null, 'inf', { priority: 'high' }));
+
+    const link = screen.getByRole('link', { name: /Run deep analysis/ });
+    expect(link.getAttribute('href')).toBe(
+      '/demo/projects/inf?priority=high&insights=deep'
+    );
+  });
+
+  // Pin for the same composition on the way back: the "back to quick
+  // insights" link must keep the priority filter and drop only ?insights=.
+  it('threads the current priority filter into the back-to-quick link', () => {
+    const state: LoaderState<ProjectInsights> = {
+      status: 'success',
+      data: { ...stats, mode: 'deep' },
+    };
+    render(renderInsightsBody(state, null, 'inf', { priority: 'high' }));
+
+    const link = screen.getByRole('link', { name: /Back to quick insights/ });
+    expect(link.getAttribute('href')).toBe('/demo/projects/inf?priority=high');
+  });
 });

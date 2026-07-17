@@ -186,17 +186,17 @@ describe('task loader', () => {
 
 // The comments loader is streaming (an async generator), so it is called
 // like projects-shell.server.test.ts's activity loader: paramsSchema
-// coercion runs when the generator is PRODUCED, before any chunk is drawn,
-// so a malformed id denies before iteration rather than mid-stream.
+// validation runs before the loader fn is invoked at all, so a malformed id
+// denies before the generator is ever produced and no stream opens.
 describe('comments loader (streaming)', () => {
   beforeEach(() => resetDemoData());
 
   const callComments = async (pathParams: {
     projectId: string;
     taskId: string;
-  }): Promise<CallResult<unknown>> => {
+  }): Promise<CallResult<AsyncGenerator<unknown[]>>> => {
     const app = new Hono();
-    let result!: CallResult<unknown>;
+    let result!: CallResult<AsyncGenerator<unknown[]>>;
     app.get('/', async (c) => {
       result = await createCaller(c).call(serverLoaders.comments, {
         location: { pathParams },
@@ -214,6 +214,18 @@ describe('comments loader (streaming)', () => {
       expect(isDeny(r.outcome)).toBe(true);
       if (isDeny(r.outcome)) expect(r.outcome.status).toBe(404);
     }
+  });
+
+  it('streams the seeded comments for a valid task id', async () => {
+    const r = await callComments({ projectId: 'inf', taskId: 't-1' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    let last: unknown[] = [];
+    for await (const chunk of r.value) {
+      last = chunk;
+    }
+    expect(last.length).toBeGreaterThan(0);
   });
 });
 
