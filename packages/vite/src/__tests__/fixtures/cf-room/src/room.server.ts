@@ -18,7 +18,9 @@ const roomChannel = defineChannel('room/:id')<RoomMsg>();
 const deniedChannel = defineChannel('denied/:id')<RoomMsg>();
 
 // A third channel for the factory-less probe room (distinct topic space).
-type ProbeReply = { dataIsUndefined: boolean };
+type ProbeReply =
+  | { dataIsUndefined: boolean }
+  | { paramsProtoIsNull: boolean };
 const probeChannel = defineChannel('probe/:id')<ProbeReply>();
 
 // A guard that ALWAYS denies. This is the canonical auth-deny shape (the same
@@ -47,7 +49,20 @@ export const serverRooms = {
   // conn.data to undefined). The DO reaches this via realtime-do's "x-hp-data
   // absent -> undefined" branch. onMessage replies to the SENDER (conn.send =
   // sendTo self) so a single connected client observes its own probe result.
+  //
+  // onJoin also reports that the room-key `params` object it receives is an
+  // ORDINARY object on Cloudflare (rehydrated from the `x-hp-params` header via
+  // `JSON.parse`), matching the Node path: the prototype-chain param-read
+  // hazard is closed structurally (no channel/route can declare a reserved
+  // param name), so params does not need a null prototype and stays a normal
+  // object across both isolates. This is the cross-isolate, real-workerd
+  // version of that parity (the unit-testable half lives in server's own tests).
   probe: defineRoom(probeChannel, {
+    onJoin(conn, { params }) {
+      conn.send({
+        paramsProtoIsObject: Object.getPrototypeOf(params) === Object.prototype,
+      });
+    },
     onMessage(conn) {
       conn.send({ dataIsUndefined: conn.data === undefined });
     },

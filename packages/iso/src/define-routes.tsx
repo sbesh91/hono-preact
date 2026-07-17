@@ -13,6 +13,7 @@ import { RouteManifestContext } from './internal/route-manifest.js';
 import { makeRouterLoadTracker } from './internal/route-change.js';
 import { PageMiddlewareHost } from './internal/page-middleware-host.js';
 import type { PageUse } from './internal/use-types.js';
+import { reservedParamNamesIn } from './internal/param-slots.js';
 
 function wrapWithRouteLocations(
   serverMod: unknown,
@@ -229,6 +230,23 @@ function collectRouteViolations(
         errors.push(rule.message(here));
         break;
       }
+    }
+    // Reserved-param-name check (the convergent prototype-chain fix, see
+    // isReservedParamName's own doc): orthogonal to the shape rules above
+    // (a node can violate both a shape rule and this one), so it is not
+    // folded into ROUTE_RULES's break-after-first-match table. A route can
+    // never DECLARE a param named after an Object.prototype member; a guard
+    // reading `ctx.location.pathParams` for a request that OMITS such a
+    // param would otherwise misread the inherited member as present.
+    for (const name of reservedParamNamesIn(r.path)) {
+      errors.push(
+        `Route ${here}: the param ':${name}' is reserved -- it resolves ` +
+          `through Object.prototype (or otherwise carries prototype-chain ` +
+          `meaning) on a plain params object, so a guard reading an ABSENT ` +
+          `param of this name would read the inherited member instead of ` +
+          `undefined and wrongly treat it as present. Rename the param to ` +
+          `something that is not '${name}'.`
+      );
     }
     if (ctx.hasChildren) {
       collectRouteViolations(r.children!, here === '/' ? '' : here, errors);

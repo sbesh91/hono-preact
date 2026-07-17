@@ -134,7 +134,7 @@ The client has only `send`. There is no client-side `broadcast` because fan-out 
 
 ## Guard inheritance
 
-The guard chain for a room is: app `use` (from `defineApp({ use })`) then route-node `use` (from `serverRoute`, if the room lives next to a route) then the room's own `use`:
+The guard chain for a room is: app `use` (from `defineApp({ use })`) then the owning route's page-layer `use` then the room's own `use`. A room colocated with a route (its `.server.ts` sibling) inherits that route's `use` chain automatically, the same as a colocated loader or action:
 
 ```ts
 export const serverRooms = {
@@ -146,9 +146,50 @@ export const serverRooms = {
 };
 ```
 
+`serverRoute(r).room(channel, handler)` binds a room to a route explicitly instead of relying on colocation:
+
+```ts
+// src/server/boards/cursors.server.ts
+import { serverRoute } from 'hono-preact';
+import { cursorsChannel } from '../../cursors-channel.js';
+
+const route = serverRoute('/board/:boardId');
+
+export const serverRooms = {
+  cursors: route.room(cursorsChannel, {
+    // Inherits `/board/:boardId`'s page-layer `use` chain, wherever this file lives.
+    onJoin(conn, { params }) {
+      // params is typed from the CHANNEL pattern (board/:boardId), not the route.
+      // The route's own `:boardId` is required to be a channel param of the same
+      // name too, so the guard chain's `ctx.location.pathParams.boardId` and this
+      // `params.boardId` always denote the same resource.
+    },
+  }),
+};
+```
+
+The declared pattern is stamped on the def and validated at boot: a pattern that does not match the module's mount, names an unknown route, or targets a childless wildcard fails the boot rather than running the room under an empty gate chain. A declared binding takes precedence over the module-mount derivation, so it also lets a route-bound room live under the [`src/server` registry](/docs/routes#the-srcserver-registry) organized by domain rather than beside its view. A bare `defineRoom` with no `serverRoute` binding, defined in a `src/server` registry module rather than colocated with a route, is route-independent: it only ever runs the app-level `use` and its own `use`.
+
+A room's route and its channel must be **congruent**: every `:param` the route pattern declares (including an optional `:id?` or rest `:rest*`/`:rest+` slot) must also be a param the channel pattern declares, and every `:param` the route _requires_ must be a _required_ param of the channel too (an optional or rest channel slot can be absent at runtime, so it cannot stand in for a required route param). The channel may be finer-grained and carry extra params of its own, but never coarser. `/board/:boardId` bound to a `board/:boardId` channel is congruent; `/board/:id` bound to that same channel is not, because `id` names no channel key. This applies whether the route param is required or optional/rest: preact-iso's runtime matcher binds an optional or rest param over HTTP just as readily as a required one, so a guard can read it either way.
+
+Whether a mismatch fails the boot depends on how the room reaches its route:
+
+- An **explicitly bound** room (`serverRoute(r).room`, or the equivalent `serverRoute(r).socket`) **fails the boot closed** on a mismatch, but only when a guard could actually read the mismatched param, that is, when at least one of the three tiers is non-empty: app-level `use` from `defineApp`, the route-node `use` chain, or the room's own `use`. With all three empty, no guard can read the param, so the boot proceeds and prints a console advisory naming the mismatch instead. Either way the mismatch is never silent.
+- A **colocated** room (no `serverRoute` binding) **never fails the boot** for a mismatch. Its route is its module's mount, and it carries no param wire, so its guard chain reads the missing param as `undefined`. It prints the same console advisory instead, whether a guard reads that param today or you add one later. That advisory (like the socket one below) prints in production too, not just in dev: it is your only signal that the mismatch is live.
+
+When congruence holds (names line up correctly), a separate dev-only advisory names each correspondence (which route param is satisfied by which channel key), so the pairing is never silent even when the names happen to match. A room's guard chain reads its params from the resolved **channel** key, not the route, so a route param the channel doesn't carry reads as `undefined`.
+
+The requirement applies to a colocated room the same as an explicitly bound one: a colocated room's effective route is the module's mount, so its params are checked against that mount even with no declared `__routeId`. A bare `defineRoom` with no route binding and no colocation is route-independent and is not checked.
+
+A route param outside the supported `:name` class (one or more of `[A-Za-z0-9_]`, with an optional `?`/`*`/`+`), like a hyphenated `/board/:board-id`, gets special treatment. Its value never reaches `pathParams` for a realtime connection, even though preact-iso's runtime matcher binds it fine over plain HTTP, so room param **resolution** can't see it. The congruence **check** above still can: it reasons over every param a guard could actually read off the route, using preact-iso's own matcher rather than this framework's narrower `:param` grammar, so a hyphenated segment is caught the same as a conforming one.
+
+What happens next depends on how the room reaches that route. A **colocated** room is never rejected (per the bound/colocated split above); it prints the same console advisory instead. An **explicitly bound** room (`serverRoute(r).room`, or an equivalent `serverRoute(r).socket`) fails the boot outright, whether or not a guard is live: `serverRoute('/board/:board-id').room(...)` throws at startup rather than run with an empty params object, so every `/__loaders` request, action POST, and `/__sockets` upgrade returns a 500 until you rename the segment to use only letters, digits, and underscores.
+
 A guard that denies the upgrade closes the connection with code `4403`. Use `deny()` rather than `redirect()` in a room guard: a WebSocket handshake cannot follow an HTTP redirect, so a `redirect()` is treated as a deny (close `4403`) and logs a warning.
 
-The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions.
+The room-key params are resolved server-side before the guard chain runs, so a route-node or room `use` guard can read them via `ctx.location.pathParams` (for example `ctx.location.pathParams.roomId`) to make resource-scoped authorization decisions. This holds whether the route-node `use` is colocation-derived or explicitly bound: binding selects the `use` chain, not the room-key param wire, which always comes from the channel. The congruence check above is what guarantees that wire actually carries every param the route's own guards expect.
+
+The params a room sees, both `onJoin`'s `ctx.params` and the guard's `ctx.location.pathParams`, are plain objects: read them any way you like. You never have to worry about a key name clashing with a built-in like `constructor` or `toString`, because a channel can't declare one in the first place: `defineChannel('board/:constructor')` throws at definition.
 
 ## Presence reconnect behavior
 
@@ -186,9 +227,9 @@ honoPreact({
 
 `realtimeBinding` must match the binding `name`; `realtimeClass` must match both the binding `class_name` and the `new_sqlite_classes` migration tag. `realtimeClass` must be a valid JavaScript identifier (it is emitted as a `class` declaration in the generated entry).
 
-Two behaviors differ between Node and Cloudflare:
+A few behaviors differ between Node and Cloudflare:
 
-- **Plain sockets (`defineSocket`/`useSocket`) now work on Cloudflare.** The worker guards the upgrade at the edge and forwards it to a per-connection Durable Object running under the Hibernation API. See [WebSockets](/docs/websockets) for setup details.
+- **Plain sockets (`defineSocket`/`useSocket`) run in a Durable Object.** On Cloudflare, the worker guards the upgrade at the edge and forwards it to a per-connection Durable Object running under the Hibernation API; on Node they run in-process. See [WebSockets](/docs/websockets) for setup details.
 - **`onJoin` teardown functions run only on Node.** A function returned from `onJoin` is called on connection close in the Node runtime. On Cloudflare a Durable Object can hibernate between messages, so the teardown cannot be preserved. Use `onLeave` for cleanup that must run on both runtimes.
 - **`conn.data` is read-only edge metadata.** `conn.data` is typed `Readonly<Data>` and seeded by the `data()` factory at upgrade time. For state that evolves and must broadcast, use `setPresence`. For Node-only mutable per-connection state, capture a closure variable in `onJoin()` instead.
 
@@ -228,7 +269,10 @@ Returns a `RoomRef` that the client hook reads. On the client side the `.server`
 | `data`                  | `Readonly<Data>` | Per-connection metadata seeded by the `data()` factory. Read-only; use `setPresence` for evolving state. For Node-only mutable per-connection state, capture a closure variable in `onJoin()`. |
 | `close(code?, reason?)` | method           | Close this connection.                                                                                                                                                                         |
 
-### `ref.useRoom(opts?)` / `useRoom(ref, opts?)`
+### `ref.useRoom(opts)` / `useRoom(ref, opts)`
+
+`opts` is optional for a param-less channel, and required for a channel with
+params (to supply `key`; see below).
 
 | Option                 | Type                          | Default                        | Description                                                                                    |
 | ---------------------- | ----------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
@@ -268,8 +312,11 @@ import type {
   UseRoomOptions,
   UseRoomResult,
   PresenceMember,
+  UseRoomArgs,
 } from 'hono-preact';
 ```
+
+`UseRoomArgs<R>` is the type of `useRoom`'s options rest tuple (`[opts?: UseRoomOptions<R>]` for a param-less binding, `[opts: UseRoomOptions<R>]` for a param-bearing one): useful for typing a generic wrapper that forwards its own rest args to `useRoom` without re-deriving the required-vs-optional rule itself.
 
 ## See also
 

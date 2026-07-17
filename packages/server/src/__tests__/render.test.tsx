@@ -161,6 +161,44 @@ describe('renderPage', () => {
     expect(body).toContain('render outcome');
   });
 
+  // The app-use guard tier reads ctx.location.searchParams (the URL query) and
+  // pathParams as ORDINARY objects: the prototype-chain param-read hazard is
+  // closed structurally (no route can DECLARE a param named after an
+  // Object.prototype member), so these do not need to be null-prototype. This
+  // test pins that they behave like normal objects: Object.prototype methods
+  // (`hasOwnProperty`) work, `Object.hasOwn`/`Object.keys` see only the real
+  // query keys, and a real query param reads through.
+  it('hands the app-use guard ordinary searchParams/pathParams (hasOwnProperty works, no phantom keys)', async () => {
+    const seen: Record<string, unknown> = {};
+    const appConfig = defineApp({
+      use: [
+        defineServerMiddleware<'page'>(async (ctx) => {
+          const sp = ctx.location.searchParams;
+          // `.hasOwnProperty` must not throw (it did when these were
+          // null-prototype): the regression this test guards against.
+          seen.hasToken = sp.hasOwnProperty('token');
+          seen.hasConstructor = Object.hasOwn(sp, 'constructor');
+          seen.keys = Object.keys(sp);
+          seen.pathKeys = Object.keys(ctx.location.pathParams);
+          seen.realQuery = sp.token;
+        }),
+      ],
+    });
+
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <UntitledPage />, { appConfig }));
+    // URL OMITS `constructor` but sends a real `token`.
+    await app.request('http://localhost/?token=abc');
+
+    expect(seen.hasToken).toBe(true);
+    // The request never supplied `constructor`, so it is not an OWN key even
+    // though a plain object inherits `Object.prototype.constructor`.
+    expect(seen.hasConstructor).toBe(false);
+    expect(seen.keys).toEqual(['token']);
+    expect(seen.pathKeys).toEqual([]);
+    expect(seen.realQuery).toBe('abc');
+  });
+
   it('escapes special characters in <title> content', async () => {
     const res = await makeApp(XssTitle).request('http://localhost/');
     const html = await res.text();

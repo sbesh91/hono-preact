@@ -157,6 +157,8 @@ const c = defineChannel('board/:boardId')<{ taskId: string }>();
 | `name`    | `string`   | Channel address, e.g. `'board/:boardId'`. Params use `:name` syntax. |
 | `Payload` | type param | Message type. Defaults to `void` (signal channel, no message).       |
 
+Each `:` in `name` starts a param whose own name must be one or more of `[A-Za-z0-9_]`, optionally followed by a single `?`, `*`, or `+` modifier (e.g. `:id`, `:id?`, `:rest*`, `:rest+`). `defineChannel` throws immediately, at definition time, if any segment carries a `:` outside that grammar, including a `:` that appears mid-segment rather than at its start (e.g. `'board:boardId'`).
+
 Returns a `Channel<Name, Payload>` with one method:
 
 | Method                 | Signature                     | Description                                                                                                                                         |

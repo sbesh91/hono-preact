@@ -27,7 +27,7 @@ import {
   SOCKETS_RPC_PATH,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
 } from '@hono-preact/iso/internal/runtime';
 import { socketsHandler } from '../sockets-handler.js';
 import { buildRoomRegistry } from '../rooms-handler.js';
@@ -46,7 +46,7 @@ function wsRoomUrl(
     `ws://localhost:${port}${SOCKETS_RPC_PATH}` +
     `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(moduleKey)}` +
     `&${SOCKET_NAME_PARAM}=${encodeURIComponent(roomName)}` +
-    `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify(keyParams))}`
+    `&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify(keyParams))}`
   );
 }
 

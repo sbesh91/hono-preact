@@ -7,7 +7,11 @@ import {
   defineSocket,
   type SocketDef,
 } from '@hono-preact/iso';
-import type { RoomDef } from '@hono-preact/iso/internal';
+import {
+  _defineRouteSocket,
+  _defineRouteRoom,
+  type RoomDef,
+} from '@hono-preact/iso/internal';
 import {
   installWebSocketUpgrader,
   __resetWebSocketUpgraderForTesting,
@@ -15,7 +19,7 @@ import {
   __resetRealtimeConnectorForTesting,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
   WS_DENY_CODE,
 } from '@hono-preact/iso/internal/runtime';
@@ -794,7 +798,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(ROOM_MODULE)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(rawR)}`
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(rawR)}`
     );
   }
 
@@ -816,7 +820,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(ROOM_MODULE)}` +
         `&${SOCKET_NAME_PARAM}=${encodeURIComponent(ROOM_NAME)}` +
-        `&${SOCKET_ROOM_PARAM}=${encodeURIComponent(JSON.stringify({ roomId: 'demo' }))}` +
+        `&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ roomId: 'demo' }))}` +
         `&tag=x`
     );
 
@@ -919,6 +923,75 @@ describe('socketsHandler: realtime connector forwarding', () => {
       expect(fwd.name).toBe('chatSocket');
       expect(fwd.data).toEqual({ who: 'alice' });
     }
+  });
+
+  it('forwards a BOUND socket through the connector with the RESOLVED route params (CF path)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    // The upgrader must NOT be consulted on the forward path; install one that
+    // throws so a stray upgrade() call would fail the test loudly.
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the forward path');
+    });
+
+    const def = _defineRouteSocket<
+      never,
+      never,
+      Record<string, string>,
+      Record<string, string>
+    >('/board/:id', {
+      data: (_c, params) => params,
+    }) as unknown as SocketDef<never, never, Record<string, string>>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    app = makeApp(registry);
+
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ id: 'b1' }))}`
+    );
+
+    // This pins that the CF path threads the RESOLVED r= params into the data
+    // factory, not `{}`: a future edit that forwards the wrong (or no) params
+    // to the factory would break this while the Node-path test above stays
+    // green.
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    const fwd = recorded[0]!;
+    expect(fwd.kind).toBe('socket-forward');
+    if (fwd.kind === 'socket-forward') {
+      expect(fwd.data).toEqual({ id: 'b1' });
+    }
+  });
+
+  it('denies a BOUND socket with no r= query via the connector deny, before any DO contact (CF path)', async () => {
+    const { connector, calls } = makeFakeConnector();
+    installRealtimeConnector(connector);
+    // A missing required param must deny BEFORE any connector forward; install
+    // an upgrader that throws so a stray upgrade() call fails the test loudly.
+    installWebSocketUpgrader(() => () => {
+      throw new Error('upgrader must not run on the socket deny path');
+    });
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<never, never>('/board/:id', {
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    app = makeApp(registry);
+
+    // No SOCKET_KEY_PARAM (r=) on the request.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket`
+    );
+
+    // The connector was called exactly once with kind:deny: the missing
+    // required param denies at the edge, so the connector never receives a
+    // socket-forward context and the DO is never contacted.
+    const recorded = calls();
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.kind).toBe('deny');
+    expect(openSpy).not.toHaveBeenCalled();
   });
 
   it('a denied plain socket closes via the connector deny, never the upgrader (CF path)', async () => {
@@ -1135,5 +1208,559 @@ describe('socketsHandler: dev budget warning threads through to warnIfOverForwar
     const ws = lastWs();
     await events.onOpen?.(new Event('open'), ws as never);
     expect(ws.closes).toHaveLength(0);
+  });
+});
+
+describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)', () => {
+  const denyMiddleware = defineServerMiddleware(async (_ctx) => {
+    const { deny } = await import('@hono-preact/iso');
+    throw deny('forbidden', 403);
+  });
+
+  it('a registry-module socket bound to a guarded route runs that route gates (attacker model)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<never, never>('/admin', {
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    // Registry module: not in the route tree, so the mount derivation yields
+    // undefined. Before this fix the connection resolved SOCKETS_RPC_PATH and
+    // ran NO page gates; the declared '/admin' binding must select them.
+    const resolvePageUse = (path: string) =>
+      path === '/admin' ? [denyMiddleware] : [];
+
+    const registry = new Map([['src/server/rt::feed', def]]);
+    app = makeApp(registry, undefined, resolvePageUse, () => undefined);
+    await getRequest('src/server/rt', 'feed');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('a registry-module room bound to a guarded route runs that route gates (attacker model)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const onJoinSpy = vi.fn();
+    const channel = defineChannel('board/:boardId')<{ n: number }>();
+    const def = _defineRouteRoom('/admin', channel, {
+      onJoin: onJoinSpy,
+    }) as unknown as RoomDef<unknown, unknown, unknown, unknown, unknown>;
+
+    const resolvePageUse = (path: string) =>
+      path === '/admin' ? [denyMiddleware] : [];
+
+    const localApp = new Hono();
+    localApp.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry: new Map(),
+        rooms: new Map([['src/server/rt::board', def]]),
+        resolvePageUse,
+        resolveRoutePath: () => undefined,
+      })
+    );
+    // A valid room-key param is required so the connection is denied by the
+    // guard (the thing under test), not by a failed room-key resolution (which
+    // also closes WS_DENY_CODE but proves nothing about route precedence).
+    await localApp.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('src/server/rt')}&${SOCKET_NAME_PARAM}=board&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ boardId: 'demo' }))}`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(onJoinSpy).not.toHaveBeenCalled();
+  });
+
+  it('the declared pattern wins over the mount derivation (subtree spelling)', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<never, never>('/admin/*', {
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const resolved: string[] = [];
+    const resolvePageUse = (path: string) => {
+      resolved.push(path);
+      return [];
+    };
+
+    // The mount derivation says '/admin' (the exact page scope); the declared
+    // subtree spelling must win. This is the one route-attached case where the
+    // two chains observably differ (the boot guard forces exact declarations
+    // to equal the mount).
+    const registry = new Map([['pages/admin::feed', def]]);
+    app = makeApp(registry, undefined, resolvePageUse, () => '/admin');
+    await getRequest('pages/admin', 'feed');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(resolved).toEqual(['/admin/*']);
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(ws.closes).toHaveLength(0);
+  });
+
+  it('bare defs keep the mount derivation and the SOCKETS_RPC_PATH fallback', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const def = defineSocket<never, never>({}) as unknown as SocketDef<
+      never,
+      never,
+      undefined
+    >;
+    const resolved: string[] = [];
+    const resolvePageUse = (path: string) => {
+      resolved.push(path);
+      return [];
+    };
+
+    // Mounted module: bare defs still resolve via the mount.
+    app = makeApp(
+      new Map([['pages/chat::feed', def]]),
+      undefined,
+      resolvePageUse,
+      (mk) => (mk === 'pages/chat' ? '/chat' : undefined)
+    );
+    await getRequest('pages/chat', 'feed');
+    await lastEvents().onOpen?.(new Event('open'), lastWs() as never);
+    expect(resolved).toEqual(['/chat']);
+
+    // Route-less registry module: terminal fallback unchanged.
+    resolved.length = 0;
+    app = makeApp(
+      new Map([['src/server/rt::feed', def]]),
+      undefined,
+      resolvePageUse,
+      () => undefined
+    );
+    await getRequest('src/server/rt', 'feed');
+    await lastEvents().onOpen?.(new Event('open'), lastWs() as never);
+    expect(resolved).toEqual([SOCKETS_RPC_PATH]);
+  });
+});
+
+describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)', () => {
+  it('resolves route params from the r= wire and feeds them to the guard and the data factory, dropping an undeclared key', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let guardSeenParams: Record<string, string> | undefined;
+    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+      guardSeenParams = mwCtx.location.pathParams;
+      await next();
+    });
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<
+      never,
+      never,
+      Record<string, string>,
+      Record<string, string>
+    >('/board/:id', {
+      data: (_c, params) => params,
+      open(socket) {
+        openSpy(socket.data);
+      },
+    }) as unknown as SocketDef<never, never, Record<string, string>>;
+
+    const resolvePageUse = (path: string) =>
+      path === '/board/:id' ? [captureGuard] : [];
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    app = makeApp(registry, undefined, resolvePageUse, () => undefined);
+
+    // The wire also carries `orgId`, a key the pattern `/board/:id` never
+    // declares. No real HTTP request could ever produce it (Hono only
+    // populates declared slots), so the resolver must drop it before it
+    // reaches either the guard's `pathParams` or the `data` edge factory.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ id: 'b1', orgId: 'victim' }))}`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(0);
+    expect(guardSeenParams).toEqual({ id: 'b1' });
+    expect(guardSeenParams?.orgId).toBeUndefined();
+    expect(openSpy).toHaveBeenCalledWith({ id: 'b1' });
+  });
+
+  it('denies 4403 when the r= wire omits a required route param', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const openSpy = vi.fn();
+    const def = _defineRouteSocket<never, never>('/board/:id', {
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    app = makeApp(
+      registry,
+      undefined,
+      () => [],
+      () => undefined
+    );
+
+    // No r= param on the request.
+    await getRequest('pages/board', 'boardSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('warns naming the missing slot in dev mode when a required param is absent', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const def = _defineRouteSocket<never, never>(
+      '/board/:id',
+      {}
+    ) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    const testApp = new Hono();
+    testApp.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry,
+        resolvePageUse: () => [],
+        resolveRoutePath: () => undefined,
+        dev: true,
+      })
+    );
+
+    await testApp.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(warn.mock.calls.some((c) => /\bid\b/.test(String(c[0])))).toBe(true);
+
+    warn.mockRestore();
+  });
+
+  it('a colocated socket (no __routeId) is never denied for a missing param and keeps pathParams: {}', async () => {
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let guardSeenParams: Record<string, string> | undefined;
+    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+      guardSeenParams = mwCtx.location.pathParams;
+      await next();
+    });
+
+    const openSpy = vi.fn();
+    // A bare defineSocket (no __routeId), colocated with a param-bearing route
+    // file. The mount-derived routePath is param-bearing ('/board/:id'), but
+    // gating must be on __routeId (absent here), NOT on the mounted pattern
+    // having params: a colocated socket's client stub cannot be typed to send
+    // params, so it must never be denied for a "missing" one.
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    const resolvePageUse = (path: string) =>
+      path === '/board/:id' ? [captureGuard] : [];
+    const resolveRoutePath = (mk: string) =>
+      mk === 'pages/board' ? '/board/:id' : undefined;
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+
+    // No r= param at all.
+    await getRequest('pages/board', 'boardSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(0);
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(guardSeenParams).toEqual({});
+  });
+
+  it('a colocated socket ignores a malicious r= wire entirely and keeps pathParams: {}', async () => {
+    // Adversarial variant of the test above: rather than omitting r=, a
+    // client sends one, trying to smuggle a param value into a colocated
+    // socket's guard. Colocated (unbound) resolution must never read r= at
+    // all -- pinning the round-3 hole class (an unbound socket/room
+    // resolving CLIENT-SUPPLIED params) from the opposite direction of the
+    // "no r=" test.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let guardSeenParams: Record<string, string> | undefined;
+    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+      guardSeenParams = mwCtx.location.pathParams;
+      await next();
+    });
+
+    const openSpy = vi.fn();
+    // A bare defineSocket (no __routeId), colocated with a param-bearing
+    // route file, exactly as the "no r=" test above.
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/board::boardSocket', def]]);
+    const resolvePageUse = (path: string) =>
+      path === '/board/:id' ? [captureGuard] : [];
+    const resolveRoutePath = (mk: string) =>
+      mk === 'pages/board' ? '/board/:id' : undefined;
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+
+    // A malicious r= wire, as if forged to smuggle an authorized-looking id.
+    await app.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket&${SOCKET_KEY_PARAM}=${encodeURIComponent(JSON.stringify({ id: 'pwn' }))}`
+    );
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(ws.closes).toHaveLength(0);
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(guardSeenParams).toEqual({});
+  });
+
+  it('a colocated socket guard requiring a route param DENIES (colocated sockets resolve no param wire, so the guard sees an empty object)', async () => {
+    // A colocated (bare `defineSocket`, no __routeId) socket resolves NO param
+    // wire: its guard always gets an empty `{}` (the /__sockets endpoint is
+    // query-string only). So a guard requiring a route param reads `undefined`
+    // and denies. The prototype-chain variant of this (a mount route named
+    // `/plugin/:constructor`, where a plain `{}` would read the inherited
+    // truthy Object member for `pathParams.constructor`) is closed at its
+    // source instead of by a null prototype: `defineRoutes` rejects a route
+    // that DECLARES a reserved param name, so such a mount route can never
+    // exist and no colocated guard can read a prototype-member param.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let observedId: unknown = 'not-yet-observed';
+    const requireId = defineServerMiddleware(async (mwCtx, next) => {
+      const id = mwCtx.location.pathParams.id;
+      observedId = id;
+      if (!id) {
+        const { deny } = await import('@hono-preact/iso');
+        throw deny('missing id', 403);
+      }
+      await next();
+    });
+
+    const openSpy = vi.fn();
+    const def = defineSocket<never, never>({
+      open: openSpy,
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/plugin::feed', def]]);
+    const resolvePageUse = (path: string) =>
+      path === '/plugin/:id' ? [requireId] : [];
+    const resolveRoutePath = (mk: string) =>
+      mk === 'pages/plugin' ? '/plugin/:id' : undefined;
+    app = makeApp(registry, undefined, resolvePageUse, resolveRoutePath);
+
+    await getRequest('pages/plugin', 'feed');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(observedId).toBeUndefined();
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('a failed room-key resolution does NOT run the guard chain (its side effects must not fire for a doomed connection)', async () => {
+    // roomKey.ok is false (no r= wire, and the channel has a required :id
+    // slot). A failed room key is a protocol-level reject independent of the
+    // guard, so the guard chain must NOT be dispatched: onOpen denies on
+    // `!roomKey.ok` regardless, and running the guard first would fire its side
+    // effects (rate-limit, audit-log) for a connection that is already doomed.
+    // Mirrors the route-bound socket branch, which short-circuits identically.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let guardRan = false;
+    const captureGuard = defineServerMiddleware(async (_mwCtx, next) => {
+      guardRan = true;
+      await next();
+    });
+
+    const channel = defineChannel('room/:id')<unknown>();
+    const roomDef = _defineRouteRoom(
+      '/room/:id',
+      channel,
+      {}
+    ) as unknown as RoomDef<unknown, unknown, unknown, unknown, unknown>;
+
+    const registry = new Map<string, SocketDef<unknown, unknown, unknown>>();
+    const rooms = new Map([['pages/room::feed', roomDef]]);
+    const app2 = new Hono();
+    app2.get(
+      SOCKETS_RPC_PATH,
+      socketsHandler({
+        registry,
+        rooms,
+        resolvePageUse: (path) => (path === '/room/:id' ? [captureGuard] : []),
+      })
+    );
+
+    // No r= param, so resolveRoomKey fails (missing required :id).
+    await app2.request(
+      `http://localhost${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/room')}&${SOCKET_NAME_PARAM}=feed`
+    );
+    // The connection is still denied, but the guard never ran.
+    const ws = lastWs();
+    await lastEvents().onOpen?.(new Event('open'), ws as never);
+
+    expect(guardRan).toBe(false);
+    expect(ws.closes).toHaveLength(1);
+    expect(ws.closes[0]!.code).toBe(WS_DENY_CODE);
+  });
+
+  it('a denied bound socket (missing required param) resolves an empty params object', async () => {
+    // The early-return deny path (missing required :id on a route-bound
+    // socket) never runs the guard, but the resolved connection's own
+    // `params` field must still be a well-formed empty object for any
+    // downstream reader.
+    const def = _defineRouteSocket<never, never>(
+      '/board/:id',
+      {}
+    ) as unknown as SocketDef<never, never, undefined>;
+    const registry = new Map([['pages/board::boardSocket', def]]);
+
+    const { resolveConnection } = await import('../socket-resolution.js');
+    const honoApp = new Hono();
+    let capturedParams: Record<string, string> | undefined;
+    let capturedDenied: boolean | undefined;
+    honoApp.get('/probe', async (ctx) => {
+      const resolved = await resolveConnection(ctx, {
+        registry,
+        resolvePageUse: () => [],
+        resolveRoutePath: () => undefined,
+      });
+      if (resolved.kind === 'socket') {
+        capturedParams = resolved.params;
+        capturedDenied = resolved.denied;
+      }
+      return ctx.text('ok');
+    });
+    // No r= param, so the required :id slot is missing -> denied 4403.
+    await honoApp.request(
+      `http://localhost/probe?${SOCKET_MODULE_PARAM}=${encodeURIComponent('pages/board')}&${SOCKET_NAME_PARAM}=boardSocket`
+    );
+
+    expect(capturedDenied).toBe(true);
+    expect(capturedParams).toBeDefined();
+    expect(Object.keys(capturedParams!)).toEqual([]);
+  });
+
+  it('a colocated socket data factory can mutate its (empty) params argument without throwing', async () => {
+    // Regression for the frozen-EMPTY_PARAMS bug: the empty params object
+    // handed to every colocated socket's data factory used to be ONE
+    // Object.freeze'd singleton shared across every connection. A factory
+    // doing `params.derived = computeFrom(c)` threw
+    // `TypeError: Cannot add property derived, object is not extensible`.
+    // The empty params object is a fresh, extensible `{}` per call, so the
+    // mutation must succeed silently.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    let mutationThrew = false;
+    let readBack: unknown;
+    const def = defineSocket<never, never, { derived: string }>({
+      data: (_c, rawParams) => {
+        const params = rawParams as Record<string, unknown>;
+        try {
+          // params is empty (colocated, no __routeId) but must still be
+          // extensible: a real-world factory commonly derives socket.data
+          // from request-scoped state, not from the (empty) params object
+          // itself, but the object identity is the same one this mutation
+          // targets.
+          params.derived = 'computed';
+        } catch {
+          mutationThrew = true;
+        }
+        readBack = params.derived;
+        return { derived: 'computed' };
+      },
+    }) as unknown as SocketDef<never, never, { derived: string }>;
+
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    await getRequest('pages/chat', 'chatSocket');
+
+    const events = lastEvents();
+    const ws = lastWs();
+    await events.onOpen?.(new Event('open'), ws as never);
+
+    expect(mutationThrew).toBe(false);
+    expect(readBack).toBe('computed');
+  });
+
+  it('two connections to a colocated socket get DIFFERENT (non-aliased) empty params objects', async () => {
+    // A shared frozen singleton meant every connection's data factory saw
+    // the SAME object; a mutation by one connection would have been visible
+    // to every other connection that hit the same empty-params call site.
+    // Each site builds a fresh `{}` per call, so no two connections should
+    // ever observe each other's mutation.
+    const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+
+    const seenParamsObjects: Record<string, unknown>[] = [];
+    const def = defineSocket<never, never, undefined>({
+      data: (_c, rawParams) => {
+        const p = rawParams as Record<string, unknown>;
+        // If this connection ever saw a PRIOR connection's mutation, the key
+        // would already be present here.
+        expect(Object.hasOwn(p, 'taggedBy')).toBe(false);
+        p.taggedBy = `conn-${seenParamsObjects.length}`;
+        seenParamsObjects.push(p);
+        return undefined;
+      },
+    }) as unknown as SocketDef<never, never, undefined>;
+
+    const registry = new Map([['pages/chat::chatSocket', def]]);
+    app = makeApp(registry);
+
+    await getRequest('pages/chat', 'chatSocket');
+    await lastEvents().onOpen?.(new Event('open'), lastWs() as never);
+
+    await getRequest('pages/chat', 'chatSocket');
+    await lastEvents().onOpen?.(new Event('open'), lastWs() as never);
+
+    expect(seenParamsObjects).toHaveLength(2);
+    expect(seenParamsObjects[0]).not.toBe(seenParamsObjects[1]);
+    expect(seenParamsObjects[0]!.taggedBy).toBe('conn-0');
+    expect(seenParamsObjects[1]!.taggedBy).toBe('conn-1');
   });
 });

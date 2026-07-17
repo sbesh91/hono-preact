@@ -51,6 +51,43 @@ export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 // validator (route-binding-guard.ts); users spell the pattern as a literal
 // '<path>/*' string, so it has no public-barrel story.
 export { subtreePatternOf } from './define-routes.js';
+// Required-param-slot extraction shared with @hono-preact/server's room-key
+// resolver, socket param resolver, and boot congruence check.
+// Declared-param-slot extraction (required AND optional/rest) shared with the
+// same two resolvers, so they can restrict a resolved params object to the
+// pattern's own declared slots and drop anything else.
+// isConformingParamSegment is shared with @hono-preact/server's boot binding
+// guard, which rejects a route-bound socket/room whose __routeId carries a
+// non-conforming ':'-segment (the route-side twin of defineChannel's own
+// definition-time check).
+// isPresentParamSlot is shared with the same package's room-key resolver and
+// route-bound socket param parse, so both check their untrusted-wire params
+// objects identically (`Object.hasOwn`, never a bare index read; see
+// param-slots.ts's own docs).
+// isHazardousColonSegment is shared with the same boot binding guard's
+// route-id conformance check, so it and defineChannel's own definition-time
+// check can never disagree on which ':'-segment spellings are a real hazard.
+// isReservedParamName is the convergent prototype-chain fix: shared by
+// defineRoutes's route-tree validator and defineChannel/defineRoom's own
+// definition-time checks, so a route or channel can never DECLARE a param
+// named after an Object.prototype member, closing the prototype-chain
+// param-read hazard on every guard tier structurally rather than per
+// construction site.
+// guardReadableParamSlots is shared with the same boot binding guard's
+// colocated-unit advisory and its room/channel congruence check: it answers
+// "what param could a guard actually read" per preact-iso's own (wider)
+// `exec` matcher, so a hyphenated route param is no longer invisible to
+// those two detections the way it is to declaredParamSlots.
+export {
+  requiredParamSlots,
+  declaredParamSlots,
+  guardReadableParamSlots,
+  isConformingParamSegment,
+  isPresentParamSlot,
+  isHazardousColonSegment,
+  isReservedParamName,
+  reservedParamNamesIn,
+} from './internal/param-slots.js';
 export * from './internal/contract.js';
 export {
   validateWithSchema,

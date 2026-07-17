@@ -88,9 +88,11 @@ export {
 } from './internal/action-result-store.js';
 
 // Route-binding helper: exported here (not from the main surface) for tests
-// and framework internals that need to create a route-bound LoaderRef directly
-// without going through the `serverRoute(r).loader(fn)` public API.
+// and framework internals that need to create route-bound refs directly
+// without going through the `serverRoute(r).loader/.socket/.room(fn)` public APIs.
 export { _defineRouteLoader } from './define-loader.js';
+export { _defineRouteSocket } from './define-socket.js';
+export { _defineRouteRoom } from './define-room.js';
 
 // Middleware dispatcher + observer fanout. Internal-stability subpath.
 export {

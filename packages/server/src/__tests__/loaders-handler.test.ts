@@ -701,6 +701,23 @@ describe('loadersHandler: location validation', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it('rejects a route-bound loader whose route declares a reserved param name at definition (structural prototype-chain fix)', () => {
+    // The prototype-chain bypass class (a guard reading
+    // `ctx.location.pathParams.constructor` for a route bound to
+    // '/plugin/:constructor' resolving the INHERITED truthy Object constructor
+    // for an absent slot, so `if (!id) deny()` wrongly PASSES) is closed at its
+    // source rather than by null-prototyping the loader RPC params: serverRoute
+    // rejects a reserved param name at DEFINITION (`reservedParamNamesIn`, the
+    // same check defineRoutes runs on the route tree), so no such loader can
+    // exist and no guard can ever read a prototype-member param. The loader RPC
+    // pathParams/searchParams therefore stay ordinary objects.
+    expect(() => serverRoute('/plugin/:constructor')).toThrow(/reserved/);
+    expect(() => serverRoute('/plugin/:toString')).toThrow(/reserved/);
+    expect(() => serverRoute('/plugin/:hasOwnProperty')).toThrow(/reserved/);
+    // An ordinary param name is unaffected.
+    expect(() => serverRoute('/plugin/:id')).not.toThrow();
+  });
 });
 
 describe('loadersHandler bare-loader guarded-route dev warning', () => {

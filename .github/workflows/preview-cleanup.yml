@@ -25,7 +25,7 @@ jobs:
       # No checkout: teardown needs no repo files, only node for `npx`.
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: '24'
 
       # No repo build needed to delete a worker; run wrangler pinned to the
       # exact version the site deploys with (apps/site resolves ^4.92.0 to

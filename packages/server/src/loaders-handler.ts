@@ -109,8 +109,18 @@ function validateLocation(loc: unknown): SerializedLocation | null {
     return null;
   return {
     path: o.path,
-    pathParams: o.pathParams as Record<string, string>,
-    searchParams: o.searchParams as Record<string, string>,
+    // pathParams/searchParams come straight off the untrusted client-JSON RPC
+    // body: their KEYS are entirely client-controlled here (unlike a route
+    // match or a declared-slot-filtered channel key). A guard must therefore
+    // not treat loader-RPC location as authoritative; a client can set or omit
+    // any key. The prototype shape is not a boundary on this surface (an
+    // attacker who could exploit an absent reserved-named key reading an
+    // inherited member can simply INCLUDE that key to make it truthy on any
+    // object), so these are ordinary objects. The prototype-chain hazard for
+    // route-bound params is closed structurally: no route can DECLARE a
+    // reserved param name (`isReservedParamName`).
+    pathParams: { ...(o.pathParams as Record<string, string>) },
+    searchParams: { ...(o.searchParams as Record<string, string>) },
   };
 }
 

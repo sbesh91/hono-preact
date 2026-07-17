@@ -17,6 +17,7 @@ import {
   type RoomTransport,
 } from './room-engine.js';
 import { warnIfOverForwardBudget } from './realtime-budget.js';
+import { parseKeyParams } from './param-parse.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -89,51 +90,29 @@ export type RoomKeyResolution =
  * resolved params into the guard as `pathParams`, and hand the result to
  * `createRoomWsEvents` without a re-parse.
  *
+ * The parse+validate half is the shared `parseKeyParams` pipeline
+ * (param-parse.ts), the same one the route-bound socket branch of
+ * `resolveConnection` (socket-resolution.ts) runs: both resolve a pattern's
+ * `:param` slots off the identical `SOCKET_KEY_PARAM` wire shape. This
+ * function layers topic
+ * computation on top: `params` collapses into a discriminated `ok: false` on
+ * ANY parse/required-slot failure (the reason itself is not surfaced here,
+ * since a room denies uniformly regardless of which pipeline step failed).
+ *
  * Security property preserved: the topic is ALWAYS `channel.key(params)`
  * computed here, server-side. The client only varies param VALUES, never the
  * channel namespace, so it cannot reach an unrelated topic.
  *
  * @param channel The room's bound channel (its name pattern + `key`).
- * @param rawR    The raw `SOCKET_ROOM_PARAM` query value (or undefined).
+ * @param rawR    The raw `SOCKET_KEY_PARAM` query value (or undefined).
  */
 export function resolveRoomKey(
   channel: AnyRoomDef['channel'],
   rawR: string | undefined
 ): RoomKeyResolution {
-  // The client sends key params as `r=<JSON>` (or omits `r` for a param-less
-  // channel). An absent/empty `r` means no params.
-  let params: Record<string, string> = {};
-  if (rawR !== undefined && rawR !== '') {
-    let parsed: unknown;
-    try {
-      // Sanctioned untrusted-wire JSON.parse: the client sends the channel key
-      // params as a JSON object whose values are strings (channel param slots).
-      parsed = JSON.parse(rawR);
-    } catch {
-      return { ok: false };
-    }
-    // `JSON.parse('null')` succeeds but returns null, and `null["key"]` throws.
-    // Coerce any non-plain-object parse result (null, numbers, strings, arrays)
-    // to {} so the required-param check below denies cleanly. Then validate that
-    // every value is a string: a non-string value (e.g. `{"roomId":[1,2,3]}`)
-    // would otherwise arrive at the handler as a typed-contract lie, so reject
-    // it here instead of casting a non-string-valued object to Record<string,string>.
-    if (
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      !Array.isArray(parsed)
-    ) {
-      const entries = Object.entries(parsed);
-      if (entries.some(([, v]) => typeof v !== 'string')) {
-        return { ok: false };
-      }
-      // Every value is a string (checked above): this is now a sound narrowing,
-      // not a cast over an unvalidated shape.
-      params = Object.fromEntries(
-        entries.filter((e): e is [string, string] => typeof e[1] === 'string')
-      );
-    }
-  }
+  const parsed = parseKeyParams(channel.name, rawR);
+  if (!parsed.ok) return { ok: false };
+  const { params } = parsed;
 
   // Compute the topic SERVER-SIDE by interpolating the channel name with the
   // client-supplied params. The erased Channel<string,unknown> type resolves
@@ -142,23 +121,12 @@ export function resolveRoomKey(
   // runtime signature.
   const topic = (channel.key as (p?: Record<string, string>) => string)(params);
 
-  // Validate that every required `:param` segment in the channel name has a
-  // non-empty value. interpolatePattern drops a missing segment rather than
-  // leaving `:name` in place, so we check the params object directly.
-  const missingRequired = channel.name
-    .split('/')
-    .filter((seg) => {
-      if (!seg.startsWith(':')) return false;
-      const flag = seg[seg.length - 1];
-      // Optional (?), rest-zero-or-more (*), and rest-one-or-more (+) are not
-      // required to be present. Only plain `:name` is required.
-      return flag !== '?' && flag !== '*' && flag !== '+';
-    })
-    .some((seg) => !params[seg.slice(1)]);
-
-  if (!topic || missingRequired) {
-    return { ok: false };
-  }
+  // Defensive: `parseKeyParams` already enforces every required `:param` is
+  // present, so `topic` should never come back empty for a validated params
+  // object. Kept as a belt-and-braces check rather than a non-null
+  // assertion, so a future channel-key implementation that can legitimately
+  // interpolate to '' still denies instead of joining an empty-string topic.
+  if (!topic) return { ok: false };
 
   return { ok: true, params, topic };
 }

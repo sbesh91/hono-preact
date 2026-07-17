@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: '24'
 
       # List all worker scripts (Cloudflare has no wrangler "list workers"
       # command; the account API is the scriptable path). Keep only the

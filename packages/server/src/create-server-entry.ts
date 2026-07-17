@@ -20,8 +20,14 @@ import {
   assertRouteBindingsMatchMount,
   assertRegistryRouteBindingsValid,
   warnAliasedLayoutBinding,
+  warnRoomParamBinding,
+  warnRoomParamExemption,
+  warnColocatedSocketParams,
   type RouteBindingCheckContext,
   type AliasedBindingInfo,
+  type RoomParamBindingInfo,
+  type RoomParamExemptionInfo,
+  type ColocatedSocketParamAdvisoryInfo,
 } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
 import {
@@ -124,35 +130,71 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
           routes.serverRoutes
         ));
 
-  // Boot-time guard: every route-bound loader/action must declare the route its
-  // module is mounted on (`route.path`), so a route-bound unit can never resolve
-  // its page-use (auth) chain from the wrong route. Awaited before the two
-  // `byPattern` surfaces (the loaders RPC and the action POST); a mismatch fails
-  // the request closed (500) rather than running through a wrong/empty gate
-  // chain. Cached like the socket registries: one walk at boot, per-request in
-  // dev for hot-reload parity.
+  // Boot-time guard: every route-bound unit (loader/action/socket/room) must
+  // declare the route its module is mounted on (`route.path`), so a route-bound
+  // unit can never resolve its page-use (auth) chain from the wrong route.
+  // Awaited before the three route-bound dispatch surfaces (the loaders RPC,
+  // the action POST, and the /__sockets upgrade); a mismatch fails the request
+  // closed (500) rather than running through a wrong/empty gate chain. Cached
+  // like the socket registries: one walk at boot, per-request in dev for
+  // hot-reload parity.
   //
-  // The registry check rides along: a `serverRoute(...)`-bound loader/action in
-  // a src/server module resolves its gate chain by `byPattern(__routeId)`, which
+  // The registry check rides along: a `serverRoute(...)`-bound unit in a
+  // src/server module resolves its gate chain by `byPattern(__routeId)`, which
   // fails open, so we require the bound route to be a real pattern. It keys off
   // the routeUse map, which now includes subtree patterns, so a registry unit
   // may bind either an exact route or a childful route's subtree. A
   // stale/typo'd pattern fails the boot closed rather than running the unit
   // under no gates.
-  // Dedup store for the dev aliasing warning: one per binding for the life
-  // of this entry (boot checks re-run per request in dev).
+  // Dedup stores for the advisories (two dev-only, two wired in prod too;
+  // see bindingCheckContext below): one per binding for the life of this
+  // entry (boot checks re-run per request in dev).
   const warnedAliasedBindings = new Set<string>();
+  const warnedRoomParamBindings = new Set<string>();
+  const warnedRoomParamExemptions = new Set<string>();
+  const warnedColocatedSocketParams = new Set<string>();
   const bindingCheckContext: RouteBindingCheckContext = {
     routeUseByPattern: new Map(routes.routeUse.map((r) => [r.path, r.use])),
-    // Dev-only observational diagnostic: an exact-path binding whose sibling
-    // subtree chain differs was widened by the index child's own `use`. Prod
-    // passes no callback, so the detection short-circuits to zero cost.
+    // The outermost tier composeServerChain composes ([...appConfig.use,
+    // ...pageUse, ...def.use]); a room's route/channel congruence check must
+    // treat this tier as live too, not just page-use, since the guard chain
+    // feeds it the SAME pathParams.
+    appUse: appConfig.use ?? [],
+    // Purely-informational diagnostics (a structural quirk or a SUCCESSFUL
+    // param correspondence, never a hazard): dev-only. Prod passes no
+    // callbacks for these two, so both detections short-circuit to zero cost.
     ...(dev
       ? {
+          // An exact-path binding whose sibling subtree chain differs was
+          // widened by the index child's own `use`.
           onAliasedBinding: (info: AliasedBindingInfo) =>
             warnAliasedLayoutBinding(warnedAliasedBindings, info),
+          // A param-bearing room binding whose route params are satisfied by
+          // the channel key of the same name, so the aliasing is named
+          // rather than left silent.
+          onRoomParamBinding: (info: RoomParamBindingInfo) =>
+            warnRoomParamBinding(warnedRoomParamBindings, info),
         }
       : {}),
+    // Hazard diagnostics: both describe a guard chain that reads (or would
+    // read) an unbound route param as `undefined`. Neither can fail the boot
+    // for a colocated unit (that is the whole point: colocation predates the
+    // route-bound param wire, so a throw here would break every released
+    // colocated-socket/room app), so a loud warning is the ONLY signal an
+    // author gets. Wired UNCONDITIONALLY (dev AND prod): a dev-only warning
+    // would leave production silently running an auth hole.
+    //
+    // A room's route/channel param mismatch that did not fail the boot
+    // (colocated, or bound with all three guard tiers empty today): a guard
+    // on the route reads the missing param as `undefined`, live now or
+    // added later.
+    onRoomParamExemption: (info: RoomParamExemptionInfo) =>
+      warnRoomParamExemption(warnedRoomParamExemptions, info),
+    // A colocated socket (no __routeId) sits on a param-bearing, guarded
+    // route: it resolves no param wire, so a guard on its chain reads those
+    // route params as `undefined` forever.
+    onColocatedSocketParams: (info: ColocatedSocketParamAdvisoryInfo) =>
+      warnColocatedSocketParams(warnedColocatedSocketParams, info),
   };
   const runBootChecks = () =>
     Promise.all([
@@ -229,6 +271,18 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
     // resolveRoutePath together give socketsHandler the route-node use chain
     // for the socket's owning route, which is where auth gates live.
     .get(SOCKETS_RPC_PATH, async (c, next) => {
+      // Sockets are the third route-bound dispatch surface: a misbound
+      // socket/room must fail the handshake closed (500, no upgrade) rather
+      // than resolve a wrong or empty gate chain, mirroring the loaders RPC
+      // and action POST gates above.
+      try {
+        await routeBindingCheck();
+      } catch (err) {
+        return c.json(
+          { error: err instanceof Error ? err.message : String(err) },
+          500
+        );
+      }
       const [registry, rooms, routePathResolver] = await Promise.all([
         socketRegistryPromise(),
         roomRegistryPromise(),

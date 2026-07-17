@@ -51,4 +51,36 @@ describe('buildPath', () => {
   it('substitutes a valid sibling param while keeping a hyphenated literal', () => {
     expect(buildPath('/x/:foo-bar/y/:id', { id: '7' })).toBe('/x/:foo-bar/y/7');
   });
+
+  // (regression) a params value supplied via a PROTOTYPE getter (not an own
+  // property) must still substitute. `Object.hasOwn` -- an earlier gate --
+  // only sees own properties, so it dropped a getter-provided value and
+  // buildPath silently truncated the path.
+  it('substitutes a param value supplied via a prototype getter', () => {
+    class WithGetterId {
+      get id() {
+        return '1';
+      }
+    }
+    expect(buildPath('/user/:id', new WithGetterId())).toBe('/user/1');
+  });
+
+  // (regression) a NUMERIC param value must coerce and substitute, not drop.
+  // A `typeof value === 'string'` gate wrongly dropped numbers; the `!value ||
+  // typeof value === 'function'` gate keeps a number (coerced by
+  // encodeURIComponent), matching the pre-hardening behavior. A JS caller can
+  // pass a number even though the type is `string`.
+  it('coerces and substitutes a numeric param value', () => {
+    expect(
+      buildPath('/posts/:id', { id: 123 } as unknown as { id: string })
+    ).toBe('/posts/123');
+  });
+
+  // (regression) numeric 0 is a real, distinct value and must NOT be dropped:
+  // a `!value` gate treated 0 as absent and collapsed '/posts/0' to '/posts'.
+  it('keeps a numeric 0 param value rather than dropping the segment', () => {
+    expect(
+      buildPath('/posts/:id', { id: 0 } as unknown as { id: string })
+    ).toBe('/posts/0');
+  });
 });

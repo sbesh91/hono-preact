@@ -251,6 +251,76 @@ describe('defineRoutes validation', () => {
       defineRoutes([{ path: '/', view: noopView, layout: noopLayout }])
     ).toThrow(/^Route \/: cannot declare both `view` and `layout`\.$/);
   });
+
+  // (security, P0) the convergent prototype-chain fix: a route can never
+  // DECLARE a `:param` named after an Object.prototype member. See
+  // isReservedParamName (param-slots.ts) for why: a guard reading
+  // ctx.location.pathParams for a request that OMITS such a param would
+  // otherwise read the inherited member instead of undefined.
+
+  it('throws at boot for a :constructor route param', () => {
+    expect(() =>
+      defineRoutes([{ path: '/x/:constructor', view: noopView }])
+    ).toThrow(/:constructor/);
+    expect(() =>
+      defineRoutes([{ path: '/x/:constructor', view: noopView }])
+    ).toThrow(/reserved/);
+  });
+
+  it('throws for the legacy Object.prototype accessor member names a denylist forgets', () => {
+    // A hardcoded denylist missed these four; `Object.hasOwn(Object.prototype)`
+    // catches them. A `:__lookupGetter__` param would otherwise read the
+    // inherited accessor (truthy) for a missing key on a plain params object.
+    for (const name of [
+      '__defineGetter__',
+      '__defineSetter__',
+      '__lookupGetter__',
+      '__lookupSetter__',
+    ]) {
+      expect(() =>
+        defineRoutes([{ path: `/x/:${name}`, view: noopView }])
+      ).toThrow(/reserved/);
+    }
+  });
+
+  it('does NOT throw for :toJSON or :prototype (not Object.prototype members, so no over-reach)', () => {
+    expect(() =>
+      defineRoutes([{ path: '/x/:toJSON', view: noopView }])
+    ).not.toThrow();
+    expect(() =>
+      defineRoutes([{ path: '/x/:prototype', view: noopView }])
+    ).not.toThrow();
+  });
+
+  it('throws at boot for a reserved param name nested under a layout', () => {
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/plugin',
+          layout: noopLayout,
+          children: [{ path: ':toString', view: noopView }],
+        },
+      ])
+    ).toThrow(/:toString/);
+  });
+
+  it('names the full joined route path for the offending nested param', () => {
+    expect(() =>
+      defineRoutes([
+        {
+          path: '/plugin',
+          layout: noopLayout,
+          children: [{ path: ':toString', view: noopView }],
+        },
+      ])
+    ).toThrow(/Route \/plugin\/:toString:/);
+  });
+
+  it('does not throw for an ordinary route param', () => {
+    expect(() =>
+      defineRoutes([{ path: '/x/:id', view: noopView }])
+    ).not.toThrow();
+  });
 });
 
 describe('serverImports collection', () => {

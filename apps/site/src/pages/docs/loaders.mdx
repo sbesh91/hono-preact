@@ -440,6 +440,8 @@ A route-bound loader (`serverRoute(r).loader(fn)`) receives:
 
 A route-independent loader (`defineLoader(fn)`) receives the same fields except `location`.
 
+`location.pathParams` and `location.searchParams` are plain objects, so read them any way you like: `pathParams.id`, `'id' in pathParams`, `Object.keys(pathParams)`, and the rest all work. You never have to worry about a param name clashing with a built-in like `constructor` or `toString`, because a route can't declare one in the first place: `serverRoute('/plugin/:constructor')` throws at definition. The same holds for a socket's `data` params and a room's `onJoin` params; see [WebSockets](/docs/websockets) and [Rooms](/docs/rooms).
+
 Pass the signal to upstream `fetch` calls and subscriptions so they clean up promptly:
 
 ```ts

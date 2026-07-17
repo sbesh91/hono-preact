@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'preact/hooks';
-import type { SocketRef } from './define-socket.js';
 import type { Serialize } from './internal/serialize.js';
 import {
   SOCKETS_RPC_PATH,
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
+  SOCKET_KEY_PARAM,
   FORM_MODULE_FIELD,
   FORM_SOCKET_FIELD,
 } from './internal/contract.js';
@@ -18,12 +18,67 @@ import type {
 // Re-export the shared lifecycle types so the public surface is unchanged.
 export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
 
-// Extract the Incoming message type from a SocketRef.
-type Incoming<R> = R extends SocketRef<infer I, unknown> ? I : never;
-// Extract the Outgoing message type from a SocketRef (received by the client).
-type Outgoing<R> = R extends SocketRef<unknown, infer O> ? O : never;
+/**
+ * Structural phantom shape `useSocket` reads types from. Carries ONLY the
+ * phantom fields, not `SocketRef`'s `useSocket` method: constraining on the
+ * full `SocketRef` (whose method references `UseSocketOptions<SocketRef<...>>`)
+ * makes the constraint recurse through that method, which TS rejects as
+ * excessively deep. Mirrors `RoomRefShape` in use-room.ts.
+ *
+ * Every field here is optional, so a plain `{}` DOES satisfy `R extends
+ * AnySocketRefShape` and `useSocket({})` type-checks with no compile error.
+ * A prior revision closed that hole with a REQUIRED `[SocketRefBrand]: true`
+ * phantom field (a `declare const ... unique symbol` with no runtime
+ * counterpart), but that made the field a required member of the PUBLIC
+ * `SocketRef` interface too, so a hand-rolled mock or a
+ * `const m: SocketRef<A, B> = {...}` annotation -- both legal since
+ * `SocketRef` shipped in v0.8.0 -- stopped compiling: a breaking change to a
+ * released public type. A follow-up attempt required the `useSocket` method
+ * itself instead (still no new required member on the *value* side, since
+ * every real ref already carries it), but that reintroduced the exact
+ * excessively-deep recursion this comment describes: checking whether
+ * `SocketRef<I,O,P>` structurally satisfies a shape that itself requires
+ * `useSocket(...): ...` forces TS to inspect `SocketRef`'s own `useSocket`
+ * method, whose parameter type is `UseSocketArgs<SocketRef<I,O,P>>` --
+ * referencing `SocketRef<I,O,P>` while still resolving `SocketRef<I,O,P>`.
+ * So this constraint stays field-only and accepts that `useSocket({})`
+ * compiles: it fails loudly at runtime (the missing `moduleKey`/`socketName`
+ * mean the connection is never `ready`), which is a user-visible bug, not a
+ * security hole -- unlike breaking the public type for every existing
+ * caller.
+ */
+type SocketRefShape<Incoming, Outgoing, Params> = {
+  readonly [FORM_MODULE_FIELD]?: string;
+  readonly [FORM_SOCKET_FIELD]?: string;
+  readonly __incoming?: Incoming;
+  readonly __outgoing?: Outgoing;
+  readonly __params?: Params;
+};
+type AnySocketRefShape = SocketRefShape<unknown, unknown, unknown>;
 
-export type UseSocketOptions<R extends SocketRef<unknown, unknown>> = {
+type Incoming<R> =
+  R extends SocketRefShape<infer I, unknown, unknown> ? I : never;
+type Outgoing<R> =
+  R extends SocketRefShape<unknown, infer O, unknown> ? O : never;
+type ParamsOf<R> =
+  R extends SocketRefShape<unknown, unknown, infer P> ? P : never;
+
+// `params` mirrors the room's `KeyOption`, with one deliberate divergence: a
+// param-less binding types `params` as `{ params?: never }` rather than
+// `{ params?: P }`. `P` is `{}` for a bare socket, and TS's structural `{}`
+// accepts almost any object, so `{ params?: {} }` would silently accept a
+// stray `params` value instead of rejecting it. `never` still declares the
+// property (so both branches expose it for the castless `opts?.params` read
+// below) but makes assigning anything to it a real type error, so a bare
+// `defineSocket` ref truly exposes no usable `params` option. A `:param`
+// binding still makes it required and typed from the route.
+type ParamsOption<P> = keyof P extends never
+  ? { params?: never }
+  : { params: P };
+
+export type UseSocketOptions<R extends AnySocketRefShape> = ParamsOption<
+  ParamsOf<R>
+> & {
   /** Called on every incoming message. Does NOT trigger a re-render. */
   onMessage?: (msg: Serialize<Outgoing<R>>) => void;
   /** Called when the connection opens. */
@@ -49,7 +104,7 @@ export type UseSocketOptions<R extends SocketRef<unknown, unknown>> = {
   lastMessage?: boolean;
 };
 
-export type UseSocketResult<R extends SocketRef<unknown, unknown>> = {
+export type UseSocketResult<R extends AnySocketRefShape> = {
   send: (msg: Incoming<R>) => void;
   status: SocketStatus;
   close: (code?: number, reason?: string) => void;
@@ -57,10 +112,24 @@ export type UseSocketResult<R extends SocketRef<unknown, unknown>> = {
   lastMessage?: Serialize<Outgoing<R>>;
 };
 
-export function useSocket<R extends SocketRef<unknown, unknown>>(
+// The options argument itself is required exactly when the route has params:
+// a rest tuple, rather than a plain optional parameter, so `useSocket(ref)`
+// with the options argument omitted ENTIRELY is a type error for a
+// param-bearing binding (previously `opts` was merely optional, so omitting
+// it compiled even when `ParamsOption` required `params`; the hole only bit
+// once an options object was actually passed). Exported so `SocketRef.useSocket`
+// in define-socket.ts spells the identical rest tuple instead of re-deriving it,
+// keeping the free-function and ref-method arity rules single-sourced.
+export type UseSocketArgs<R extends AnySocketRefShape> =
+  keyof ParamsOf<R> extends never
+    ? [opts?: UseSocketOptions<R>]
+    : [opts: UseSocketOptions<R>];
+
+export function useSocket<R extends AnySocketRefShape>(
   ref: R,
-  opts?: UseSocketOptions<R>
+  ...args: UseSocketArgs<R>
 ): UseSocketResult<R> {
+  const opts = args[0];
   const [lastMsg, setLastMsg] = useState<Serialize<Outgoing<R>> | undefined>(
     undefined
   );
@@ -72,13 +141,24 @@ export function useSocket<R extends SocketRef<unknown, unknown>>(
 
   const enabled = opts?.enabled ?? true;
 
+  // JSON-encode route params (bound sockets) once per render so the dep array
+  // stays a stable primitive. Read `opts?.params` DIRECTLY, with no cast: both
+  // branches of `ParamsOption` declare a `params` property, so it is accessible
+  // on the generic intersection. This mirrors use-room.ts, which reads
+  // `opts?.key` off the identical `KeyOption` shape castless. A bare socket
+  // types `params` as absent, so this is `undefined` there.
+  const paramsJson = opts?.params ? JSON.stringify(opts.params) : undefined;
+
   const lifecycle = useWsLifecycle({
     enabled,
     ready: Boolean(moduleKey && socketName),
-    deps: [moduleKey, socketName],
+    deps: [moduleKey, socketName, paramsJson],
     buildUrl: () => {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${proto}//${location.host}${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent(moduleKey!)}&${SOCKET_NAME_PARAM}=${encodeURIComponent(socketName!)}`;
+      const base = `${proto}//${location.host}${SOCKETS_RPC_PATH}?${SOCKET_MODULE_PARAM}=${encodeURIComponent(moduleKey!)}&${SOCKET_NAME_PARAM}=${encodeURIComponent(socketName!)}`;
+      return paramsJson !== undefined
+        ? `${base}&${SOCKET_KEY_PARAM}=${encodeURIComponent(paramsJson)}`
+        : base;
     },
     onOpen: () => opts?.onOpen?.(),
     onClose: (e) => opts?.onClose?.(e),

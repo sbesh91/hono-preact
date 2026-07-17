@@ -113,6 +113,13 @@ const chatRef: SocketRef<ChatMsg, ServerMsg> = {
   [FORM_SOCKET_FIELD]: 'chat',
 };
 
+// A route-bound ref (e.g. serverRoute('/board/:id').socket(...)) carrying
+// `{ id: string }` params, for the wire-encoding test below.
+const boardRef: SocketRef<ChatMsg, ServerMsg, { id: string }> = {
+  [FORM_MODULE_FIELD]: 'pages/board.server',
+  [FORM_SOCKET_FIELD]: 'board',
+};
+
 // ---------------------------------------------------------------------------
 // Helper component + result capture
 // ---------------------------------------------------------------------------
@@ -127,6 +134,27 @@ function Harness({
   socketRef: typeof chatRef;
   opts?: Parameters<typeof useSocket<typeof chatRef>>[1];
   onResult: (r: Result) => void;
+}) {
+  const result = useSocket(socketRef, opts);
+  onResult(result);
+  return null;
+}
+
+// A second harness bound to the param-bearing ref, for the wire-encoding
+// test below (its `opts.params` is required and typed, unlike `Harness`'s).
+type BoardResult = ReturnType<typeof useSocket<typeof boardRef>>;
+
+function BoardHarness({
+  socketRef,
+  opts,
+  onResult,
+}: {
+  socketRef: typeof boardRef;
+  // boardRef has a required `boardId` param, so this resolves to the
+  // non-optional branch of UseSocketArgs; every call site below always
+  // passes `opts`, so this stays required rather than `opts?: ...`.
+  opts: Parameters<typeof useSocket<typeof boardRef>>[1];
+  onResult: (r: BoardResult) => void;
 }) {
   const result = useSocket(socketRef, opts);
   onResult(result);
@@ -449,5 +477,82 @@ describe('useSocket send-queue overflow', () => {
     ).toBe(true);
 
     warn.mockRestore();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Route-bound params (#273 item 4): a param-bearing ref's `params` option is
+// JSON-encoded onto the `r=` query of the upgrade URL, the same wire key
+// `useRoom` uses for its channel key params.
+// ---------------------------------------------------------------------------
+
+describe('useSocket params wire encoding', () => {
+  it('JSON-encodes opts.params onto the r= query of the upgrade URL', async () => {
+    let result!: BoardResult;
+
+    await act(async () => {
+      render(
+        <BoardHarness
+          socketRef={boardRef}
+          opts={{ params: { id: 'b1' } }}
+          onResult={(r) => (result = r)}
+        />
+      );
+    });
+
+    expect(lastWS).not.toBeNull();
+    expect(lastWS!.url).toContain(
+      `&r=${encodeURIComponent(JSON.stringify({ id: 'b1' }))}`
+    );
+    // Sanity: the socket still connects normally.
+    expect(result.status).toBe('connecting');
+  });
+
+  it('a bare (param-less) socket omits the r= query entirely', async () => {
+    let result!: Result;
+
+    await act(async () => {
+      render(<Harness socketRef={chatRef} onResult={(r) => (result = r)} />);
+    });
+
+    expect(lastWS).not.toBeNull();
+    expect(lastWS!.url).not.toContain('&r=');
+    void result;
+  });
+
+  it('changing params reconnects (a new WebSocket is opened)', async () => {
+    let result!: BoardResult;
+    let utils!: ReturnType<typeof render>;
+
+    await act(async () => {
+      utils = render(
+        <BoardHarness
+          socketRef={boardRef}
+          opts={{ params: { id: 'b1' } }}
+          onResult={(r) => (result = r)}
+        />
+      );
+    });
+
+    expect(wsInstances.length).toBe(1);
+    expect(lastWS!.url).toContain(
+      `&r=${encodeURIComponent(JSON.stringify({ id: 'b1' }))}`
+    );
+
+    await act(async () => {
+      utils.rerender(
+        <BoardHarness
+          socketRef={boardRef}
+          opts={{ params: { id: 'b2' } }}
+          onResult={(r) => (result = r)}
+        />
+      );
+    });
+
+    expect(wsInstances.length).toBe(2);
+    expect(lastWS!.url).toContain(
+      `&r=${encodeURIComponent(JSON.stringify({ id: 'b2' }))}`
+    );
+    void result;
   });
 });

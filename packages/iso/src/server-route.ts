@@ -17,11 +17,15 @@ import type {
 import type { Topic } from './define-channel.js';
 import { subscribeTopic } from './internal/subscribe-topic.js';
 import {
-  defineSocket,
+  _defineRouteSocket,
   type SocketHandler,
   type SocketRef,
 } from './define-socket.js';
-import { defineRoom, type RoomHandler, type RoomRef } from './define-room.js';
+import {
+  _defineRouteRoom,
+  type RoomHandler,
+  type RoomRef,
+} from './define-room.js';
 import type { Channel } from './define-channel.js';
 import {
   _defineRouteAction,
@@ -29,6 +33,7 @@ import {
   type ActionRef,
   type DefineActionOptions,
 } from './action.js';
+import { reservedParamNamesIn } from './internal/param-slots.js';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
 /**
@@ -131,14 +136,22 @@ export interface RouteBinder<RouteId extends string> {
 
   /**
    * Define a duplex WebSocket bound to this route. Consume with
-   * `useSocket(serverSockets.x)`. The handler receives `ctx.c` (the Hono
-   * Context for the upgrade request); there is no `ctx.params` field because
-   * the socket endpoint is query-string-only at runtime. Typed route params
-   * for sockets are reserved for a later release (rooms).
+   * `useSocket(serverSockets.x, { params })`. Binding selects the route's
+   * page-level `use` (auth) chain for the upgrade guard probe AND, for a
+   * param-bearing route, requires the client to supply the route params via a
+   * typed `params` option. Those params are validated at the upgrade (a missing
+   * slot denies 4403), read by the guard as `ctx.location.pathParams`, and
+   * passed to the edge `data` factory as its second argument. The declared
+   * pattern is stamped on the def and validated fail-closed at boot: the boot
+   * check also rejects (throws, does not just deny) a route whose `:param`
+   * segment does not conform to the shared param grammar (e.g. a hyphen, as in
+   * `:board-id`), since such a segment would otherwise resolve NO required
+   * params and pass the guard an empty object for a param the same guard sees
+   * populated over plain HTTP.
    */
   socket<Incoming, Outgoing, Data = undefined>(
-    handler: SocketHandler<Incoming, Outgoing, Data>
-  ): SocketRef<Incoming, Outgoing>;
+    handler: SocketHandler<Incoming, Outgoing, Data, RouteParams<RouteId>>
+  ): SocketRef<Incoming, Outgoing, RouteParams<RouteId>>;
 
   /**
    * Define a broadcasting room bound to this route, addressed by a `Channel`.
@@ -146,8 +159,25 @@ export interface RouteBinder<RouteId extends string> {
    * from the CHANNEL name pattern (e.g. `defineChannel('room/:roomId')`), not
    * the route's pattern: the room key rides the wire (the `&r=channel.key(...)`
    * query param), so the channel is the only param source available at runtime
-   * on the flat socket endpoint. Attaching the room to the route node only
-   * wires its `use` inheritance.
+   * on the flat socket endpoint. Binding the route wires the room's page-level
+   * `use` inheritance: the declared pattern is stamped on the def, validated
+   * fail-closed at boot (the same non-conforming-`:param` rejection `.socket`
+   * documents above), and takes precedence over the module-mount derivation
+   * when the upgrade guard chain is resolved.
+   *
+   * Boot ALSO enforces route/channel param congruence whenever at least one of
+   * the three guard tiers the upgrade composes is non-empty: app-use
+   * (`defineApp({ use })`), page-use (this route's own composed chain), or the
+   * room's own `use`. Every one of the route's own `:param` names must also be
+   * a `:param` of the CHANNEL (the channel may be finer-grained, never
+   * coarser), because a guard in ANY of those three tiers can read
+   * `ctx.location.pathParams` under the route's param names, and those values
+   * come from the channel key, not the route. Only a room where ALL THREE
+   * tiers are empty is exempt (there is no guard anywhere for a name mismatch
+   * to fool); binding such a room to a channel that does not carry the
+   * route's resource identity is still a correctness hazard, so a dev-only
+   * advisory names the mismatch even when boot does not fail closed. Keep the
+   * names aligned regardless.
    */
   room<
     Name extends string,
@@ -191,6 +221,25 @@ export interface RouteBinder<RouteId extends string> {
 export function serverRoute<
   const RouteId extends RegisteredPaths | RegisteredSubtrees,
 >(route: RouteId): RouteBinder<RouteId> {
+  // Reject a reserved param name at DEFINITION, the same convergent check
+  // `defineRoutes` runs on the route tree (`reservedParamNamesIn`). A
+  // registered route with such a param is already rejected there, but a
+  // `serverRoute`-bound loader/action/socket/room can name its own pattern
+  // directly, so this closes the same prototype-chain param-read hazard on
+  // that surface too: with no route-bound unit able to DECLARE a reserved
+  // param name, no guard on ANY tier can read one, so the params objects the
+  // guard sees stay ordinary objects (no null-prototype needed).
+  const reserved = reservedParamNamesIn(route);
+  if (reserved.length > 0) {
+    throw new Error(
+      `serverRoute('${route}'): the param ':${reserved[0]}' is reserved -- ` +
+        `it resolves through Object.prototype (or otherwise carries ` +
+        `prototype-chain meaning) on a plain params object, so a guard ` +
+        `reading an ABSENT param of this name would read the inherited ` +
+        `member instead of undefined and wrongly treat it as present. ` +
+        `Rename the param to a name that is not an Object.prototype member.`
+    );
+  }
   return {
     loader: (fn: Loader<unknown>, opts?: DefineLoaderOptions<unknown>) =>
       _defineRouteLoader(route, fn, opts),
@@ -198,7 +247,7 @@ export function serverRoute<
       fn: ActionFn<unknown, unknown, unknown>,
       opts?: DefineActionOptions<unknown, unknown>
     ) => _defineRouteAction(route, fn, opts),
-    socket: (handler) => defineSocket(handler),
-    room: (channel, handler) => defineRoom(channel, handler),
+    socket: (handler) => _defineRouteSocket(route, handler),
+    room: (channel, handler) => _defineRouteRoom(route, channel, handler),
   };
 }

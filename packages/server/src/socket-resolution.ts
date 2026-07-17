@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import {
   SOCKET_MODULE_PARAM,
   SOCKET_NAME_PARAM,
-  SOCKET_ROOM_PARAM,
+  SOCKET_KEY_PARAM,
   SOCKETS_RPC_PATH,
 } from '@hono-preact/iso/internal/runtime';
 import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
@@ -11,6 +11,7 @@ import type { SocketDef, RoomDef } from '@hono-preact/iso/internal';
 import { composeServerChain } from './compose-server-chain.js';
 import { resolveRoomKey } from './rooms-handler.js';
 import type { RoomKeyResolution } from './rooms-handler.js';
+import { parseKeyParams } from './param-parse.js';
 
 type GlobModule = {
   __moduleKey?: unknown;
@@ -126,9 +127,11 @@ export interface SocketsHandlerOptions {
   ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
   /**
    * Resolve a socket's moduleKey to its owning route path so that
-   * `resolvePageUse` receives the correct path. When the moduleKey is not
-   * found in the route tree (a bare `defineSocket` not attached to a route
-   * node) the resolver returns `undefined` and the handler falls back to
+   * `resolvePageUse` receives the correct path when the def carries no
+   * declared `__routeId` (bare `defineSocket`/`defineRoom`); a stamped
+   * declared pattern takes precedence. When the moduleKey is not found in the
+   * route tree (a bare `defineSocket` not attached to a route node) the
+   * resolver returns `undefined` and the handler falls back to
    * `SOCKETS_RPC_PATH`, which matches no route pattern, so `resolvePageUse`
    * returns `[]` and the socket gets app-use + def-use only.
    */
@@ -153,10 +156,14 @@ export async function resolveGuardDenied(opts: {
   moduleKey: string;
   name: string;
   /**
-   * Path params the guard chain can read via `ctx.location.pathParams`. Rooms
-   * pass their server-resolved room-key params here (so a route-node/room guard
-   * can read e.g. `ctx.location.pathParams.roomId`); plain sockets pass `{}`
-   * (the `/__sockets` endpoint is query-string only, with no param wire).
+   * Path params the guard chain can read via `ctx.location.pathParams`. A
+   * ROOM passes its server-resolved channel-key params here (so a
+   * route-node/room guard can read e.g. `ctx.location.pathParams.roomId`). A
+   * route-BOUND socket (`serverRoute(r).socket`, `__routeId` set) passes its
+   * validated route params, resolved from the `SOCKET_KEY_PARAM` wire; a
+   * missing required slot denies the connection (4403) before the guard runs,
+   * so the guard never sees a partially-resolved bound socket. A COLOCATED
+   * or bare socket (no `__routeId`) has no param wire and passes `{}`.
    */
   pathParams?: Record<string, string>;
 }): Promise<boolean> {
@@ -190,6 +197,10 @@ export async function resolveGuardDenied(opts: {
     scope: 'loader',
     c: ctx,
     signal,
+    // searchParams: a realtime upgrade is query-string-only on `/__sockets`
+    // itself and carries no client-supplied search params to the guard, but
+    // the field is still guard-readable (`ctx.location.searchParams`), so it
+    // gets an empty object.
     location: { path: routePath, pathParams, searchParams: {} },
     module: moduleKey,
     loader: name,
@@ -246,6 +257,14 @@ export type ResolvedConnection =
       moduleKey: string | undefined;
       name: string | undefined;
       denied: boolean;
+      /**
+       * The socket's validated route params. `{}` for a colocated (unbound)
+       * socket, which has no param wire; the resolved wire params for an
+       * EXPLICITLY route-bound socket (`__routeId` set). Fed to both the
+       * page-use guard (as `pathParams`) and the `data` edge factory's second
+       * argument.
+       */
+      params: Record<string, string>;
     }
   | {
       kind: 'room';
@@ -282,14 +301,19 @@ export async function resolveConnection(
 
   if (!def) return { kind: 'unknown' };
 
-  // Resolve the owning route path from the moduleKey (server-derived, not
-  // client-supplied). A def whose moduleKey is not in the route tree falls
-  // back to SOCKETS_RPC_PATH, which matches no route pattern, so
-  // resolvePageUse returns [] and the def gets app-use + def-use only.
+  // The def's declared pattern (serverRoute(r).socket/.room stamps __routeId)
+  // wins when present: the boot binding guard validates it against the module
+  // mount (or the route table for src/server registry modules) before the
+  // entry serves, so the byPattern lookup cannot fail open for a bound def.
+  // The module-mount derivation is the fallback for bare defs; a bare def
+  // whose moduleKey is not in the route tree falls back to SOCKETS_RPC_PATH,
+  // which matches no route pattern, so resolvePageUse returns [] and the def
+  // gets app-use + def-use only.
   const routePath =
-    moduleKey && opts.resolveRoutePath
+    def.__routeId ??
+    (moduleKey && opts.resolveRoutePath
       ? (opts.resolveRoutePath(moduleKey) ?? SOCKETS_RPC_PATH)
-      : SOCKETS_RPC_PATH;
+      : SOCKETS_RPC_PATH);
 
   // `'channel' in def` narrows `def` to a room, so the room branch carries the
   // resolved `roomKey` with no non-null assertion and the socket branch carries
@@ -301,8 +325,24 @@ export async function resolveConnection(
     // (channel.key(params)); the client only varies param VALUES.
     const roomKey = resolveRoomKey(
       def.channel,
-      ctx.req.query(SOCKET_ROOM_PARAM)
+      ctx.req.query(SOCKET_KEY_PARAM)
     );
+    // A failed room-key resolution (bad/absent wire, missing required slot) is
+    // a protocol-level reject independent of the guard: both consumers deny on
+    // `denied || !roomKey.ok`. Short-circuit here WITHOUT running the guard
+    // chain, so its side effects (rate-limit, audit-log) do not fire for a
+    // connection that is already doomed. Mirrors the route-bound socket branch,
+    // which short-circuits on a failed param parse before the guard runs.
+    if (!roomKey.ok) {
+      return {
+        kind: 'room',
+        roomDef: def,
+        roomKey,
+        moduleKey,
+        name,
+        denied: true,
+      };
+    }
     const denied = await resolveGuardDenied({
       def,
       ctx,
@@ -311,15 +351,50 @@ export async function resolveConnection(
       routePath,
       moduleKey: moduleKey ?? '',
       name: name ?? '',
-      // Only feed resolved params to the guard; a failed room-key resolution
-      // contributes no params. onOpen still denies on a failed room key, so the
-      // guard never sees a partially-resolved room.
-      pathParams: roomKey.ok ? roomKey.params : {},
+      pathParams: roomKey.params,
     });
     return { kind: 'room', roomDef: def, roomKey, moduleKey, name, denied };
   }
 
-  // Plain socket: no param wire, so the guard gets `{}` path params.
+  // Plain socket. A bare (colocated / registry) socket has no param wire and
+  // its guard gets `{}` (the /__sockets endpoint is query-string only). An
+  // EXPLICITLY route-bound socket (serverRoute(r).socket, __routeId set) carries
+  // its route params on the shared key wire, mirroring a room's channel key:
+  // resolve + validate them here so the page-use guard reads them and the edge
+  // `data` factory receives them. A missing required slot denies 4403.
+  let socketParams: Record<string, string> = {};
+  if (def.__routeId !== undefined) {
+    const resolved = parseKeyParams(
+      def.__routeId,
+      ctx.req.query(SOCKET_KEY_PARAM)
+    );
+    if (!resolved.ok) {
+      if (opts.dev) {
+        // Name the actual failure. Telling an author to supply params they
+        // already sent (because the payload itself was unusable) sends them
+        // hunting for the wrong bug.
+        const detail =
+          resolved.reason === 'missing-params'
+            ? `without required route param(s): ${resolved.missing.join(', ')}. ` +
+              `Connect with useSocket(ref, { params: { ${resolved.missing.join(', ')} } })`
+            : `with an unusable route-param payload: the '${SOCKET_KEY_PARAM}' query ` +
+              `must be a JSON object whose values are all strings`;
+        console.warn(
+          `hono-preact: socket '${name ?? ''}' bound to '${def.__routeId}' was ` +
+            `connected ${detail}; the connection is denied (4403).`
+        );
+      }
+      return {
+        kind: 'socket',
+        socketDef: def,
+        moduleKey,
+        name,
+        denied: true,
+        params: {},
+      };
+    }
+    socketParams = resolved.params;
+  }
   const denied = await resolveGuardDenied({
     def,
     ctx,
@@ -328,7 +403,14 @@ export async function resolveConnection(
     routePath,
     moduleKey: moduleKey ?? '',
     name: name ?? '',
-    pathParams: {},
+    pathParams: socketParams,
   });
-  return { kind: 'socket', socketDef: def, moduleKey, name, denied };
+  return {
+    kind: 'socket',
+    socketDef: def,
+    moduleKey,
+    name,
+    denied,
+    params: socketParams,
+  };
 }
