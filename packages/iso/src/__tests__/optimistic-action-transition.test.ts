@@ -30,7 +30,11 @@ describe('useOptimisticAction transition forwarding', () => {
   it('wraps settle in startViewTransition when transition: true', async () => {
     const spy = vi.fn((cb: () => void) => {
       cb();
-      return { finished: Promise.resolve() };
+      return {
+        finished: Promise.resolve(),
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+      };
     });
     document.startViewTransition = spy as never;
 

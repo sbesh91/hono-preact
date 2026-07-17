@@ -58,7 +58,7 @@ export function useOptimistic<TBase, TPayload>(
       typeof document !== 'undefined' &&
       typeof document.startViewTransition === 'function'
     ) {
-      document.startViewTransition(async () => {
+      const t = document.startViewTransition(async () => {
         mutator();
         await new Promise<void>((resolve) => {
           if (typeof requestAnimationFrame === 'function') {
@@ -71,6 +71,12 @@ export function useOptimistic<TBase, TPayload>(
           }
         });
       });
+      // An aborted or skipped transition is a cosmetic downgrade, not an
+      // error: the mutator already ran inside the update callback. Swallow
+      // the rejections so they do not surface as unhandled.
+      t.finished.catch(() => {});
+      t.ready.catch(() => {});
+      t.updateCallbackDone.catch(() => {});
     } else {
       mutator();
     }

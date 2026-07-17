@@ -77,6 +77,8 @@ const ALLOWLIST: Record<string, string> = {
     'hoofd re-export for injecting third-party <script> tags; the demo needs none',
   useViewTransitionClass:
     'ref-callback hook form; the demo uses the ViewTransitionGroup component (Board.tsx) built on it',
+  upgradeWebSocket:
+    'Node-adapter-only raw WS upgrader; unusable under the site Cloudflare adapter (#282 finding)',
 };
 
 function collectFiles(root: string): string[] {
