@@ -10,9 +10,9 @@ import {
 import {
   serverActions,
   serverLoaders,
-  draftPreviewHandler,
   type TaskDetail,
 } from '../task.server.js';
+import { draftPreviewHandler } from '../../../demo/draft-preview.js';
 import {
   resetDemoData,
   upsertUser,

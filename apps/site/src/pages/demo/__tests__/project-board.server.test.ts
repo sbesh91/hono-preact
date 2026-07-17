@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { createCaller, isDeny, type CallResult } from 'hono-preact';
+import { serverLoaders, type BoardData } from '../project-board.server.js';
 import {
-  serverLoaders,
   insightsCache,
   timeLoader,
-  type BoardData,
   type ProjectInsights,
-} from '../project-board.server.js';
+} from '../board-insights.js';
 import { resetDemoData } from '../../../demo/data.js';
 
 const callBoard = async (projectId: string): Promise<CallResult<BoardData>> => {

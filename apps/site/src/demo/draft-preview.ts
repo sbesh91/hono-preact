@@ -29,3 +29,21 @@ export function previewOf(draft: string): DraftPreview {
     mentions,
   };
 }
+
+export type DraftMsg = { draft: string };
+
+// The handler is its own named binding so the unit test can drive
+// open/message directly with a stub socket (the SocketRef type the client
+// sees hides the handler methods).
+export const draftPreviewHandler = {
+  // Per-connection setup: seed the preview line immediately so the client
+  // renders stats before the first keystroke.
+  open(socket: { send(msg: DraftPreview): void }) {
+    socket.send(previewOf(''));
+  },
+  // Pure request/response per message: hibernation-safe on Cloudflare (no
+  // in-memory state between events).
+  message(socket: { send(msg: DraftPreview): void }, msg: DraftMsg) {
+    socket.send(previewOf(msg.draft));
+  },
+};
