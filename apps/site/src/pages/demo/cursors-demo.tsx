@@ -1,4 +1,4 @@
-import { definePage } from 'hono-preact';
+import { definePage, useTitle } from 'hono-preact';
 import type { JSX, FunctionComponent } from 'preact';
 import { useCallback, useEffect, useRef } from 'preact/hooks';
 import { serverRooms } from './cursors-demo.server.js';
@@ -13,6 +13,7 @@ const PRESENCE_INTERVAL_MS = 16;
 // (HONO_PREACT_REALTIME binding). Open two browser tabs and move the pointer
 // in one to see it appear in the other, cross-isolate.
 const CursorsDemo: FunctionComponent = () => {
+  useTitle('Live cursors');
   const room = serverRooms.cursors.useRoom({
     key: { room: 'demo' },
     presence: { x: 0, y: 0 },

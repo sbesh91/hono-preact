@@ -1,9 +1,16 @@
-import { definePage, Form, useFormStatus, useActionResult } from 'hono-preact';
+import {
+  definePage,
+  Form,
+  useFormStatus,
+  useActionResult,
+  useTitle,
+} from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { serverActions } from './login.server.js';
 import { DEMO_AUTHED_KEY } from '../../demo/guard.js';
 
 const LoginPage: FunctionComponent = () => {
+  useTitle('Sign in');
   const { pending } = useFormStatus(serverActions.login);
   const result = useActionResult(serverActions.login);
   const error =
