@@ -1,9 +1,10 @@
 // apps/site/src/pages/demo/project-board.tsx
-import { definePage, useRoute } from 'hono-preact';
+import { definePage, useRoute, NavLink } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { serverLoaders } from './project-board.server.js';
 import Board from '../../components/demo/Board.js';
 import NewTaskDialog from '../../components/demo/NewTaskDialog.js';
+import { BoardInfoPopover } from '../../components/demo/BoardInfoPopover.js';
 import { InsightsPanel } from '../../components/demo/InsightsPanel.js';
 import { PRIORITY_LABEL } from '../../components/demo/priority.js';
 import { PRIORITIES } from '../../demo/data.js';
@@ -33,13 +34,18 @@ const ProjectBoardPage: FunctionComponent = () => {
           aria-label="Filter by priority"
         >
           {(['all', ...PRIORITIES] as const).map((p) => (
-            <a
+            <NavLink
               key={p}
               href={boardHref(project.slug, {
                 priority: p,
                 insights: searchParams.insights,
               })}
-              aria-current={priority === p ? 'page' : undefined}
+              transition={false}
+              // NavLink's own active detection is path-only, so it would
+              // mark the query-less All chip current too; pin aria-current
+              // explicitly here ('false' suppresses NavLink's fallback,
+              // since undefined would not).
+              aria-current={priority === p ? 'page' : 'false'}
               class={[
                 'rounded-full px-2 py-0.5 font-medium',
                 priority === p
@@ -48,9 +54,10 @@ const ProjectBoardPage: FunctionComponent = () => {
               ].join(' ')}
             >
               {p === 'all' ? 'All' : PRIORITY_LABEL[p]}
-            </a>
+            </NavLink>
           ))}
         </nav>
+        <BoardInfoPopover />
         <div class="ml-auto">
           <NewTaskDialog projectId={project.id} users={users} />
         </div>

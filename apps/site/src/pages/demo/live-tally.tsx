@@ -1,4 +1,4 @@
-import { definePage, useAction } from 'hono-preact';
+import { definePage, useAction, useTitle } from 'hono-preact';
 import { serverLoaders, serverActions } from './live-tally.server.js';
 
 const pingsLoader = serverLoaders.pings;
@@ -10,6 +10,7 @@ const pingsLoader = serverLoaders.pings;
 // so each tab keeps its own honest count (the reduce just counts arrivals).
 const LiveTally = pingsLoader.View<number>(
   (s) => {
+    useTitle('Live tally');
     const ping = useAction(serverActions.ping);
     // Only `open`/`closed` carry the accumulated tally; `connecting` and a cold
     // `error` carry no data, so fall back to the initial tally (0) until a chunk

@@ -1,15 +1,28 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/preact';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/preact';
+import { LocationProvider } from 'preact-iso';
+import type { ComponentChildren } from 'preact';
 import type { LoaderState } from 'hono-preact';
 import type { ProjectInsights } from '../../../pages/demo/board-insights.js';
 import { renderInsightsBody } from '../InsightsPanel.js';
+
+// The mode links render as NavLink, which reads useLocation() from
+// preact-iso's routing context; wrap every render the same way the app does.
+function renderWithLocation(children: ComponentChildren) {
+  return render(<LocationProvider>{children}</LocationProvider>);
+}
 
 const stats: ProjectInsights = {
   total: 7,
   byStatus: { backlog: 2, in_progress: 1, in_review: 4, done: 3 },
   oldestOpenDays: 5,
   mode: 'quick',
+};
+
+const successState: LoaderState<ProjectInsights> = {
+  status: 'success',
+  data: stats,
 };
 
 afterEach(() => cleanup());
@@ -20,7 +33,9 @@ describe('renderInsightsBody', () => {
       status: 'success',
       data: stats,
     };
-    render(renderInsightsBody(state, null, 'inf', {}));
+    renderWithLocation(
+      renderInsightsBody(state, null, 'inf', {}, () => {}, false)
+    );
 
     expect(screen.getByText('7')).toBeTruthy();
     expect(screen.getByText(/Backlog:/)).toBeTruthy();
@@ -39,7 +54,9 @@ describe('renderInsightsBody', () => {
       error: boom,
       data: stats,
     };
-    render(renderInsightsBody(state, boom, 'inf', {}));
+    renderWithLocation(
+      renderInsightsBody(state, boom, 'inf', {}, () => {}, false)
+    );
 
     expect(screen.getByText('7')).toBeTruthy();
     expect(screen.getByText('5d')).toBeTruthy();
@@ -48,7 +65,9 @@ describe('renderInsightsBody', () => {
 
   it('renders the computing line while loading', () => {
     const state: LoaderState<ProjectInsights> = { status: 'loading' };
-    render(renderInsightsBody(state, null, 'inf', {}));
+    renderWithLocation(
+      renderInsightsBody(state, null, 'inf', {}, () => {}, false)
+    );
 
     expect(screen.getByText(/Computing insights/)).toBeTruthy();
   });
@@ -61,7 +80,16 @@ describe('renderInsightsBody', () => {
       status: 'success',
       data: stats,
     };
-    render(renderInsightsBody(state, null, 'inf', { priority: 'high' }));
+    renderWithLocation(
+      renderInsightsBody(
+        state,
+        null,
+        'inf',
+        { priority: 'high' },
+        () => {},
+        false
+      )
+    );
 
     const link = screen.getByRole('link', { name: /Run deep analysis/ });
     expect(link.getAttribute('href')).toBe(
@@ -76,9 +104,36 @@ describe('renderInsightsBody', () => {
       status: 'success',
       data: { ...stats, mode: 'deep' },
     };
-    render(renderInsightsBody(state, null, 'inf', { priority: 'high' }));
+    renderWithLocation(
+      renderInsightsBody(
+        state,
+        null,
+        'inf',
+        { priority: 'high' },
+        () => {},
+        false
+      )
+    );
 
     const link = screen.getByRole('link', { name: /Back to quick insights/ });
     expect(link.getAttribute('href')).toBe('/demo/projects/inf?priority=high');
+  });
+
+  it('renders a Recompute control that fires the callback', () => {
+    const onRecompute = vi.fn();
+    renderWithLocation(
+      renderInsightsBody(successState, null, 'inf', {}, onRecompute, false)
+    );
+    const btn = screen.getByRole('button', { name: /recompute/i });
+    fireEvent.click(btn);
+    expect(onRecompute).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the Recompute control while reloading', () => {
+    renderWithLocation(
+      renderInsightsBody(successState, null, 'inf', {}, () => {}, true)
+    );
+    const btn = screen.getByRole('button', { name: /recompute/i });
+    expect(btn).toHaveProperty('disabled', true);
   });
 });

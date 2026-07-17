@@ -5,7 +5,11 @@ import { useOptimistic } from '../optimistic.js';
 
 declare global {
   interface Document {
-    startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+    startViewTransition?: (cb: () => void) => {
+      finished: Promise<void>;
+      ready: Promise<void>;
+      updateCallbackDone: Promise<void>;
+    };
   }
 }
 
@@ -27,7 +31,11 @@ describe('useOptimistic transition option', () => {
   it('does not wrap settle/revert when transition is omitted (default)', () => {
     const spy = vi.fn((cb: () => void) => {
       cb();
-      return { finished: Promise.resolve() };
+      return {
+        finished: Promise.resolve(),
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+      };
     });
     document.startViewTransition = spy as never;
 
@@ -48,7 +56,11 @@ describe('useOptimistic transition option', () => {
   it('wraps settle and revert when transition is true, but not the initial mutate', () => {
     const spy = vi.fn((cb: () => void) => {
       cb();
-      return { finished: Promise.resolve() };
+      return {
+        finished: Promise.resolve(),
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+      };
     });
     document.startViewTransition = spy as never;
 

@@ -1,11 +1,27 @@
 import type { LayoutProps } from 'hono-preact';
-import { buildPath, useAction, useNavigate, useRoute } from 'hono-preact';
+import {
+  buildPath,
+  useAction,
+  useNavigate,
+  NavLink,
+  useRouteMatch,
+  useViewTransitionName,
+} from 'hono-preact';
+import type { FunctionComponent } from 'preact';
 import { ActivityBar } from '../../components/demo/ActivityBar.js';
 import { useEffect } from 'preact/hooks';
 import { serverLoaders } from './projects-shell.server.js';
 import { serverActions as loginActions } from './login.server.js';
 import { DEMO_AUTHED_KEY } from '../../demo/guard.js';
 import type { ShellData } from './projects-shell.server.js';
+
+// Only the ACTIVE dot carries the view-transition-name (names must be
+// unique per document), so on navigation the browser morphs the dot from
+// the old active item to the new one: the classic gliding-indicator VT.
+const SidebarDot: FunctionComponent<{ active: boolean }> = ({ active }) => {
+  const ref = useViewTransitionName(active ? 'demo-sidebar-active' : null);
+  return <span ref={ref} class="h-2 w-2 rounded-[3px] bg-accent" />;
+};
 
 const shellLoader = serverLoaders.default;
 
@@ -17,13 +33,11 @@ function Sidebar({
   children: LayoutProps['children'];
 }) {
   const navigate = useNavigate();
-  // Read the current route's pathParams directly so we can tolerate the case
-  // where the sidebar renders on /demo/projects (no :projectId segment) and
-  // the case where it renders on /demo/projects/:projectId. useParams always
-  // asserts the key is present, so we drop to useRoute().pathParams for the
-  // safe read.
-  const { pathParams } = useRoute();
-  const activeSlug: string | undefined = pathParams.projectId;
+  // Typed match instead of the tolerant pathParams read: null off the
+  // projects subtree, the typed { projectId } inside it (exact: false keeps
+  // the sidebar lit on nested task pages).
+  const match = useRouteMatch('/demo/projects/:projectId', { exact: false });
+  const activeSlug = match?.projectId ?? null;
 
   // Self-heal the client guard flag on any authed render.
   useEffect(() => {
@@ -63,24 +77,22 @@ function Sidebar({
           {data.projects.map((p) => {
             const active = p.slug === activeSlug;
             return (
-              <a
+              <NavLink
                 key={p.id}
                 href={buildPath('/demo/projects/:projectId', {
                   projectId: p.slug,
                 })}
-                class={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium ${
-                  active
-                    ? 'bg-accent/10 text-accent'
-                    : 'text-foreground hover:bg-foreground/5'
-                }`}
-                aria-current={active ? 'page' : undefined}
+                exact={false}
+                class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium"
+                activeClass="bg-accent/10 text-accent"
+                inactiveClass="text-foreground hover:bg-foreground/5"
               >
-                <span class="h-2 w-2 rounded-[3px] bg-accent" />
+                <SidebarDot active={active} />
                 {p.name}
                 <span class="ml-auto text-[11px] text-muted">
                   {p.taskCount}
                 </span>
-              </a>
+              </NavLink>
             );
           })}
         </nav>

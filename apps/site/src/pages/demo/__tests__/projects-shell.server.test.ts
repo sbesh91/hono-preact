@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { createCaller, publish, serverRoute, buildPath } from 'hono-preact';
-import { serverLoaders } from '../projects-shell.server.js';
+import { serverLoaders, serverActions } from '../projects-shell.server.js';
 import {
   activityChannel,
   taskMovedEvent,
@@ -12,6 +12,27 @@ import { resetDemoData, getTask } from '../../../demo/data.js';
 import { __resetSimHeartbeatForTesting } from '../../../demo/activity-sim.js';
 import routes from '../../../routes.js';
 import { requireSession } from '../../../demo/guard.js';
+import { signIn } from '../../../demo/session.js';
+
+// A cookie set on the response is not readable on the same request, so the
+// session cookie is minted in a first round-trip and replayed as a request
+// header on the action call (currentUser reads it off c.req).
+async function mintSessionCookie(user: {
+  id: string;
+  email: string;
+  name: string;
+}): Promise<string> {
+  const app = new Hono();
+  app.post('/login', async (c) => {
+    await signIn(c, user);
+    return c.text('ok');
+  });
+  const res = await app.request('/login', { method: 'POST' });
+  const setCookie = res.headers.get('set-cookie');
+  if (!setCookie) throw new Error('expected a session cookie');
+  // Strip attributes (Path, HttpOnly, ...); keep just `name=value`.
+  return setCookie.split(';')[0];
+}
 
 // Mint a real Hono Context by driving one request through a capture handler.
 async function mintContext(): Promise<Context> {
@@ -88,6 +109,14 @@ describe('activity live loader', () => {
   });
 });
 
+// ActionRef's public type has no __routeId field (only AnyLoaderRef exposes
+// it structurally); serverRoute(r).action still stamps it onto the raw
+// function at runtime, the same way the server's extractActions reads it.
+// Narrow structurally instead of casting.
+function hasRouteId(x: object): x is { __routeId: string } {
+  return '__routeId' in x && typeof x.__routeId === 'string';
+}
+
 describe('shell loaders are subtree-bound to the projects layout', () => {
   it('binds default and activity to /demo/projects/*', () => {
     // Route binding is what attaches the layout's own composed use chain
@@ -96,6 +125,13 @@ describe('shell loaders are subtree-bound to the projects layout', () => {
     expect(serverLoaders.default.__routeBound).toBe(true);
     expect(serverLoaders.activity.__routeId).toBe('/demo/projects/*');
     expect(serverLoaders.activity.__routeBound).toBe(true);
+    // The digest action is built off the same bound `route`, so it inherits
+    // requireSession too; pin it so a regressed binding fails here instead
+    // of surfacing as a silent 401 in the digest streaming test below.
+    expect(hasRouteId(serverActions.digest)).toBe(true);
+    if (hasRouteId(serverActions.digest)) {
+      expect(serverActions.digest.__routeId).toBe('/demo/projects/*');
+    }
   });
 
   it('default loader returns the shell data shape via the server caller', async () => {
@@ -119,6 +155,46 @@ describe('the bound subtree pattern resolves the projects gates from the site ma
     expect(byPattern.get(serverLoaders.default.__routeId!)).toEqual(
       requireSession
     );
+  });
+});
+
+describe('digest streaming action', () => {
+  beforeEach(() => resetDemoData());
+
+  it('streams one line per project then returns totals', async () => {
+    const cookie = await mintSessionCookie({
+      id: 'u-1',
+      email: 'alice@example.com',
+      name: 'Alice',
+    });
+    const app = new Hono();
+    let chunks: string[] = [];
+    let final!: { projects: number; tasks: number; by: string };
+    app.post('/', async (c) => {
+      const r = await createCaller(c).call(serverActions.digest, {});
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        const gen = r.value;
+        for (;;) {
+          const n = await gen.next();
+          if (n.done) {
+            final = n.value;
+            break;
+          }
+          chunks.push(n.value);
+        }
+      }
+      return c.text('ok');
+    });
+    await app.request('/', {
+      method: 'POST',
+      headers: { Cookie: cookie },
+    });
+    expect(chunks).toHaveLength(4);
+    expect(chunks[0]).toContain('Infrastructure');
+    expect(final.projects).toBe(4);
+    expect(final.tasks).toBe(14);
+    expect(final.by).toBe('Alice');
   });
 });
 

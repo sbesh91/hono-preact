@@ -63,7 +63,7 @@ const TaskHeaderAndActions: FunctionComponent<{
   task: TaskData;
   reloadTask: () => void;
 }> = ({ task, reloadTask }) => {
-  useTitle(`${task.title} · demo`);
+  useTitle(task.title);
 
   // The route slug doubles as the project slug, so the back link can point at
   // the board without touching any loader. (project-header.tsx reads the same

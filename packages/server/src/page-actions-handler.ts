@@ -28,7 +28,7 @@ import {
   isAsyncGenerator,
 } from './sse.js';
 import type { ActionEntry } from './page-action-resolvers.js';
-import { pickAccept } from './accept.js';
+import { pickAccept, acceptsEventStream } from './accept.js';
 import type { VNode } from 'preact';
 
 export interface PageActionsHandlerOptions {
@@ -375,7 +375,13 @@ export function pageActionsHandler(
 
       if (isAsyncGenerator(value) || value instanceof ReadableStream) {
         streamingResult = value;
-        if (accept !== 'event-stream') {
+        // Stream whenever the client can accept SSE at all, not only when
+        // event-stream WINS the negotiation: useAction's mutate sends a dual
+        // header (json preferred, event-stream at q=0.9) so onChunk keeps
+        // working even though json wins pickAccept. The 405 below is
+        // reserved for clients that cannot accept SSE at all (a no-JS
+        // progressive-enhancement form post).
+        if (!acceptsEventStream(c.req.header('Accept'))) {
           const message = 'Streaming actions require Accept: text/event-stream';
           return accept === 'json'
             ? c.json({ __outcome: 'error', message }, 405)

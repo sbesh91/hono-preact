@@ -9,6 +9,7 @@ import {
   setTaskStatus,
   setTaskPriority,
   deleteTask,
+  restoreTask,
   addComment,
   listComments,
   upsertUser,
@@ -77,5 +78,36 @@ describe('tasks', () => {
     setTaskStatus(open.id, 'done');
     const feed = activityForProject(inf.id, 20);
     expect(feed.some((a) => a.kind === 'task-moved')).toBe(true);
+  });
+});
+
+describe('deleteTask trash + restoreTask', () => {
+  beforeEach(() => resetDemoData());
+
+  it('restores a deleted task with its comments', () => {
+    const before = getTask('t-1');
+    expect(before).not.toBeNull();
+    const commentCount = listComments('t-1').length;
+    expect(commentCount).toBeGreaterThan(0);
+
+    deleteTask('t-1');
+    expect(getTask('t-1')).toBeNull();
+    expect(listComments('t-1')).toHaveLength(0);
+
+    const restored = restoreTask('t-1');
+    expect(restored?.id).toBe('t-1');
+    expect(getTask('t-1')?.title).toBe(before?.title);
+    expect(listComments('t-1')).toHaveLength(commentCount);
+  });
+
+  it('returns null when there is nothing to restore', () => {
+    expect(restoreTask('t-1')).toBeNull();
+    expect(restoreTask('never-existed')).toBeNull();
+  });
+
+  it('a second restore of the same task is a no-op', () => {
+    deleteTask('t-1');
+    expect(restoreTask('t-1')).not.toBeNull();
+    expect(restoreTask('t-1')).toBeNull();
   });
 });

@@ -1,7 +1,13 @@
 // apps/site/src/components/demo/Board.tsx
 import type { FunctionComponent } from 'preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { useAction, useOptimisticAction } from 'hono-preact';
+import {
+  useAction,
+  useOptimistic,
+  useOptimisticAction,
+  ViewTransitionName,
+} from 'hono-preact';
+import { toast } from 'hono-preact-ui';
 import { groupTasks, STATUS_COLUMNS } from '../../demo/group-tasks.js';
 import type { Task, TaskStatus, TaskPriority, User } from '../../demo/data.js';
 import {
@@ -34,12 +40,47 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
       ),
     invalidate: [serverLoaders.default],
   });
+  // Deletes ride a STANDALONE optimistic layer over the patch-adjusted list:
+  // the card disappears same-frame, settle keeps it gone once the server
+  // confirms, revert brings it back on failure. transition: true wraps
+  // settle/revert in a view transition where supported.
+  const [visibleTasks, removeOptimistically] = useOptimistic(
+    patch.value,
+    (current, taskId: string) => current.filter((t) => t.id !== taskId),
+    { transition: true }
+  );
   const del = useAction(serverActions.deleteTask, {
+    invalidate: [serverLoaders.default],
+  });
+  const restore = useAction(serverActions.restoreTask, {
     invalidate: [serverLoaders.default],
   });
 
   const doPatch: PatchFn = (taskId, p) => patch.mutate({ taskId, ...p });
-  const doRemove: RemoveFn = (taskId) => del.mutate({ taskId });
+
+  const doRemove: RemoveFn = (taskId) => {
+    const removed = patch.value.find((t) => t.id === taskId);
+    const handle = removeOptimistically(taskId);
+    void del.mutate({ taskId }).then((r) => {
+      if (r.ok) {
+        handle.settle();
+        toast.success(`Deleted "${removed?.title ?? 'task'}"`, {
+          description: 'The task and its comments are gone.',
+          action: {
+            label: 'Undo',
+            onClick: () => {
+              void restore.mutate({ taskId }).then((rr) => {
+                if (!rr.ok) toast.error(rr.error.message);
+              });
+            },
+          },
+        });
+      } else {
+        handle.revert();
+        toast.error(r.error.message);
+      }
+    });
+  };
 
   const colEls = useRef<Map<string, HTMLElement>>(new Map());
   const getColumnRects = (): ColumnRect[] =>
@@ -55,7 +96,7 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
     doPatch(taskId, { status: to })
   );
 
-  const columns = groupTasks(patch.value);
+  const columns = groupTasks(visibleTasks);
   const userById = new Map(users.map((u) => [u.id, u] as const));
 
   // FLIP: when the optimistic patch reorders cards, glide each card whose slot
@@ -111,25 +152,33 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
       card.style.transform = '';
     }
     flipUntil.current = performance.now() + 240; // ~transition duration + margin
-  }, [patch.value]);
+  }, [visibleTasks]);
 
   return (
     <div ref={boardRef} class="grid grid-cols-4 gap-3 overflow-x-auto p-4">
       {columns.map((column) => (
-        <Column
+        // The wrapper (not Column) is the grid item now, so it needs
+        // display: grid to stretch its one child to the row height.
+        <ViewTransitionName
+          name={`board-col-${column.status}`}
+          groupClass="board-column"
           key={column.status}
-          column={column}
-          projectSlug={projectSlug}
-          userById={userById}
-          onPatch={doPatch}
-          onRemove={doRemove}
-          registerEl={(el: HTMLElement | null) => {
-            if (el) colEls.current.set(column.status, el);
-          }}
-          onPointerDownCard={drag.onPointerDown}
-          draggingId={drag.draggingId}
-          isOver={drag.overStatus === column.status}
-        />
+          render={<div class="grid" />}
+        >
+          <Column
+            column={column}
+            projectSlug={projectSlug}
+            userById={userById}
+            onPatch={doPatch}
+            onRemove={doRemove}
+            registerEl={(el: HTMLElement | null) => {
+              if (el) colEls.current.set(column.status, el);
+            }}
+            onPointerDownCard={drag.onPointerDown}
+            draggingId={drag.draggingId}
+            isOver={drag.overStatus === column.status}
+          />
+        </ViewTransitionName>
       ))}
     </div>
   );

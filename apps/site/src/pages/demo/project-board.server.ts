@@ -9,6 +9,7 @@ import {
   setTaskStatus,
   setTaskPriority,
   deleteTask,
+  restoreTask,
   type Task,
   type Project,
   type User,
@@ -34,6 +35,7 @@ import {
   insightsTiming,
   type ProjectInsights,
 } from './board-insights.js';
+import { sleepMs } from '../../demo/sleep.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
 // `ctx.location.pathParams` (projectId) from the route's pattern.
@@ -52,20 +54,6 @@ export type BoardData = {
 const InsightsSearchSchema = v.object({
   insights: v.optional(v.picklist(['quick', 'deep']), 'quick'),
 });
-
-// Abort-aware sleep so the timeout abort actually stops the deep path.
-const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
-  new Promise((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(t);
-      reject(new Error('aborted'));
-    };
-    const t = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, ms);
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
 
 export const serverLoaders = {
   default: route.loader(
@@ -105,7 +93,7 @@ export const serverLoaders = {
         // Deliberately exceeds the loader's 1s timeoutMs below. This is the
         // demo's visible TimeoutError path: the handler aborts the loader and
         // the client error boundary receives a TimeoutError instance.
-        await sleep(5_000, signal);
+        await sleepMs(5_000, signal);
       }
       const tasks = listTasksForProject(project.id);
       const byStatus: Record<TaskStatus, number> = {
@@ -186,6 +174,23 @@ export const serverActions = {
       if (!user) throw deny(401, 'Sign in to delete tasks.');
       deleteTask(input.taskId);
       return { ok: true };
+    },
+    { input: DeleteTaskSchema }
+  ),
+
+  // Undo for deleteTask. The trash is per-process (like the whole demo store),
+  // so on Workers a restore may land on a fresh isolate and find nothing;
+  // denying 404 lets the client surface "undo expired" honestly. Reuses
+  // DeleteTaskSchema: the payload is the same single taskId.
+  restoreTask: defineAction(
+    async (ctx, input) => {
+      const user = await currentUser(ctx.c);
+      if (!user) throw deny(401, 'Sign in to restore tasks.');
+      const restored = restoreTask(input.taskId);
+      if (!restored) {
+        throw deny(404, 'Nothing to restore: the undo window expired.');
+      }
+      return { id: restored.id };
     },
     { input: DeleteTaskSchema }
   ),

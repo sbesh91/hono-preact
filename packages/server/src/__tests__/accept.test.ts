@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickAccept } from '../accept.js';
+import { pickAccept, acceptsEventStream } from '../accept.js';
 
 describe('pickAccept', () => {
   it('maps application/json to json', () => {
@@ -37,5 +37,22 @@ describe('pickAccept', () => {
   });
   it('treats q=0 as a real (lowest) preference, not exclusion', () => {
     expect(pickAccept('application/json;q=0')).toBe('json');
+  });
+});
+
+describe('acceptsEventStream', () => {
+  it('rejects an absent Accept header', () => {
+    expect(acceptsEventStream(undefined)).toBe(false);
+  });
+  it('accepts a bare text/event-stream header', () => {
+    expect(acceptsEventStream('text/event-stream')).toBe(true);
+  });
+  it('accepts the dual header useAction sends, even though json wins pickAccept', () => {
+    expect(
+      acceptsEventStream('application/json, text/event-stream;q=0.9')
+    ).toBe(true);
+  });
+  it('rejects an explicit q=0 (client cannot accept event-stream)', () => {
+    expect(acceptsEventStream('text/event-stream;q=0')).toBe(false);
   });
 });
