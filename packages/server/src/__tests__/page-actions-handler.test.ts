@@ -469,6 +469,32 @@ describe('pageActionsHandler', () => {
     });
   });
 
+  it("streams a streaming action invoked with useAction's dual Accept header (json;q=1, event-stream;q=0.9)", async () => {
+    async function* gen() {
+      yield { tick: 1 };
+      yield { tick: 2 };
+    }
+    const handler = buildHandler({ stream: async () => gen() });
+    const app = new Hono().post('*', handler);
+    const res = await app.request('/foo', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream;q=0.9',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action: 'stream',
+        payload: {},
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toMatch(/text\/event-stream/);
+    const body = await res.text();
+    expect(body).toContain('data: {"tick":1}');
+    expect(body).toContain('data: {"tick":2}');
+  });
+
   it('returns 404 when the action is not declared on the page chain', async () => {
     const handler = buildHandler({ submit: async () => 'ok' });
     const app = new Hono().post('*', handler);
