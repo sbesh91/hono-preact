@@ -538,13 +538,6 @@ html:active-view-transition-type(nav-up)::view-transition-new(root) {
   html:active-view-transition-type(docs)::view-transition-new(root) {
     animation: none;
   }
-  ::view-transition-group(.task-card) {
-    animation-duration: 0s;
-  }
-  ::view-transition-group(*.board-column),
-  ::view-transition-group(demo-sidebar-active) {
-    animation-duration: 0s;
-  }
 }
 
 /* ---- formerly home.css (route-scoped by the auto-splitter) ---- */
@@ -5156,6 +5149,17 @@ html:active-view-transition-type(demo-within)::view-transition-new(
    projects on navigation. */
 ::view-transition-group(demo-sidebar-active) {
   animation-duration: 220ms;
+}
+
+/* Reduced motion: zero the shared-element morphs. Must come AFTER the base
+   rules above; media queries add no specificity, so an earlier override
+   silently loses the source-order tie. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(.task-card),
+  ::view-transition-group(*.board-column),
+  ::view-transition-group(demo-sidebar-active) {
+    animation-duration: 0s;
+  }
 }
 
 /* ----- Demo: popup surface enter/exit (Menu, ContextMenu, Tooltip, Select, Combobox) ----- */
