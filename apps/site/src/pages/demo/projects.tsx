@@ -4,7 +4,7 @@ import { useState } from 'preact/hooks';
 import { serverActions } from './projects-shell.server.js';
 
 const ProjectsIndex: FunctionComponent = () => {
-  useTitle('Projects · demo');
+  useTitle('Projects');
   const [lines, setLines] = useState<string[]>([]);
   // onChunk fires per generator yield; mutate resolves with the return value.
   const digest = useAction(serverActions.digest, {
