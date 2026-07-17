@@ -1,8 +1,31 @@
 import { definePage } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
+import { serverLoaders as auditLoaders } from '../../server/audit/log.server.js';
+
+// Route-less registry loader consumed from a page: the client stub reaches
+// it by module key over the loaders RPC. Entries come from the app-level
+// stream observer, so visiting the projects board populates this feed.
+const RecentServerActivity = auditLoaders.recent.View(({ status, data }) => (
+  <section class="rounded-xl border border-border bg-background p-4 text-left">
+    <h2 class="text-sm font-semibold text-foreground">Recent server streams</h2>
+    {status === 'loading' || !data ? (
+      <p class="mt-2 text-xs text-muted">Loading…</p>
+    ) : data.entries.length === 0 ? (
+      <p class="mt-2 text-xs text-muted">
+        Nothing yet. Open the projects board, then come back.
+      </p>
+    ) : (
+      <ul class="mt-2 space-y-1 font-mono text-[11px] text-muted">
+        {data.entries.slice(0, 8).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    )}
+  </section>
+));
 
 const DemoIndex: FunctionComponent = () => (
-  <div class="grid min-h-screen place-items-center bg-background px-4">
+  <div class="grid min-h-screen place-items-center gap-4 bg-background px-4 py-8">
     <div class="w-full max-w-sm rounded-2xl border border-border bg-surface-subtle p-8 shadow-sm">
       <div class="mb-6">
         <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-orange to-magenta-500">
@@ -56,6 +79,9 @@ const DemoIndex: FunctionComponent = () => (
         </a>
         .
       </footer>
+    </div>
+    <div class="w-full max-w-2xl">
+      <RecentServerActivity />
     </div>
   </div>
 );

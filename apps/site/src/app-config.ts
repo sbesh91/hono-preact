@@ -2,6 +2,7 @@ import { defineApp } from 'hono-preact';
 import light from '@/styles/fonts/selawik-light.woff2?url';
 import semibold from '@/styles/fonts/selawik-semibold.woff2?url';
 import bold from '@/styles/fonts/selawik-bold.woff2?url';
+import { streamAudit } from './demo/stream-audit.js';
 
 // Dogfood the framework's Speculation Rules emitter: the docs site is navigation-
 // heavy with same-origin, idempotent GET routes, so prefetch-on-moderate-eagerness
@@ -17,6 +18,7 @@ import bold from '@/styles/fonts/selawik-bold.woff2?url';
 // preload gives the brand font a real chance to win the optional window without
 // risking layout shift.
 export default defineApp({
+  use: [streamAudit],
   speculation: true,
   fonts: [light, semibold, bold],
 });
