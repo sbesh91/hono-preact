@@ -7,6 +7,7 @@ import {
   TimeoutError,
   useRoute,
   useReload,
+  NavLink,
   type LoaderState,
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
@@ -63,22 +64,24 @@ export function renderInsightsBody(
         </strong>
       </span>
       {d.mode === 'quick' ? (
-        <a
+        <NavLink
           href={boardHref(slug, {
             insights: 'deep',
             priority: searchParams.priority,
           })}
+          transition={false}
           class="font-medium underline hover:text-foreground"
         >
           Run deep analysis (times out on purpose)
-        </a>
+        </NavLink>
       ) : (
-        <a
+        <NavLink
           href={boardHref(slug, { priority: searchParams.priority })}
+          transition={false}
           class="font-medium underline hover:text-foreground"
         >
           Back to quick insights
-        </a>
+        </NavLink>
       )}
       <button
         class="font-medium underline hover:text-foreground disabled:opacity-60"

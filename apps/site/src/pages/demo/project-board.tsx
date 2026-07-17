@@ -1,5 +1,5 @@
 // apps/site/src/pages/demo/project-board.tsx
-import { definePage, useRoute } from 'hono-preact';
+import { definePage, useRoute, NavLink } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { serverLoaders } from './project-board.server.js';
 import Board from '../../components/demo/Board.js';
@@ -33,12 +33,13 @@ const ProjectBoardPage: FunctionComponent = () => {
           aria-label="Filter by priority"
         >
           {(['all', ...PRIORITIES] as const).map((p) => (
-            <a
+            <NavLink
               key={p}
               href={boardHref(project.slug, {
                 priority: p,
                 insights: searchParams.insights,
               })}
+              transition={false}
               aria-current={priority === p ? 'page' : undefined}
               class={[
                 'rounded-full px-2 py-0.5 font-medium',
@@ -48,7 +49,7 @@ const ProjectBoardPage: FunctionComponent = () => {
               ].join(' ')}
             >
               {p === 'all' ? 'All' : PRIORITY_LABEL[p]}
-            </a>
+            </NavLink>
           ))}
         </nav>
         <div class="ml-auto">

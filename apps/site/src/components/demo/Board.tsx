@@ -1,7 +1,12 @@
 // apps/site/src/components/demo/Board.tsx
 import type { FunctionComponent } from 'preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
-import { useAction, useOptimistic, useOptimisticAction } from 'hono-preact';
+import {
+  useAction,
+  useOptimistic,
+  useOptimisticAction,
+  ViewTransitionGroup,
+} from 'hono-preact';
 import { toast } from 'hono-preact-ui';
 import { groupTasks, STATUS_COLUMNS } from '../../demo/group-tasks.js';
 import type { Task, TaskStatus, TaskPriority, User } from '../../demo/data.js';
@@ -152,20 +157,21 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
   return (
     <div ref={boardRef} class="grid grid-cols-4 gap-3 overflow-x-auto p-4">
       {columns.map((column) => (
-        <Column
-          key={column.status}
-          column={column}
-          projectSlug={projectSlug}
-          userById={userById}
-          onPatch={doPatch}
-          onRemove={doRemove}
-          registerEl={(el: HTMLElement | null) => {
-            if (el) colEls.current.set(column.status, el);
-          }}
-          onPointerDownCard={drag.onPointerDown}
-          draggingId={drag.draggingId}
-          isOver={drag.overStatus === column.status}
-        />
+        <ViewTransitionGroup class="board-column" key={column.status}>
+          <Column
+            column={column}
+            projectSlug={projectSlug}
+            userById={userById}
+            onPatch={doPatch}
+            onRemove={doRemove}
+            registerEl={(el: HTMLElement | null) => {
+              if (el) colEls.current.set(column.status, el);
+            }}
+            onPointerDownCard={drag.onPointerDown}
+            draggingId={drag.draggingId}
+            isOver={drag.overStatus === column.status}
+          />
+        </ViewTransitionGroup>
       ))}
     </div>
   );

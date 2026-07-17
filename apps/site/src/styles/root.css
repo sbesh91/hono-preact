@@ -5143,6 +5143,17 @@ html:active-view-transition-type(demo-within)::view-transition-new(
   animation-timing-function: var(--spring-soft);
 }
 
+/* Board columns (ViewTransitionGroup class="board-column") reflow when the
+   priority filter changes; a short duration keeps the shuffle snappy. */
+::view-transition-group(*.board-column) {
+  animation-duration: 160ms;
+}
+/* The sidebar's active-project dot (useViewTransitionName) glides between
+   projects on navigation. */
+::view-transition-group(demo-sidebar-active) {
+  animation-duration: 220ms;
+}
+
 /* ----- Demo: popup surface enter/exit (Menu, ContextMenu, Tooltip, Select, Combobox) ----- */
 .demo-popup {
   transition:
