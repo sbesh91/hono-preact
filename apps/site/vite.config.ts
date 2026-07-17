@@ -96,6 +96,13 @@ export default defineConfig((env) => ({
         ),
       },
       {
+        find: 'hono-preact/page',
+        replacement: resolve(
+          __dirname,
+          '../../packages/hono-preact/src/page.ts'
+        ),
+      },
+      {
         find: 'hono-preact',
         replacement: resolve(
           __dirname,
@@ -114,6 +121,10 @@ export default defineConfig((env) => ({
       {
         find: '@hono-preact/iso/internal',
         replacement: resolve(__dirname, '../../packages/iso/src/internal.ts'),
+      },
+      {
+        find: '@hono-preact/iso/page',
+        replacement: resolve(__dirname, '../../packages/iso/src/page-only.ts'),
       },
       {
         find: '@hono-preact/iso',

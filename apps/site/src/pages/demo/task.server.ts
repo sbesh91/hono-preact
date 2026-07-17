@@ -1,4 +1,4 @@
-import { serverRoute, publish } from 'hono-preact';
+import { serverRoute, publish, deny } from 'hono-preact';
 import {
   activityForProject,
   addComment,
@@ -13,12 +13,21 @@ import {
 } from '../../demo/data.js';
 import { currentUser } from '../../demo/session.js';
 import { assertCanMoveToDone } from './task-guards.js';
-import { AddCommentSchema, SetStatusSchema } from './task-schema.js';
+import {
+  AddCommentSchema,
+  SetStatusSchema,
+  TaskRouteParamsSchema,
+} from './task-schema.js';
 import {
   activityChannel,
   commentAddedEvent,
   taskMovedEvent,
 } from '../../demo/activity-stream.js';
+import {
+  draftPreviewHandler,
+  type DraftMsg,
+  type DraftPreview,
+} from '../../demo/draft-preview.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
 // `ctx.location.pathParams` (taskId/projectId) from the route's pattern.
@@ -35,46 +44,47 @@ const withAuthor = <T extends { authorId: string }>(x: T): WithAuthor<T> => ({
 export type TaskDetail = WithAuthor<Task> & { assignee: User | null };
 
 export const serverLoaders = {
-  task: route.loader(async ({ location }): Promise<TaskDetail | null> => {
-    const id = location.pathParams.taskId;
-    if (!id) return null;
-    const task = getTask(id);
-    if (!task) return null;
-    return {
-      ...withAuthor(task),
-      assignee: task.assigneeId ? getUser(task.assigneeId) : null,
-    };
-  }),
+  task: route.loader(
+    async ({ location }): Promise<TaskDetail> => {
+      const task = getTask(location.pathParams.taskId);
+      if (!task) throw deny(404, 'Task not found.');
+      return {
+        ...withAuthor(task),
+        assignee: task.assigneeId ? getUser(task.assigneeId) : null,
+      };
+    },
+    { paramsSchema: TaskRouteParamsSchema }
+  ),
 
-  comments: route.loader(async function* ({
-    location,
-    signal,
-  }): AsyncGenerator<WithAuthor<Comment>[]> {
-    const id = location.pathParams.taskId;
-    if (!id) {
-      yield [];
-      return;
-    }
-    const all = listComments(id).map(withAuthor);
-    // Demo throttle: trickle comments one at a time. Removes any feeling of
-    // "wait for the whole loader" and is the visible proof of streaming.
-    const cumulative: WithAuthor<Comment>[] = [];
-    for (const c of all) {
-      if (signal.aborted) return;
-      cumulative.push(c);
-      yield cumulative;
-      await new Promise((r) => setTimeout(r, 300));
-    }
-    // Final yield to flush state when there are zero comments.
-    if (cumulative.length === 0) yield [];
-  }),
+  comments: route.loader(
+    async function* ({
+      location,
+      signal,
+    }): AsyncGenerator<WithAuthor<Comment>[]> {
+      const all = listComments(location.pathParams.taskId).map(withAuthor);
+      // Demo throttle: trickle comments one at a time. Removes any feeling of
+      // "wait for the whole loader" and is the visible proof of streaming.
+      const cumulative: WithAuthor<Comment>[] = [];
+      for (const c of all) {
+        if (signal.aborted) return;
+        cumulative.push(c);
+        yield cumulative;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      // Final yield to flush state when there are zero comments.
+      if (cumulative.length === 0) yield [];
+    },
+    { paramsSchema: TaskRouteParamsSchema }
+  ),
 
-  activity: route.loader(async ({ location }): Promise<ActivityItem[]> => {
-    const taskId = location.pathParams.taskId;
-    const task = taskId ? getTask(taskId) : null;
-    if (!task) return [];
-    return activityForProject(task.projectId, 10);
-  }),
+  activity: route.loader(
+    async ({ location }): Promise<ActivityItem[]> => {
+      const task = getTask(location.pathParams.taskId);
+      if (!task) return [];
+      return activityForProject(task.projectId, 10);
+    },
+    { paramsSchema: TaskRouteParamsSchema }
+  ),
 };
 
 export const serverActions = {
@@ -114,4 +124,12 @@ export const serverActions = {
     },
     { input: SetStatusSchema }
   ),
+};
+
+export const serverSockets = {
+  // Route-bound duplex socket (issue #282 P1): binding selects this route's
+  // page-use chain (the requireSession gate inherited from /demo/projects)
+  // for the upgrade guard, and requires the client to supply the route
+  // params, validated at the upgrade (a missing slot denies 4403).
+  draftPreview: route.socket<DraftMsg, DraftPreview>(draftPreviewHandler),
 };

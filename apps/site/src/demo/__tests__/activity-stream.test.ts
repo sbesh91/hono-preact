@@ -55,7 +55,7 @@ describe('recentActivityEvents', () => {
     }
     for (const e of events) {
       expect(typeof e.taskTitle).toBe('string');
-      expect(['inf', 'api', 'web']).toContain(e.projectSlug);
+      expect(['inf', 'api', 'web', 'legacy']).toContain(e.projectSlug);
       expect(e.simulated).toBe(false);
     }
   });

@@ -3,7 +3,12 @@
 // No persistence; the demo is a feature showcase, not a saved tool.
 
 export type User = { id: string; email: string; name: string };
-export type Project = { id: string; slug: string; name: string };
+export type Project = {
+  id: string;
+  slug: string;
+  name: string;
+  archived: boolean;
+};
 
 /** Canonical ordered set of task statuses. Derive `TaskStatus` from this. */
 export const STATUSES = [
@@ -59,9 +64,12 @@ function freshStore(): Store {
     { id: 'u-2', email: 'bob@example.com', name: 'Bob' },
   ];
   const projects: Project[] = [
-    { id: 'p-1', slug: 'inf', name: 'Infrastructure' },
-    { id: 'p-2', slug: 'api', name: 'API' },
-    { id: 'p-3', slug: 'web', name: 'Web' },
+    { id: 'p-1', slug: 'inf', name: 'Infrastructure', archived: false },
+    { id: 'p-2', slug: 'api', name: 'API', archived: false },
+    { id: 'p-3', slug: 'web', name: 'Web', archived: false },
+    // Archived on purpose: the /demo/projects/legacy route demonstrates the
+    // render() page outcome (a server middleware swaps the page tree).
+    { id: 'p-4', slug: 'legacy', name: 'Legacy Console', archived: true },
   ];
   const T = Date.UTC(2026, 4, 1); // deterministic
   const HR = 3600_000;
@@ -223,6 +231,29 @@ function freshStore(): Store {
       'low',
       11
     ),
+    // Legacy Console (p-4, archived)
+    mk(
+      't-13',
+      'p-4',
+      'u-1',
+      'u-2',
+      'Sunset the v1 console',
+      'Redirects are live.',
+      'done',
+      'low',
+      12
+    ),
+    mk(
+      't-14',
+      'p-4',
+      'u-2',
+      null,
+      'Export historical reports',
+      'One-off dump for finance.',
+      'done',
+      'medium',
+      13
+    ),
   ];
 
   // Keep two long threads on t-1 / t-3 so the streaming comments loader
@@ -297,6 +328,7 @@ export const listComments = (taskId: string): Comment[] =>
 
 export const getUser = (id: string): User | null =>
   store.users.find((u) => u.id === id) ?? null;
+export const listUsers = (): User[] => store.users.slice();
 export const findUserByEmail = (email: string): User | null =>
   store.users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ??
   null;

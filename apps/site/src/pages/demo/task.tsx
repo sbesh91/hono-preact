@@ -14,6 +14,7 @@ import { ArrowLeft } from 'lucide-preact';
 import {
   serverLoaders,
   serverActions,
+  serverSockets,
   type TaskDetail,
 } from './task.server.js';
 import { serverLoaders as boardLoaders } from './project-board.server.js';
@@ -222,6 +223,18 @@ const CommentsSection: FunctionComponent<{
   });
   const { pending } = useFormStatus(serverActions.addComment);
 
+  // Live draft preview over the route-bound duplex socket. The params are
+  // required by the binding and validated at the upgrade; the upgrade also
+  // runs the requireSession gate this route inherits, so signed-out users
+  // simply never connect (status stays 'connecting').
+  const { projectId, taskId: taskIdParam } = useParams(
+    '/demo/projects/:projectId/tasks/:taskId'
+  );
+  const preview = serverSockets.draftPreview.useSocket({
+    params: { projectId, taskId: taskIdParam },
+    lastMessage: true,
+  });
+
   return (
     <section class={`${PANEL} space-y-4`}>
       <h3 class="text-base font-semibold text-foreground">
@@ -243,9 +256,40 @@ const CommentsSection: FunctionComponent<{
           rows={3}
           required
           placeholder="Add a comment"
+          onInput={(e) => {
+            if (preview.status === 'open') {
+              preview.send({ draft: e.currentTarget.value });
+            }
+          }}
           class="block w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
         />
-        <div class="flex justify-end">
+        <div class="flex items-center justify-between gap-3">
+          <p class="flex items-center gap-1.5 text-xs text-muted">
+            <span
+              class={[
+                'inline-block h-1.5 w-1.5 rounded-full',
+                preview.status === 'open' ? 'bg-green-500' : 'bg-amber-400',
+              ].join(' ')}
+              aria-hidden
+            />
+            {preview.status === 'open' && preview.lastMessage ? (
+              <>
+                {preview.lastMessage.chars} chars &middot;{' '}
+                {preview.lastMessage.words} words
+                {preview.lastMessage.mentions.length > 0 && (
+                  <>
+                    {' '}
+                    &middot; mentions{' '}
+                    <strong class="font-medium text-foreground">
+                      {preview.lastMessage.mentions.join(', ')}
+                    </strong>
+                  </>
+                )}
+              </>
+            ) : (
+              'Live preview connecting…'
+            )}
+          </p>
           <button
             type="submit"
             class="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
@@ -331,27 +375,44 @@ const ActivityView = activityLoader.View(({ data }) =>
 
 // ---- Page: task loads first, then comments + activity in parallel ----
 
-const TaskView = taskLoader.View(({ status, data }) => {
-  // `useReload` runs unconditionally at the top of the render fn (it lives in
-  // the loader boundary `.View` establishes). The loading arm shows the cold
-  // placeholder; success/revalidating/error all carry the task, so the prior
-  // content stays put during a background reload. `data` can be falsy (the task
-  // was not found), distinct from `loading`, so keep the `status` check.
-  const { reload: reloadTask } = useReload();
-  if (status === 'loading') return <p class="p-6">Loading task…</p>;
-  if (!data) return <p class="p-6">Task not found.</p>;
-  const task = data;
-  return (
-    <div class="mx-auto w-full max-w-5xl px-6 py-6">
-      <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <main class="space-y-6">
-          <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
-          <CommentsView taskId={task.id} />
-        </main>
-        <ActivityView />
+const TaskView = taskLoader.View(
+  ({ status, data }) => {
+    const { reload: reloadTask } = useReload();
+    if (status === 'loading' || !data) return <p class="p-6">Loading task…</p>;
+    const task = data;
+    return (
+      <div class="mx-auto w-full max-w-5xl px-6 py-6">
+        <div class="grid gap-6 lg:grid-cols-[1fr_280px]">
+          <main class="space-y-6">
+            <TaskHeaderAndActions task={task} reloadTask={reloadTask} />
+            <CommentsView taskId={task.id} />
+          </main>
+          <ActivityView />
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+  {
+    // A cold loader failure (the deny(404) for an unknown task, or the
+    // paramsSchema 404 for a malformed URL) routes here instead of the
+    // success arms; reset re-enters the loader.
+    errorFallback: (err, reset) => (
+      <div class="mx-auto w-full max-w-xl px-6 py-16 text-center space-y-3">
+        <h2 class="text-lg font-semibold text-foreground">
+          Couldn&apos;t load this task
+        </h2>
+        <p class="text-sm text-muted">{err.message}</p>
+        <div class="flex justify-center gap-3 text-sm">
+          <button class="font-medium underline" onClick={reset}>
+            Try again
+          </button>
+          <a href="/demo/projects" class="font-medium underline">
+            Back to projects
+          </a>
+        </div>
+      </div>
+    ),
+  }
+);
 
 export default definePage(TaskView);

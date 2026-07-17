@@ -12,6 +12,7 @@ import {
   serverLoaders,
   type TaskDetail,
 } from '../task.server.js';
+import { draftPreviewHandler } from '../../../demo/draft-preview.js';
 import {
   resetDemoData,
   upsertUser,
@@ -118,16 +119,24 @@ describe('task setStatus action', () => {
 describe('task loader', () => {
   beforeEach(() => resetDemoData());
 
-  const loadTask = async (taskId: string): Promise<TaskDetail | null> => {
+  const callTask = async (pathParams: {
+    projectId: string;
+    taskId: string;
+  }): Promise<CallResult<TaskDetail>> => {
     const app = new Hono();
-    let result!: CallResult<TaskDetail | null>;
+    let result!: CallResult<TaskDetail>;
     app.get('/', async (c) => {
       result = await createCaller(c).call(serverLoaders.task, {
-        location: { pathParams: { taskId } },
+        location: { pathParams },
       });
       return c.text('ok');
     });
     await app.request('/');
+    return result;
+  };
+
+  const loadTask = async (taskId: string): Promise<TaskDetail> => {
+    const result = await callTask({ projectId: 'inf', taskId });
     if (!result.ok) throw new Error('expected the task loader to succeed');
     return result.value;
   };
@@ -140,10 +149,10 @@ describe('task loader', () => {
 
     const result = await loadTask(task.id);
 
-    expect(result?.assignee?.id).toBe(assignee.id);
-    expect(result?.assignee?.name).toBe('Assignee');
+    expect(result.assignee?.id).toBe(assignee.id);
+    expect(result.assignee?.name).toBe('Assignee');
     // The author is still resolved on the same value.
-    expect(result?.author?.id).toBe(task.authorId);
+    expect(result.author?.id).toBe(task.authorId);
   });
 
   it('resolves a null assignee for an unassigned task', async () => {
@@ -153,10 +162,106 @@ describe('task loader', () => {
 
     const result = await loadTask(task.id);
 
-    expect(result?.assignee).toBeNull();
+    expect(result.assignee).toBeNull();
   });
 
-  it('returns null for an unknown task id', async () => {
-    expect(await loadTask('does-not-exist')).toBeNull();
+  it('denies 404 for a well-formed unknown task id', async () => {
+    const r = await callTask({ projectId: 'inf', taskId: 't-999999' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) expect(r.outcome.status).toBe(404);
+    }
+  });
+
+  it('rejects a malformed task id via paramsSchema (framework 404)', async () => {
+    const r = await callTask({ projectId: 'inf', taskId: 'DROP TABLE' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) expect(r.outcome.status).toBe(404);
+    }
+  });
+});
+
+// The comments loader is streaming (an async generator), so it is called
+// like projects-shell.server.test.ts's activity loader: paramsSchema
+// validation runs before the loader fn is invoked at all, so a malformed id
+// denies before the generator is ever produced and no stream opens.
+describe('comments loader (streaming)', () => {
+  beforeEach(() => resetDemoData());
+
+  const callComments = async (pathParams: {
+    projectId: string;
+    taskId: string;
+  }): Promise<CallResult<AsyncGenerator<unknown[]>>> => {
+    const app = new Hono();
+    let result!: CallResult<AsyncGenerator<unknown[]>>;
+    app.get('/', async (c) => {
+      result = await createCaller(c).call(serverLoaders.comments, {
+        location: { pathParams },
+      });
+      return c.text('ok');
+    });
+    await app.request('/');
+    return result;
+  };
+
+  it('rejects a malformed task id via paramsSchema (framework 404)', async () => {
+    const r = await callComments({ projectId: 'inf', taskId: 'DROP TABLE' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) expect(r.outcome.status).toBe(404);
+    }
+  });
+
+  it('streams the seeded comments for a valid task id', async () => {
+    const r = await callComments({ projectId: 'inf', taskId: 't-1' });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    let last: unknown[] = [];
+    for await (const chunk of r.value) {
+      last = chunk;
+    }
+    expect(last.length).toBeGreaterThan(0);
+  });
+});
+
+// The draft-preview socket is a route-bound duplex socket: the handler only
+// touches its own connection, so it is testable by driving the def's
+// lifecycle methods directly with a stub ServerSocket.
+describe('draftPreview socket', () => {
+  beforeEach(() => resetDemoData());
+
+  type Sent = { chars: number; words: number; mentions: string[] };
+  const makeSocket = () => {
+    const sent: Sent[] = [];
+    return {
+      sent,
+      socket: {
+        send: (msg: Sent) => {
+          sent.push(msg);
+        },
+        close: () => {},
+        data: undefined,
+        raw: null,
+      },
+    };
+  };
+
+  it('sends a zero preview on open', async () => {
+    const { socket, sent } = makeSocket();
+    await draftPreviewHandler.open?.(socket);
+    expect(sent).toEqual([{ chars: 0, words: 0, mentions: [] }]);
+  });
+
+  it('answers each draft message with its preview', async () => {
+    const { socket, sent } = makeSocket();
+    await draftPreviewHandler.message?.(socket, {
+      draft: 'ask @bob to review',
+    });
+    expect(sent).toEqual([{ chars: 18, words: 4, mentions: ['Bob'] }]);
   });
 });

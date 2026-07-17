@@ -44,3 +44,28 @@ export const PatchTaskSchema = v.object({
 export const DeleteTaskSchema = v.object({
   taskId: v.pipe(v.string(), v.minLength(1)),
 });
+
+// Route-param shapes. paramsSchema failures respond 404 through the
+// framework (LoaderValidationError on the client), so a malformed URL never
+// reaches the loader body; a well-formed unknown id still runs the loader,
+// which denies 404 itself.
+const projectSlug = v.pipe(
+  v.string(),
+  v.regex(/^[a-z][a-z0-9-]*$/, 'Not a project slug')
+);
+const taskIdShape = v.pipe(v.string(), v.regex(/^t-\d+$/, 'Not a task id'));
+
+export const ProjectRouteParamsSchema = v.object({ projectId: projectSlug });
+export const TaskRouteParamsSchema = v.object({
+  projectId: projectSlug,
+  taskId: taskIdShape,
+});
+
+// Board filter: searchSchema validates and defaults ?priority=. An unknown
+// value responds 400 through the framework (LoaderValidationError on the
+// client); v.object strips any undeclared key from the schema's output, so
+// unrelated query keys are dropped from the loader's searchParams view, even
+// though the request URL itself is unaffected.
+export const BoardSearchSchema = v.object({
+  priority: v.optional(v.picklist(['all', ...PRIORITIES]), 'all'),
+});
