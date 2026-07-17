@@ -1,6 +1,6 @@
 # WebSockets
 
-hono-preact ships two WebSocket layers. The typed socket primitive (`defineSocket` + `useSocket`) gives you a declarative, type-safe duplex channel wired automatically to the framework's shared connection. The raw `upgradeWebSocket` export, imported from `hono-preact`, lets you register any hand-authored WS route in `api.ts` on the same connection, following Hono's own `upgradeWebSocket` pattern.
+hono-preact ships two WebSocket layers. The typed socket primitive (`defineSocket` + `useSocket`) gives you a declarative, type-safe duplex channel wired automatically to the framework's shared connection. The raw `upgradeWebSocket` export, imported from `hono-preact`, lets you register any hand-authored WS route in `api.ts` on the same connection, following Hono's own `upgradeWebSocket` pattern; it requires the Node adapter (see below).
 
 For the rules around the `api.ts` mount point and framework-reserved paths, see [Composing Hono Middleware](/docs/hono-middleware).
 
@@ -177,7 +177,7 @@ The params a socket sees, both the `data` factory's second argument and the guar
 
 ### Cloudflare setup
 
-On Cloudflare Workers, `defineSocket` runs inside a per-connection Durable Object, so it needs the `HONO_PREACT_REALTIME` Durable Object binding and migration in `wrangler.jsonc` (the same binding rooms and live-loader pub/sub use). See [Rooms → Cloudflare setup](/docs/rooms#cloudflare-setup) for the binding and migration. (This applies to `defineSocket`; the raw `upgradeWebSocket` path below is separate and pairs its own Durable Object.)
+On Cloudflare Workers, `defineSocket` runs inside a per-connection Durable Object, so it needs the `HONO_PREACT_REALTIME` Durable Object binding and migration in `wrangler.jsonc` (the same binding rooms and live-loader pub/sub use). See [Rooms → Cloudflare setup](/docs/rooms#cloudflare-setup) for the binding and migration. (This applies to `defineSocket`; the raw `upgradeWebSocket` path below is separate and Node-only.)
 
 ### Reconnect behavior
 
@@ -233,7 +233,7 @@ app.get(
 export default app;
 ```
 
-`upgradeWebSocket` resolves the correct adapter at request time (Cloudflare Workers or Node), so the same `api.ts` code works across adapters without conditional imports.
+`upgradeWebSocket` resolves its upgrader lazily at request time, and only the Node adapter installs one. Under the Cloudflare adapter a raw WS route throws at request time (`no WebSocket upgrader installed`); on Cloudflare, realtime goes through the typed primitives (`defineSocket`, rooms), which run inside the framework's Durable Object.
 
 ### Node.js
 
@@ -262,9 +262,7 @@ A working end-to-end example lives at `apps/example-node/` in the repo.
 
 ### Cloudflare Workers
 
-On Cloudflare the Worker runtime handles the upgrade natively. `upgradeWebSocket` from `hono-preact` routes through `hono/cloudflare-workers` under the hood, so no extra peer install is needed. The same handler runs in `vite dev` (because the Cloudflare adapter boots workerd via `@cloudflare/vite-plugin`) and in a deployed Worker.
-
-For long-lived stateful connections, Cloudflare's recommended pattern is to pair with a Durable Object that owns the connection state. From hono-preact's perspective the handler in `api.ts` is unchanged.
+The Cloudflare adapter does not install a raw upgrader, so an `upgradeWebSocket` route in `api.ts` fails at request time with `no WebSocket upgrader installed`. Realtime on Cloudflare goes through the typed primitives instead: `defineSocket` / `serverRoute(r).socket` and rooms run inside the framework's `HONO_PREACT_REALTIME` Durable Object (see the Cloudflare setup note above).
 
 ## Avoiding reserved paths
 
@@ -334,7 +332,7 @@ Returns:
 
 ### `upgradeWebSocket(createEvents)`
 
-Wraps `hono/ws` upgradeWebSocket, resolved at request time so the same handler works across adapters.
+Wraps Hono's `upgradeWebSocket` pattern, resolved lazily at request time; only the Node adapter installs an upgrader, so this is a Node-adapter API.
 
 | Parameter      | Type                                            | Description                                     |
 | -------------- | ----------------------------------------------- | ----------------------------------------------- |
