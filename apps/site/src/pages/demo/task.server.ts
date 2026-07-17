@@ -1,4 +1,4 @@
-import { serverRoute, publish } from 'hono-preact';
+import { serverRoute, publish, deny } from 'hono-preact';
 import {
   activityForProject,
   addComment,
@@ -13,7 +13,11 @@ import {
 } from '../../demo/data.js';
 import { currentUser } from '../../demo/session.js';
 import { assertCanMoveToDone } from './task-guards.js';
-import { AddCommentSchema, SetStatusSchema } from './task-schema.js';
+import {
+  AddCommentSchema,
+  SetStatusSchema,
+  TaskRouteParamsSchema,
+} from './task-schema.js';
 import {
   activityChannel,
   commentAddedEvent,
@@ -36,16 +40,17 @@ const withAuthor = <T extends { authorId: string }>(x: T): WithAuthor<T> => ({
 export type TaskDetail = WithAuthor<Task> & { assignee: User | null };
 
 export const serverLoaders = {
-  task: route.loader(async ({ location }): Promise<TaskDetail | null> => {
-    const id = location.pathParams.taskId;
-    if (!id) return null;
-    const task = getTask(id);
-    if (!task) return null;
-    return {
-      ...withAuthor(task),
-      assignee: task.assigneeId ? getUser(task.assigneeId) : null,
-    };
-  }),
+  task: route.loader(
+    async ({ location }): Promise<TaskDetail> => {
+      const task = getTask(location.pathParams.taskId);
+      if (!task) throw deny(404, 'Task not found.');
+      return {
+        ...withAuthor(task),
+        assignee: task.assigneeId ? getUser(task.assigneeId) : null,
+      };
+    },
+    { paramsSchema: TaskRouteParamsSchema }
+  ),
 
   comments: route.loader(async function* ({
     location,
@@ -70,12 +75,14 @@ export const serverLoaders = {
     if (cumulative.length === 0) yield [];
   }),
 
-  activity: route.loader(async ({ location }): Promise<ActivityItem[]> => {
-    const taskId = location.pathParams.taskId;
-    const task = taskId ? getTask(taskId) : null;
-    if (!task) return [];
-    return activityForProject(task.projectId, 10);
-  }),
+  activity: route.loader(
+    async ({ location }): Promise<ActivityItem[]> => {
+      const task = getTask(location.pathParams.taskId);
+      if (!task) return [];
+      return activityForProject(task.projectId, 10);
+    },
+    { paramsSchema: TaskRouteParamsSchema }
+  ),
 };
 
 export const serverActions = {

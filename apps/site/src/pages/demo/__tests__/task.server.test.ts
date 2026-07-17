@@ -119,16 +119,24 @@ describe('task setStatus action', () => {
 describe('task loader', () => {
   beforeEach(() => resetDemoData());
 
-  const loadTask = async (taskId: string): Promise<TaskDetail | null> => {
+  const callTask = async (pathParams: {
+    projectId: string;
+    taskId: string;
+  }): Promise<CallResult<TaskDetail>> => {
     const app = new Hono();
-    let result!: CallResult<TaskDetail | null>;
+    let result!: CallResult<TaskDetail>;
     app.get('/', async (c) => {
       result = await createCaller(c).call(serverLoaders.task, {
-        location: { pathParams: { taskId } },
+        location: { pathParams },
       });
       return c.text('ok');
     });
     await app.request('/');
+    return result;
+  };
+
+  const loadTask = async (taskId: string): Promise<TaskDetail> => {
+    const result = await callTask({ projectId: 'inf', taskId });
     if (!result.ok) throw new Error('expected the task loader to succeed');
     return result.value;
   };
@@ -141,10 +149,10 @@ describe('task loader', () => {
 
     const result = await loadTask(task.id);
 
-    expect(result?.assignee?.id).toBe(assignee.id);
-    expect(result?.assignee?.name).toBe('Assignee');
+    expect(result.assignee?.id).toBe(assignee.id);
+    expect(result.assignee?.name).toBe('Assignee');
     // The author is still resolved on the same value.
-    expect(result?.author?.id).toBe(task.authorId);
+    expect(result.author?.id).toBe(task.authorId);
   });
 
   it('resolves a null assignee for an unassigned task', async () => {
@@ -154,11 +162,25 @@ describe('task loader', () => {
 
     const result = await loadTask(task.id);
 
-    expect(result?.assignee).toBeNull();
+    expect(result.assignee).toBeNull();
   });
 
-  it('returns null for an unknown task id', async () => {
-    expect(await loadTask('does-not-exist')).toBeNull();
+  it('denies 404 for a well-formed unknown task id', async () => {
+    const r = await callTask({ projectId: 'inf', taskId: 't-999999' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) expect(r.outcome.status).toBe(404);
+    }
+  });
+
+  it('rejects a malformed task id via paramsSchema (framework 404)', async () => {
+    const r = await callTask({ projectId: 'inf', taskId: 'DROP TABLE' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(isDeny(r.outcome)).toBe(true);
+      if (isDeny(r.outcome)) expect(r.outcome.status).toBe(404);
+    }
   });
 });
 

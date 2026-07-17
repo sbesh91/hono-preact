@@ -23,6 +23,7 @@ import {
   NewTaskSchema,
   PatchTaskSchema,
   DeleteTaskSchema,
+  ProjectRouteParamsSchema,
 } from './task-schema.js';
 
 // Bind this server module to its route once; `route.loader(fn)` then types
@@ -33,22 +34,24 @@ export type BoardData = {
   project: Project;
   users: User[];
   tasks: Task[];
-} | null;
+};
 
 export const serverLoaders = {
-  default: route.loader(async ({ location }): Promise<BoardData> => {
-    const slug = location.pathParams.projectId;
-    if (!slug) return null;
-    const project = getProjectBySlug(slug);
-    if (!project) return null;
-    return {
-      project,
-      users: [getUser('u-1'), getUser('u-2')].filter(
-        (u): u is User => u !== null
-      ),
-      tasks: listTasksForProject(project.id),
-    };
-  }),
+  default: route.loader(
+    async ({ location }): Promise<BoardData> => {
+      const slug = location.pathParams.projectId;
+      const project = getProjectBySlug(slug);
+      if (!project) throw deny(404, `No project named '${slug}'.`);
+      return {
+        project,
+        users: [getUser('u-1'), getUser('u-2')].filter(
+          (u): u is User => u !== null
+        ),
+        tasks: listTasksForProject(project.id),
+      };
+    },
+    { paramsSchema: ProjectRouteParamsSchema }
+  ),
 };
 
 export const serverActions = {

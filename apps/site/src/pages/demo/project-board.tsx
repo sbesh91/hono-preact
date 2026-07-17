@@ -10,7 +10,7 @@ const boardLoader = serverLoaders.default;
 const ProjectBoardPage: FunctionComponent = () => {
   const { status, data } = boardLoader.useData();
   if (status === 'loading') return <BoardSkeleton />;
-  if (!data) return <p class="p-6">Unknown project.</p>;
+  if (!data) return <BoardSkeleton />;
   const { project, tasks, users } = data;
   return (
     <div class="flex h-screen flex-col">
@@ -27,10 +27,27 @@ const ProjectBoardPage: FunctionComponent = () => {
 };
 ProjectBoardPage.displayName = 'ProjectBoardPage';
 
-// `data` can be legitimately falsy (a not-found project renders "Unknown
-// project" inside the page), so branch on `status`, not `data`-presence.
-const ProjectBoardView = boardLoader.View(({ status }) =>
-  status === 'loading' ? <BoardSkeleton /> : <ProjectBoardPage />
+const ProjectBoardView = boardLoader.View(
+  ({ status }) =>
+    status === 'loading' ? <BoardSkeleton /> : <ProjectBoardPage />,
+  {
+    errorFallback: (err, reset) => (
+      <div class="mx-auto w-full max-w-xl px-6 py-16 text-center space-y-3">
+        <h2 class="text-lg font-semibold text-foreground">
+          Couldn&apos;t load this board
+        </h2>
+        <p class="text-sm text-muted">{err.message}</p>
+        <div class="flex justify-center gap-3 text-sm">
+          <button class="font-medium underline" onClick={reset}>
+            Try again
+          </button>
+          <a href="/demo/projects" class="font-medium underline">
+            Back to projects
+          </a>
+        </div>
+      </div>
+    ),
+  }
 );
 
 function BoardSkeleton() {
@@ -43,4 +60,16 @@ function BoardSkeleton() {
   );
 }
 
-export default definePage(ProjectBoardView);
+export default definePage(ProjectBoardView, {
+  errorFallback: (error, reset) => (
+    <div class="mx-auto w-full max-w-xl px-6 py-16 text-center space-y-3">
+      <h2 class="text-lg font-semibold text-foreground">
+        Something broke rendering this page
+      </h2>
+      <p class="text-sm text-muted">{error.message}</p>
+      <button class="text-sm font-medium underline" onClick={reset}>
+        Reset the page
+      </button>
+    </div>
+  ),
+});
