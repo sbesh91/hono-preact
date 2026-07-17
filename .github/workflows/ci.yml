@@ -143,7 +143,13 @@ jobs:
       - name: Scaffold a node app against a local registry, letting the CLI install and git-init
         shell: bash
         env:
-          npm_config_registry: http://localhost:4873
+          # NOTE: npm_config_registry is deliberately NOT set here, at step
+          # scope. Only the scaffold's own install may target the local
+          # registry, and it is exported for that command alone below. Setting
+          # it step-wide makes `npx` try to download verdaccio ITSELF from
+          # localhost:4873, i.e. from the registry verdaccio has not started
+          # yet, which dies with ECONNREFUSED and never boots. A warm npx cache
+          # hides this locally: the fetch only happens on a cold runner.
           npm_config_user_agent: 'npm/10 node/v22 ${{ runner.os }} x64'
         run: |
           echo "::group::Start local registry"
@@ -193,6 +199,10 @@ jobs:
 
           echo "::group::Scaffold"
           cd "$RUNNER_TEMP"
+          # Point npm at the local registry for THIS command only (see the step
+          # env note). The CLI spawns `npm install` as a child, so it inherits
+          # this, which is the whole mechanism under test.
+          export npm_config_registry=http://localhost:4873
           node "$GITHUB_WORKSPACE/packages/create-hono-preact/bin/index.mjs" smoke-app --adapter=node
           echo "::endgroup::"
 
