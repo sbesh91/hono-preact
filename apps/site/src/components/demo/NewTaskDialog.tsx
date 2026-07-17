@@ -1,6 +1,12 @@
 // apps/site/src/components/demo/NewTaskDialog.tsx
 import { Dialog } from 'hono-preact-ui';
-import { FieldError, Form, useFormStatus } from 'hono-preact';
+import {
+  FieldError,
+  Form,
+  useFieldErrors,
+  useFieldErrorProps,
+  useFormStatus,
+} from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useState } from 'preact/hooks';
 import {
@@ -12,6 +18,37 @@ import { PrioritySelect, StatusSelect, AssigneeCombobox } from './pickers.js';
 import type { TaskStatus, TaskPriority, User } from '../../demo/data.js';
 
 type Props = { projectId: string; users: User[] };
+
+// Inside-the-Form components: useFieldErrors/useFieldErrorProps read the
+// enclosing Form's context, so they cannot be called from NewTaskDialog
+// itself (it renders the Form; it is not inside it).
+const TitleField: FunctionComponent = () => {
+  const aria = useFieldErrorProps('title');
+  return (
+    <label class="block">
+      <span class="mb-1 block text-[11px] font-semibold">Title</span>
+      <input
+        name="title"
+        placeholder="Short summary"
+        required
+        {...aria}
+        class="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-[12.5px] text-foreground placeholder:text-muted"
+      />
+      <FieldError name="title" class="mt-0.5 block text-[11px] text-red-500" />
+    </label>
+  );
+};
+
+const FieldErrorSummary: FunctionComponent = () => {
+  const errors = useFieldErrors();
+  const count = Object.values(errors).filter((m) => m.length > 0).length;
+  if (count === 0) return null;
+  return (
+    <p role="status" class="text-xs text-danger">
+      {count} {count === 1 ? 'field needs' : 'fields need'} attention
+    </p>
+  );
+};
 
 const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
   const [open, setOpen] = useState(false);
@@ -44,19 +81,7 @@ const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
           <input type="hidden" name="status" value={status} />
           <input type="hidden" name="assigneeId" value={assigneeId ?? ''} />
 
-          <label class="block">
-            <span class="mb-1 block text-[11px] font-semibold">Title</span>
-            <input
-              name="title"
-              placeholder="Short summary"
-              required
-              class="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-[12.5px] text-foreground placeholder:text-muted"
-            />
-            <FieldError
-              name="title"
-              class="mt-0.5 block text-[11px] text-red-500"
-            />
-          </label>
+          <TitleField />
           <label class="block">
             <span class="mb-1 block text-[11px] font-semibold">
               Description
@@ -86,6 +111,7 @@ const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
               onChange={setAssigneeId}
             />
           </label>
+          <FieldErrorSummary />
           <div class="mt-4 flex justify-end gap-2">
             <Dialog.Close class="rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-semibold">
               Cancel
