@@ -240,12 +240,11 @@ function collectRouteViolations(
     // param would otherwise misread the inherited member as present.
     for (const name of reservedParamNamesIn(r.path)) {
       errors.push(
-        `Route ${here}: the param ':${name}' is reserved -- it resolves ` +
-          `through Object.prototype (or otherwise carries prototype-chain ` +
-          `meaning) on a plain params object, so a guard reading an ABSENT ` +
-          `param of this name would read the inherited member instead of ` +
-          `undefined and wrongly treat it as present. Rename the param to ` +
-          `something that is not '${name}'.`
+        `Route ${here}: the param ':${name}' is reserved -- it is an ` +
+          `Object.prototype member, so on a plain params object a guard ` +
+          `reading an ABSENT param of this name would read the inherited ` +
+          `member instead of undefined and wrongly treat it as present. ` +
+          `Rename the param to something that is not '${name}'.`
       );
     }
     if (ctx.hasChildren) {

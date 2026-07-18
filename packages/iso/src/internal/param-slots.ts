@@ -73,10 +73,6 @@ export function isConformingParamSegment(segment: string): boolean {
   return matchParamSegment(segment) !== null;
 }
 
-// Every name `PARAM_SEGMENT`'s `[A-Za-z0-9_]+` class admits that also
-// resolves through `Object.prototype`, plus the two special property names
-// (`__proto__`, `prototype`) that are not ordinary Object.prototype OWN
-// members but still carry prototype-chain meaning on a plain object. A
 /**
  * True iff `name` is reserved: reading it off a MISSING key of a plain object
  * would resolve an inherited `Object.prototype` member (a function, or for

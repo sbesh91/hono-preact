@@ -233,11 +233,11 @@ export function serverRoute<
   if (reserved.length > 0) {
     throw new Error(
       `serverRoute('${route}'): the param ':${reserved[0]}' is reserved -- ` +
-        `it resolves through Object.prototype (or otherwise carries ` +
-        `prototype-chain meaning) on a plain params object, so a guard ` +
-        `reading an ABSENT param of this name would read the inherited ` +
-        `member instead of undefined and wrongly treat it as present. ` +
-        `Rename the param to a name that is not an Object.prototype member.`
+        `it is an Object.prototype member, so on a plain params object a ` +
+        `guard reading an ABSENT param of this name would read the ` +
+        `inherited member instead of undefined and wrongly treat it as ` +
+        `present. Rename the param to a name that is not an ` +
+        `Object.prototype member.`
     );
   }
   return {
