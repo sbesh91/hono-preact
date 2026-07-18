@@ -117,6 +117,21 @@ describe('project board priority filter', () => {
     }
   });
 
+  // The insights auto-recompute relies on taskSignature being the SAME across
+  // ?priority= values (it fingerprints the whole project, not the filtered
+  // list), so filtering never triggers a redundant insights reload. Pin it: a
+  // refactor that builds the signature from the filtered `tasks` would pass
+  // every other assertion here but break that contract.
+  it('taskSignature is filter-independent (identical across ?priority= values)', async () => {
+    const all = await callBoard('inf');
+    const urgent = await callBoardWith('inf', { priority: 'urgent' });
+    expect(all.ok && urgent.ok).toBe(true);
+    if (all.ok && urgent.ok) {
+      expect(all.value.taskSignature).toBe(urgent.value.taskSignature);
+      expect(all.value.taskSignature.length).toBeGreaterThan(0);
+    }
+  });
+
   it('rejects an unknown priority via searchSchema (framework 400)', async () => {
     const r = await callBoardWith('inf', { priority: 'bogus' });
     expect(r.ok).toBe(false);

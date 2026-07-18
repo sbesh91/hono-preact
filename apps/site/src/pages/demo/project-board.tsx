@@ -1,5 +1,5 @@
 // apps/site/src/pages/demo/project-board.tsx
-import { definePage, useRoute, NavLink } from 'hono-preact';
+import { definePage, useParams, useRoute, NavLink } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { useRef } from 'preact/hooks';
 import { serverLoaders } from './project-board.server.js';
@@ -17,17 +17,24 @@ const ProjectBoardPage: FunctionComponent = () => {
   // Hoisted once (not per chip): hooks are illegal in a loop/map callback,
   // and every chip needs the current ?insights= value to preserve it.
   const { searchParams } = useRoute();
+  const { projectId: currentSlug } = useParams('/demo/projects/:projectId');
   const { status, data } = boardLoader.useData();
 
-  // Keep the last good board on screen during a filter reload instead of
+  // Keep the last good board on screen during a SAME-PROJECT reload instead of
   // flashing the full-page skeleton. A ?priority= change is a COLD keyed reload
   // (the loader has no stale value across cache keys, so `data` is briefly
-  // undefined) even though we already have a board to show; the skeleton belongs
-  // to the genuine first load only. A mutation reload is `revalidating` and
-  // keeps `data`, so it never hits this path.
+  // undefined) even though we already have a board to show. A mutation reload is
+  // `revalidating` and keeps `data`, so it never reaches here.
+  //
+  // Scope the retained value to the CURRENT project: a project switch keeps this
+  // component mounted (same route, new :projectId) and is also a cold keyed
+  // reload, so without the slug check the ref would render the previous
+  // project's whole board under the new URL until its RPC settles. On a project
+  // switch the skeleton is correct; keep-previous applies only within a project.
   const lastData = useRef<typeof data>(undefined);
   if (data) lastData.current = data;
-  const shown = data ?? lastData.current;
+  const prev = lastData.current;
+  const shown = data ?? (prev?.project.slug === currentSlug ? prev : undefined);
   if (!shown) return <BoardSkeleton />;
   const pending = status === 'loading';
 

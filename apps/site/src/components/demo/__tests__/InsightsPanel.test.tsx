@@ -5,7 +5,10 @@ import { LocationProvider } from 'preact-iso';
 import type { ComponentChildren } from 'preact';
 import type { LoaderState } from 'hono-preact';
 import type { ProjectInsights } from '../../../pages/demo/board-insights.js';
-import { renderInsightsBody } from '../InsightsPanel.js';
+import {
+  renderInsightsBody,
+  shouldRecomputeInsights,
+} from '../InsightsPanel.js';
 
 // The mode links render as NavLink, which reads useLocation() from
 // preact-iso's routing context; wrap every render the same way the app does.
@@ -92,5 +95,34 @@ describe('renderInsightsBody', () => {
 
     const link = screen.getByRole('link', { name: /Back to quick insights/ });
     expect(link.getAttribute('href')).toBe('/demo/projects/inf?priority=high');
+  });
+});
+
+describe('shouldRecomputeInsights', () => {
+  it('recomputes when the same project mutates (signature changes)', () => {
+    expect(
+      shouldRecomputeInsights(
+        { slug: 'inf', taskSignature: 't-1:backlog' },
+        { slug: 'inf', taskSignature: 't-1:done' }
+      )
+    ).toBe(true);
+  });
+
+  it('does not recompute when the signature is unchanged (mount / ?priority= change)', () => {
+    expect(
+      shouldRecomputeInsights(
+        { slug: 'inf', taskSignature: 't-1:backlog' },
+        { slug: 'inf', taskSignature: 't-1:backlog' }
+      )
+    ).toBe(false);
+  });
+
+  it('does not recompute on a project switch (the route-bound loader already re-ran)', () => {
+    expect(
+      shouldRecomputeInsights(
+        { slug: 'inf', taskSignature: 't-1:backlog' },
+        { slug: 'web', taskSignature: 't-9:done' }
+      )
+    ).toBe(false);
   });
 });

@@ -5177,7 +5177,7 @@ html:active-view-transition-type(demo-within)::view-transition-new(
   }
 }
 
-/* ----- Demo: popup surface enter/exit (Menu, ContextMenu, Tooltip, Select, Combobox) ----- */
+/* ----- Demo: popup surface enter/exit (Menu, ContextMenu, Tooltip, Select, Combobox, Popover) ----- */
 .demo-popup {
   transition:
     opacity 130ms ease,

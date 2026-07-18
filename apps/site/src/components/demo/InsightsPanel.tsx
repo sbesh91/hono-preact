@@ -94,6 +94,20 @@ export function renderInsightsBody(
   );
 }
 
+// Recompute the insights loader only on a SAME-PROJECT task mutation. The board
+// loader's `taskSignature` fingerprints every task's id+status and is
+// filter-independent, so a ?priority= change leaves it unchanged (no recompute,
+// which in deep mode would needlessly re-hit the 1s timeout). It DOES change
+// wholesale on a project switch, but the route-bound insights loader already
+// re-runs for the new project then, so a switch must not trigger a second
+// reload. Exported so the contract is unit-tested without mounting the loader.
+export function shouldRecomputeInsights(
+  prev: { slug: string; taskSignature: string },
+  next: { slug: string; taskSignature: string }
+): boolean {
+  return next.slug === prev.slug && next.taskSignature !== prev.taskSignature;
+}
+
 const InsightsBody: FunctionComponent<{
   slug: string;
   taskSignature: string;
@@ -103,21 +117,24 @@ const InsightsBody: FunctionComponent<{
   const { searchParams } = useRoute();
   const { reload } = useReload();
 
-  // Auto-recompute: whenever a board mutation (add / delete / status move)
-  // changes the task set, ProjectBoardPage re-runs the board loader and hands
-  // down a new `taskSignature`. Invalidate + reload the insights loader so its
-  // numbers stay in sync without a manual button. invalidate() alone only clears
-  // the cache entry; pairing it with useReload's reload() re-runs this (active)
-  // loader now instead of waiting for the next navigation. The signature is
-  // filter-independent, so a ?priority= change does NOT recompute (which in deep
-  // mode would needlessly re-hit the 1s timeout).
-  const lastSignature = useRef(taskSignature);
+  // Auto-recompute: when a board mutation changes the task set, ProjectBoardPage
+  // hands down a new taskSignature; invalidate + reload keeps the numbers in
+  // sync without a manual button (invalidate() alone only clears the cache;
+  // reload() re-runs this active loader now instead of waiting for the next
+  // navigation). shouldRecomputeInsights excludes ?priority= changes and project
+  // switches; seeding the ref to the mount value excludes the initial render.
+  const last = useRef({ slug, taskSignature });
   useEffect(() => {
-    if (taskSignature === lastSignature.current) return;
-    lastSignature.current = taskSignature;
-    insightsLoader.invalidate();
-    reload();
-  }, [taskSignature, reload]);
+    const recompute = shouldRecomputeInsights(last.current, {
+      slug,
+      taskSignature,
+    });
+    last.current = { slug, taskSignature };
+    if (recompute) {
+      insightsLoader.invalidate();
+      reload();
+    }
+  }, [slug, taskSignature, reload]);
 
   return renderInsightsBody(state, staleError, slug, searchParams);
 };
