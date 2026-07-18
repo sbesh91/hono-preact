@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/preact';
+import { describe, it, expect, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import type { ComponentChildren } from 'preact';
 import type { LoaderState } from 'hono-preact';
 import type { ProjectInsights } from '../../../pages/demo/board-insights.js';
-import { renderInsightsBody } from '../InsightsPanel.js';
+import {
+  renderInsightsBody,
+  shouldRecomputeInsights,
+} from '../InsightsPanel.js';
 
 // The mode links render as NavLink, which reads useLocation() from
 // preact-iso's routing context; wrap every render the same way the app does.
@@ -20,11 +23,6 @@ const stats: ProjectInsights = {
   mode: 'quick',
 };
 
-const successState: LoaderState<ProjectInsights> = {
-  status: 'success',
-  data: stats,
-};
-
 afterEach(() => cleanup());
 
 describe('renderInsightsBody', () => {
@@ -33,9 +31,7 @@ describe('renderInsightsBody', () => {
       status: 'success',
       data: stats,
     };
-    renderWithLocation(
-      renderInsightsBody(state, null, 'inf', {}, () => {}, false)
-    );
+    renderWithLocation(renderInsightsBody(state, null, 'inf', {}));
 
     expect(screen.getByText('7')).toBeTruthy();
     expect(screen.getByText(/Backlog:/)).toBeTruthy();
@@ -54,9 +50,7 @@ describe('renderInsightsBody', () => {
       error: boom,
       data: stats,
     };
-    renderWithLocation(
-      renderInsightsBody(state, boom, 'inf', {}, () => {}, false)
-    );
+    renderWithLocation(renderInsightsBody(state, boom, 'inf', {}));
 
     expect(screen.getByText('7')).toBeTruthy();
     expect(screen.getByText('5d')).toBeTruthy();
@@ -65,9 +59,7 @@ describe('renderInsightsBody', () => {
 
   it('renders the computing line while loading', () => {
     const state: LoaderState<ProjectInsights> = { status: 'loading' };
-    renderWithLocation(
-      renderInsightsBody(state, null, 'inf', {}, () => {}, false)
-    );
+    renderWithLocation(renderInsightsBody(state, null, 'inf', {}));
 
     expect(screen.getByText(/Computing insights/)).toBeTruthy();
   });
@@ -81,14 +73,7 @@ describe('renderInsightsBody', () => {
       data: stats,
     };
     renderWithLocation(
-      renderInsightsBody(
-        state,
-        null,
-        'inf',
-        { priority: 'high' },
-        () => {},
-        false
-      )
+      renderInsightsBody(state, null, 'inf', { priority: 'high' })
     );
 
     const link = screen.getByRole('link', { name: /Run deep analysis/ });
@@ -105,35 +90,39 @@ describe('renderInsightsBody', () => {
       data: { ...stats, mode: 'deep' },
     };
     renderWithLocation(
-      renderInsightsBody(
-        state,
-        null,
-        'inf',
-        { priority: 'high' },
-        () => {},
-        false
-      )
+      renderInsightsBody(state, null, 'inf', { priority: 'high' })
     );
 
     const link = screen.getByRole('link', { name: /Back to quick insights/ });
     expect(link.getAttribute('href')).toBe('/demo/projects/inf?priority=high');
   });
+});
 
-  it('renders a Recompute control that fires the callback', () => {
-    const onRecompute = vi.fn();
-    renderWithLocation(
-      renderInsightsBody(successState, null, 'inf', {}, onRecompute, false)
-    );
-    const btn = screen.getByRole('button', { name: /recompute/i });
-    fireEvent.click(btn);
-    expect(onRecompute).toHaveBeenCalledTimes(1);
+describe('shouldRecomputeInsights', () => {
+  it('recomputes when the same project mutates (signature changes)', () => {
+    expect(
+      shouldRecomputeInsights(
+        { slug: 'inf', taskSignature: 't-1:backlog' },
+        { slug: 'inf', taskSignature: 't-1:done' }
+      )
+    ).toBe(true);
   });
 
-  it('disables the Recompute control while reloading', () => {
-    renderWithLocation(
-      renderInsightsBody(successState, null, 'inf', {}, () => {}, true)
-    );
-    const btn = screen.getByRole('button', { name: /recompute/i });
-    expect(btn).toHaveProperty('disabled', true);
+  it('does not recompute when the signature is unchanged (mount / ?priority= change)', () => {
+    expect(
+      shouldRecomputeInsights(
+        { slug: 'inf', taskSignature: 't-1:backlog' },
+        { slug: 'inf', taskSignature: 't-1:backlog' }
+      )
+    ).toBe(false);
+  });
+
+  it('does not recompute on a project switch (the route-bound loader already re-ran)', () => {
+    expect(
+      shouldRecomputeInsights(
+        { slug: 'inf', taskSignature: 't-1:backlog' },
+        { slug: 'web', taskSignature: 't-9:done' }
+      )
+    ).toBe(false);
   });
 });

@@ -11,6 +11,7 @@ import {
   type LoaderState,
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
+import { useEffect, useRef } from 'preact/hooks';
 import { serverLoaders } from '../../pages/demo/project-board.server.js';
 import type { ProjectInsights } from '../../pages/demo/board-insights.js';
 import { boardHref } from '../../demo/board-links.js';
@@ -33,9 +34,7 @@ export function renderInsightsBody(
   state: LoaderState<ProjectInsights>,
   staleError: Error | null,
   slug: string,
-  searchParams: Record<string, string>,
-  onRecompute: () => void,
-  recomputing: boolean
+  searchParams: Record<string, string>
 ) {
   if (state.status === 'loading') {
     return <p class="text-xs text-muted">Computing insights…</p>;
@@ -88,13 +87,6 @@ export function renderInsightsBody(
           Back to quick insights
         </NavLink>
       )}
-      <button
-        class="font-medium underline hover:text-foreground disabled:opacity-60"
-        onClick={onRecompute}
-        disabled={recomputing}
-      >
-        {recomputing ? 'Recompute…' : 'Recompute'}
-      </button>
       {staleError && (
         <span class="text-danger">(refresh failed: {staleError.message})</span>
       )}
@@ -102,31 +94,55 @@ export function renderInsightsBody(
   );
 }
 
-const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
+// Recompute the insights loader only on a SAME-PROJECT task mutation. The board
+// loader's `taskSignature` fingerprints every task's id+status and is
+// filter-independent, so a ?priority= change leaves it unchanged (no recompute,
+// which in deep mode would needlessly re-hit the 1s timeout). It DOES change
+// wholesale on a project switch, but the route-bound insights loader already
+// re-runs for the new project then, so a switch must not trigger a second
+// reload. Exported so the contract is unit-tested without mounting the loader.
+export function shouldRecomputeInsights(
+  prev: { slug: string; taskSignature: string },
+  next: { slug: string; taskSignature: string }
+): boolean {
+  return next.slug === prev.slug && next.taskSignature !== prev.taskSignature;
+}
+
+const InsightsBody: FunctionComponent<{
+  slug: string;
+  taskSignature: string;
+}> = ({ slug, taskSignature }) => {
   const state = insightsLoader.useData();
   const staleError = insightsLoader.useError();
   const { searchParams } = useRoute();
-  const { reload, reloading } = useReload();
-  // Direct cache invalidation + reload: invalidate() alone only clears the
-  // cache entry; pairing it with useReload's reload() re-runs the active
-  // loader immediately instead of waiting for the next navigation.
-  const recompute = () => {
-    insightsLoader.invalidate();
-    reload();
-  };
-  return renderInsightsBody(
-    state,
-    staleError,
-    slug,
-    searchParams,
-    recompute,
-    reloading
-  );
+  const { reload } = useReload();
+
+  // Auto-recompute: when a board mutation changes the task set, ProjectBoardPage
+  // hands down a new taskSignature; invalidate + reload keeps the numbers in
+  // sync without a manual button (invalidate() alone only clears the cache;
+  // reload() re-runs this active loader now instead of waiting for the next
+  // navigation). shouldRecomputeInsights excludes ?priority= changes and project
+  // switches; seeding the ref to the mount value excludes the initial render.
+  const last = useRef({ slug, taskSignature });
+  useEffect(() => {
+    const recompute = shouldRecomputeInsights(last.current, {
+      slug,
+      taskSignature,
+    });
+    last.current = { slug, taskSignature };
+    if (recompute) {
+      insightsLoader.invalidate();
+      reload();
+    }
+  }, [slug, taskSignature, reload]);
+
+  return renderInsightsBody(state, staleError, slug, searchParams);
 };
 
-export const InsightsPanel: FunctionComponent<{ slug: string }> = ({
-  slug,
-}) => (
+export const InsightsPanel: FunctionComponent<{
+  slug: string;
+  taskSignature: string;
+}> = ({ slug, taskSignature }) => (
   <div class="border-b border-border bg-surface-subtle px-4 py-2">
     <insightsLoader.Boundary
       errorFallback={(err, reset) => (
@@ -147,7 +163,7 @@ export const InsightsPanel: FunctionComponent<{ slug: string }> = ({
         </p>
       )}
     >
-      <InsightsBody slug={slug} />
+      <InsightsBody slug={slug} taskSignature={taskSignature} />
     </insightsLoader.Boundary>
   </div>
 );
