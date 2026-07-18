@@ -4,6 +4,7 @@ import {
   useFormStatus,
   useOptimisticAction,
   useParams,
+  usePrefetch,
   useReload,
   useTitle,
   ViewTransitionName,
@@ -72,6 +73,17 @@ const TaskHeaderAndActions: FunctionComponent<{
     '/demo/projects/:projectId/tasks/:taskId'
   );
 
+  // Warm the board loader on back-link intent (hover/focus). Changing this
+  // task's status invalidates the board cache, so on back-nav the board would
+  // otherwise be COLD: its server RPC misses the route scheduler's ~150ms
+  // morph-partner grace, the new snapshot is captured without this card, and
+  // the card-hero morph degrades to a flicker. Prefetching lands the fresh
+  // board (card present) in cache first, so the back-nav renders it
+  // synchronously and the morph pairs cleanly. Mirrors TaskCard's forward
+  // prefetch of the task loader.
+  const backHref = `/demo/projects/${projectSlug}`;
+  const prefetchBoard = usePrefetch(backHref, boardLoaders.default);
+
   // useOptimisticAction keeps the applied patch in place until the loader's
   // base value (task.status) actually reflects it. On error the framework
   // reverts the patch automatically so the badge snaps back to task.status;
@@ -98,7 +110,9 @@ const TaskHeaderAndActions: FunctionComponent<{
   return (
     <>
       <a
-        href={`/demo/projects/${projectSlug}`}
+        href={backHref}
+        onMouseEnter={prefetchBoard}
+        onFocus={prefetchBoard}
         class="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground"
       >
         <ArrowLeft size={15} aria-hidden />

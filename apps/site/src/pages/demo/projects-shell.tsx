@@ -9,19 +9,16 @@ import {
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { ActivityBar } from '../../components/demo/ActivityBar.js';
-import { useEffect } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { serverLoaders } from './projects-shell.server.js';
 import { serverActions as loginActions } from './login.server.js';
 import { DEMO_AUTHED_KEY } from '../../demo/guard.js';
 import type { ShellData } from './projects-shell.server.js';
 
-// Only the ACTIVE dot carries the view-transition-name (names must be
-// unique per document), so on navigation the browser morphs the dot from
-// the old active item to the new one: the classic gliding-indicator VT.
-const SidebarDot: FunctionComponent<{ active: boolean }> = ({ active }) => {
-  const ref = useViewTransitionName(active ? 'demo-sidebar-active' : null);
-  return <span ref={ref} class="h-2 w-2 rounded-[3px] bg-accent" />;
-};
+// Per-project bullet: static (every row has one).
+const SidebarDot: FunctionComponent = () => (
+  <span class="h-2 w-2 rounded-[3px] bg-accent" />
+);
 
 const shellLoader = serverLoaders.default;
 
@@ -38,6 +35,37 @@ function Sidebar({
   // the sidebar lit on nested task pages).
   const match = useRouteMatch('/demo/projects/:projectId', { exact: false });
   const activeSlug = match?.projectId ?? null;
+
+  // Sliding active indicator, driven by the view transition. ONE persistent
+  // element carries the (unique) view-transition-name and is positioned over the
+  // active row by measuring the live DOM. On a project nav the layout effect
+  // moves it to the new row inside the same render the VT captures, so the
+  // browser morphs it from the old row to the new one — gliding alongside the
+  // board's own transition.
+  //
+  // Persistence is the whole trick: the earlier per-row pill (rendered only on
+  // the active row) remounted every nav, and that freshly-mounted element got
+  // its VT group cancelled ~30ms in by the post-nav flush. A single element that
+  // never unmounts survives that flush, so its group is not cancelled. No CSS
+  // transition here: the VT owns the motion.
+  const indicatorNameRef = useViewTransitionName('demo-sidebar-active');
+  const navRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const ind = nav?.querySelector<HTMLElement>('[data-active-indicator]');
+    if (!nav || !ind) return;
+    const row = activeSlug
+      ? nav.querySelector<HTMLElement>(`[data-slug="${activeSlug}"]`)
+      : null;
+    if (!row) {
+      // Off the projects subtree (e.g. the index page): hide it.
+      ind.style.opacity = '0';
+      return;
+    }
+    ind.style.transform = `translateY(${row.offsetTop}px)`;
+    ind.style.height = `${row.offsetHeight}px`;
+    ind.style.opacity = '1';
+  }, [activeSlug, data.projects.length]);
 
   // Self-heal the client guard flag on any authed render.
   useEffect(() => {
@@ -73,28 +101,35 @@ function Sidebar({
         <p class="px-2 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
           Projects
         </p>
-        <nav class="flex flex-col gap-0.5">
-          {data.projects.map((p) => {
-            const active = p.slug === activeSlug;
-            return (
-              <NavLink
-                key={p.id}
-                href={buildPath('/demo/projects/:projectId', {
-                  projectId: p.slug,
-                })}
-                exact={false}
-                class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium"
-                activeClass="bg-accent/10 text-accent"
-                inactiveClass="text-foreground hover:bg-foreground/5"
-              >
-                <SidebarDot active={active} />
-                {p.name}
-                <span class="ml-auto text-[11px] text-muted">
-                  {p.taskCount}
-                </span>
-              </NavLink>
-            );
-          })}
+        <nav ref={navRef} class="relative isolate flex flex-col gap-0.5">
+          {/* The sliding highlight: a single persistent element the view
+              transition morphs between rows (positioned by the effect above).
+              -z-10 (under the isolate context) keeps it behind the row text. A
+              plain tinted pill — its rounded shape reads cleanly as it glides,
+              with no left stripe fighting the corners. */}
+          <span
+            ref={indicatorNameRef}
+            data-active-indicator
+            aria-hidden
+            class="pointer-events-none absolute left-0 top-0 -z-10 w-full rounded-lg bg-accent/10 opacity-0"
+          />
+          {data.projects.map((p) => (
+            <NavLink
+              key={p.id}
+              href={buildPath('/demo/projects/:projectId', {
+                projectId: p.slug,
+              })}
+              exact={false}
+              data-slug={p.slug}
+              class="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium"
+              activeClass="text-accent"
+              inactiveClass="text-foreground hover:bg-foreground/5"
+            >
+              <SidebarDot />
+              {p.name}
+              <span class="ml-auto text-[11px] text-muted">{p.taskCount}</span>
+            </NavLink>
+          ))}
         </nav>
         <div class="flex-1" />
         {data.user && (

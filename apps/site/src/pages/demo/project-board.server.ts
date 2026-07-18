@@ -49,6 +49,14 @@ export type BoardData = {
   priority: 'all' | TaskPriority;
   /** Unfiltered task count, so the UI can show "n of m". */
   totalCount: number;
+  /**
+   * A filter-independent fingerprint of every task's id + status, so a sibling
+   * loader (the insights strip) can re-run exactly when a mutation that would
+   * change its numbers lands, and NOT on a mere ?priority= change (which shuffles
+   * `tasks` but leaves this signature identical). Cheap: built from the same
+   * unfiltered list the loader already reads.
+   */
+  taskSignature: string;
 };
 
 const InsightsSearchSchema = v.object({
@@ -72,6 +80,7 @@ export const serverLoaders = {
           priority === 'all' ? all : all.filter((t) => t.priority === priority),
         priority,
         totalCount: all.length,
+        taskSignature: all.map((t) => `${t.id}:${t.status}`).join(','),
       };
     },
     {

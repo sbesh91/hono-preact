@@ -11,6 +11,7 @@ import {
   type LoaderState,
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
+import { useEffect, useRef } from 'preact/hooks';
 import { serverLoaders } from '../../pages/demo/project-board.server.js';
 import type { ProjectInsights } from '../../pages/demo/board-insights.js';
 import { boardHref } from '../../demo/board-links.js';
@@ -33,9 +34,7 @@ export function renderInsightsBody(
   state: LoaderState<ProjectInsights>,
   staleError: Error | null,
   slug: string,
-  searchParams: Record<string, string>,
-  onRecompute: () => void,
-  recomputing: boolean
+  searchParams: Record<string, string>
 ) {
   if (state.status === 'loading') {
     return <p class="text-xs text-muted">Computing insights…</p>;
@@ -88,13 +87,6 @@ export function renderInsightsBody(
           Back to quick insights
         </NavLink>
       )}
-      <button
-        class="font-medium underline hover:text-foreground disabled:opacity-60"
-        onClick={onRecompute}
-        disabled={recomputing}
-      >
-        {recomputing ? 'Recompute…' : 'Recompute'}
-      </button>
       {staleError && (
         <span class="text-danger">(refresh failed: {staleError.message})</span>
       )}
@@ -102,31 +94,38 @@ export function renderInsightsBody(
   );
 }
 
-const InsightsBody: FunctionComponent<{ slug: string }> = ({ slug }) => {
+const InsightsBody: FunctionComponent<{
+  slug: string;
+  taskSignature: string;
+}> = ({ slug, taskSignature }) => {
   const state = insightsLoader.useData();
   const staleError = insightsLoader.useError();
   const { searchParams } = useRoute();
-  const { reload, reloading } = useReload();
-  // Direct cache invalidation + reload: invalidate() alone only clears the
-  // cache entry; pairing it with useReload's reload() re-runs the active
-  // loader immediately instead of waiting for the next navigation.
-  const recompute = () => {
+  const { reload } = useReload();
+
+  // Auto-recompute: whenever a board mutation (add / delete / status move)
+  // changes the task set, ProjectBoardPage re-runs the board loader and hands
+  // down a new `taskSignature`. Invalidate + reload the insights loader so its
+  // numbers stay in sync without a manual button. invalidate() alone only clears
+  // the cache entry; pairing it with useReload's reload() re-runs this (active)
+  // loader now instead of waiting for the next navigation. The signature is
+  // filter-independent, so a ?priority= change does NOT recompute (which in deep
+  // mode would needlessly re-hit the 1s timeout).
+  const lastSignature = useRef(taskSignature);
+  useEffect(() => {
+    if (taskSignature === lastSignature.current) return;
+    lastSignature.current = taskSignature;
     insightsLoader.invalidate();
     reload();
-  };
-  return renderInsightsBody(
-    state,
-    staleError,
-    slug,
-    searchParams,
-    recompute,
-    reloading
-  );
+  }, [taskSignature, reload]);
+
+  return renderInsightsBody(state, staleError, slug, searchParams);
 };
 
-export const InsightsPanel: FunctionComponent<{ slug: string }> = ({
-  slug,
-}) => (
+export const InsightsPanel: FunctionComponent<{
+  slug: string;
+  taskSignature: string;
+}> = ({ slug, taskSignature }) => (
   <div class="border-b border-border bg-surface-subtle px-4 py-2">
     <insightsLoader.Boundary
       errorFallback={(err, reset) => (
@@ -147,7 +146,7 @@ export const InsightsPanel: FunctionComponent<{ slug: string }> = ({
         </p>
       )}
     >
-      <InsightsBody slug={slug} />
+      <InsightsBody slug={slug} taskSignature={taskSignature} />
     </insightsLoader.Boundary>
   </div>
 );

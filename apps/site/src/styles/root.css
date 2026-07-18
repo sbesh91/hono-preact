@@ -5138,19 +5138,32 @@ html:active-view-transition-type(demo-within)::view-transition-new(
 ::view-transition-group(.task-card) {
   animation-duration: var(--spring-duration);
   animation-timing-function: var(--spring-soft);
+  /* View transitions flatten every named element into a sibling group, so the
+     DOM nesting (a card paints on top of its column) is lost. The morphing card
+     must stay ABOVE the columns: on a task->board back-nav the target column is
+     new-only and fades in over the card as it settles, making the morph appear
+     to end behind the column. A higher z-index than the column groups keeps the
+     card in front throughout its flight (and on the forward nav too). */
+  z-index: 2;
 }
 
 /* Board columns (ViewTransitionName groupClass="board-column") morph on
-   project-to-project navigation (the demo-within transition); the filter
-   chips are transition={false} and never reach this rule. A short duration
-   keeps the shuffle snappy. */
+   project-to-project navigation; the filter chips are transition={false} and
+   never reach this rule. A short duration keeps the shuffle snappy. Below the
+   cards (see the z-index note above). */
 ::view-transition-group(*.board-column) {
   animation-duration: 160ms;
+  z-index: 1;
 }
-/* The sidebar's active-project dot (useViewTransitionName) glides between
-   projects on navigation. */
+/* The sidebar's active-project indicator: a single persistent element
+   (projects-shell.tsx) that carries this name and is repositioned over the
+   active row each nav, so the browser morphs it between rows alongside the board
+   transition. A z-index above the other groups keeps it painting over the frozen
+   sidebar snapshot rather than behind it. */
 ::view-transition-group(demo-sidebar-active) {
-  animation-duration: 220ms;
+  animation-duration: 240ms;
+  animation-timing-function: var(--spring-soft);
+  z-index: 5;
 }
 
 /* Reduced motion: zero the shared-element morphs. Must come AFTER the base

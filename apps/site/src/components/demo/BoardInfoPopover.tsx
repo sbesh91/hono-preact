@@ -11,7 +11,7 @@ export const BoardInfoPopover: FunctionComponent = () => (
       ?
     </Popover.Trigger>
     <Popover.Positioner class="z-50">
-      <Popover.Popup class="w-72 rounded-xl border border-border bg-background p-4 shadow-subtle">
+      <Popover.Popup class="demo-popup w-72 rounded-xl border border-border bg-background p-4 shadow-subtle">
         <Popover.Title class="text-sm font-semibold text-foreground">
           What this board exercises
         </Popover.Title>
