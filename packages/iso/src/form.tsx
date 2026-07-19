@@ -252,10 +252,12 @@ export function Form<TPayload, TResult>({
           ? window.location.pathname + window.location.search
           : '/';
       const fd = new FormData(formEl);
-      // Source the action identity from props, not the DOM hidden inputs. On an
-      // initial SSR page those inputs render empty (server-side defineAction
-      // carries no name metadata) and Preact's hydrate() does not patch their
-      // values, so reading them back would post __module/__action='' and 404.
+      // Source the action identity from props (`action.__module`/`action.__action`),
+      // the canonical value this component holds. The hidden inputs rendered
+      // below carry the same identity on both SSR and client, so
+      // `new FormData(formEl)` already includes it; setting it from props here
+      // keeps the submitted identity authoritative and independent of the DOM
+      // inputs.
       fd.set(FORM_MODULE_FIELD, moduleKey);
       fd.set(FORM_ACTION_FIELD, actionName);
       const payload = collectFormData(fd) as TPayload;

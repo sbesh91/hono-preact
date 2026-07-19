@@ -7,8 +7,11 @@ import {
   act,
   waitFor,
 } from '@testing-library/preact';
+import { renderToString } from 'preact-render-to-string';
 import { Form } from '../form.js';
+import { defineAction } from '../action.js';
 import type { ActionRef } from '../action.js';
+import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from '../internal/contract.js';
 import {
   clearLastActionResult,
   getLastActionResult,
@@ -65,6 +68,25 @@ describe('<Form>', () => {
     expect(a.type).toBe('hidden');
   });
 
+  it('end-to-end: defineAction(__module/__action) threads through to SSR hidden inputs', () => {
+    // The single guard tying the whole SSR <Form> chain together: the identity
+    // `defineAction` attaches (as the Vite plugin threads it into a real build)
+    // must surface as concrete hidden inputs in the server-rendered HTML, so a
+    // no-JS or pre-hydration native POST reaches the right action. If any link
+    // in defineAction -> Form -> server render breaks, this one named test fails.
+    const action = defineAction(async () => ({}), {
+      __module: 'm',
+      __action: 'a',
+    });
+    const html = renderToString(<Form action={action} />);
+    expect(html).toMatch(
+      new RegExp(`<input[^>]*name="${FORM_MODULE_FIELD}"[^>]*value="m"`)
+    );
+    expect(html).toMatch(
+      new RegExp(`<input[^>]*name="${FORM_ACTION_FIELD}"[^>]*value="a"`)
+    );
+  });
+
   it('renders enctype=multipart/form-data', () => {
     const { container } = render(<Form action={makeStub()} />);
     const form = container.querySelector('form')!;
@@ -108,13 +130,12 @@ describe('<Form>', () => {
     expect(headers.get('Accept')).toMatch(/application\/json/);
   });
 
-  it('sends action identity from props even when hydrated hidden inputs are stale', async () => {
-    // Repro of the hydrated-form bug: on an initial SSR page the server renders
-    // __module/__action empty (server-side defineAction carries no name
-    // metadata) and Preact's hydrate() does not patch existing DOM `value`s, so
-    // the hidden inputs stay empty. The submit handler must source the action
-    // identity from props, not from `new FormData(formEl)`, or the POST 404s
-    // with "Action '' not found".
+  it('sends action identity from props even when the hidden inputs are empty', async () => {
+    // Props (`action.__module`/`action.__action`) are the authoritative action
+    // identity. The submit handler sources from them, not from
+    // `new FormData(formEl)`, so even if the DOM hidden inputs are empty (forced
+    // to '' below to prove it) the POST carries the real identity rather than
+    // 404ing with "Action '' not found".
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
         status: 200,
@@ -127,8 +148,7 @@ describe('<Form>', () => {
         <button type="submit">go</button>
       </Form>
     );
-    // Simulate the stale, server-rendered empty hidden inputs hydrate() leaves
-    // in place.
+    // Force the hidden inputs empty to prove props, not the DOM, drive identity.
     const m = container.querySelector(
       'input[name="__module"]'
     ) as HTMLInputElement;
