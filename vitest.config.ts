@@ -17,6 +17,19 @@ export default defineConfig({
     __HONO_PREACT_VERSION__: JSON.stringify(frameworkVersion),
   },
   resolve: {
+    // This map is hand-maintained and intentionally diverges from apps/site's
+    // alias list (which `workspaceAliases` generates from each package's
+    // `exports` map). It is NOT generated here, on purpose:
+    //  (a) `hono-preact/adapter-cloudflare` and `hono-preact/adapter-node`
+    //      resolve to `packages/vite/src/*`, where the adapters actually live,
+    //      so the vite-package tests exercise the real adapter source. The
+    //      generated map would instead point at `packages/hono-preact/src/*`
+    //      (the published re-export target), which is not what these tests want.
+    //  (b) It carries test-only aliases that are not package exports at all
+    //      (e.g. `@hono-preact/iso/is-browser.js`), so an exports-driven
+    //      generator could not produce them.
+    //  (c) Sharing the `workspaceAliases` generator across both configs (and
+    //      teaching it these overrides) is a separate refactor, out of scope here.
     alias: {
       '@hono-preact/iso/internal/runtime': path.resolve(
         __dirname,

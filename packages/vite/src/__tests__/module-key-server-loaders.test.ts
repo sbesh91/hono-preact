@@ -115,6 +115,23 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
     expect(out).toContain("serverRoute('/board/:projectId')");
   });
 
+  it('threads a string-literal (hyphenated) loader key', () => {
+    // A key that is not a bare identifier (`'my-loader'`) must still get the
+    // __moduleKey/__loaderName threading, mirroring the string-literal action
+    // key handling, or its client stub would regress to an unnamed loader.
+    const code = `
+      import { defineLoader } from '@hono-preact/iso';
+      export const serverLoaders = {
+        'my-loader': defineLoader(async () => ({})),
+      };
+    `;
+    const out =
+      transform(code, '/Users/me/repo/src/pages/movie.server.ts') ?? '';
+    expect(out).toContain(
+      '__moduleKey: "src/pages/movie", __loaderName: "my-loader"'
+    );
+  });
+
   it('does not inject opts when defineLoader already has a second arg', () => {
     const code = `
       import { defineLoader } from '@hono-preact/iso';
