@@ -17,6 +17,28 @@ function toAttrs(obj: Record<string, string | undefined>): string {
     .join(' ');
 }
 
+/**
+ * Remove the first `<title>…</title>` from the `<head>` so a freshly injected
+ * one is the document's only title. The `<Head>` component always renders a
+ * static `<title>`; callers apply this only when they are about to inject a
+ * resolved title, so the two never coexist (see the `titleSource` note in
+ * `assembleDocument` and issue #293).
+ *
+ * Scoped to before the first `</head>` (matched exactly as the injection's
+ * `html.replace('</head>', …)` does) so a `<title>` inside a body inline-SVG,
+ * which is valid SVG and legitimately part of the page, is never touched. The
+ * `<title[\s>]` guard matches `<title>` and `<title lang="…">` but not a
+ * hypothetical `<titlebar>`, and the empty-string replacement expands no
+ * `$`-patterns, so no replacer function is needed here.
+ */
+function stripHeadTitle(html: string): string {
+  const headEnd = html.indexOf('</head>');
+  if (headEnd === -1) return html;
+  const head = html.slice(0, headEnd);
+  const stripped = head.replace(/<title[\s>][\s\S]*?<\/title>/i, '');
+  return stripped === head ? html : stripped + html.slice(headEnd);
+}
+
 /** The subset of `hoofd`'s `toStatic()` output the document shell consumes. */
 export type HeadStatic = {
   title?: string;
@@ -85,10 +107,17 @@ export function assembleDocument(opts: {
   } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
-  // Only inject a <title> when hoofd produced one or the caller provided a
-  // defaultTitle. Layouts that render their own static <title> (via <Head>)
-  // would otherwise be overridden by an empty injected one (browsers use the
-  // last <title> in <head>).
+  // Resolve the document's single title: hoofd's collected title when a page
+  // set one (useTitle/useTitleTemplate), else the caller's defaultTitle. Only
+  // inject when one of those exists; a title-less render keeps the Layout's own
+  // static <title> (from <Head defaultTitle>) as the fallback.
+  //
+  // When we DO inject, we first strip the Layout's static <title> below (see
+  // stripHeadTitle). The <Head> component always renders one, so injecting a
+  // second ships a duplicate; and because browsers use the FIRST <title>
+  // element (not the last), the static fallback would otherwise shadow the real
+  // page title in the pre-hydration/no-JS document (wrong title for crawlers
+  // and social cards). See issue #293.
   const titleSource = title ?? defaultTitle;
   // The Layout/user's own head tags, kept separate from framework-injected
   // preload hints so the latter can't manufacture the missing-</head> warning
@@ -147,12 +176,19 @@ export function assembleDocument(opts: {
     ...routeStyleTags,
   ].join('\n        ');
 
+  // Strip the Layout's own static <title> so the injected one (carried in
+  // userHeadTags) is the document's sole title. Guarded on titleSource: a
+  // title-less render injects no <title>, so the static fallback is left in
+  // place. Everything downstream (the <html> detection, the missing-</head>
+  // warning, and the </head> injection) operates on this stripped source.
+  const source = titleSource != null ? stripHeadTitle(html) : html;
+
   // If the rendered tree already starts with <html>, the user's Layout owns
   // the document shell. Inject hoofd's lang into that <html> tag (if hoofd
   // dispatched one) and emit only the doctype; do not double-wrap.
   // Otherwise (custom server entry rendering a fragment) keep the framework's
   // <html lang> wrapper for backward compatibility.
-  const startsWithHtml = /^\s*<html(\s|>)/i.test(html);
+  const startsWithHtml = /^\s*<html(\s|>)/i.test(source);
 
   // Warn when the Layout would drop render-critical head content: the user's own
   // head tags OR the global/route stylesheets. Framework preload hints still
@@ -162,7 +198,7 @@ export function assembleDocument(opts: {
     startsWithHtml &&
     (userHeadTags.length > 0 ||
       routeStyleTags.length + globalStyleTags.length > 0) &&
-    !html.includes('</head>')
+    !source.includes('</head>')
   ) {
     warnMissingMarker(
       '</head>',
@@ -192,7 +228,7 @@ export function assembleDocument(opts: {
   // route modules). A title containing e.g. `$&` would otherwise duplicate
   // the matched `</head>` into the output instead of rendering literally. A
   // function return value is inserted verbatim, with no pattern expansion.
-  const inner = html.replace('</head>', () => `${headTags}\n      </head>`);
+  const inner = source.replace('</head>', () => `${headTags}\n      </head>`);
 
   return startsWithHtml
     ? lang != null

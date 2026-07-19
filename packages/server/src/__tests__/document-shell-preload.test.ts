@@ -276,3 +276,51 @@ describe('assembleDocument: $-pattern safety in head injection', () => {
     expect(out).not.toContain('<html lang="en-$1">>');
   });
 });
+
+describe('assembleDocument: single <title> (#293)', () => {
+  const titleCount = (html: string): number =>
+    (html.match(/<title[\s>]/gi) ?? []).length;
+
+  it('replaces the Layout static <title> with the resolved one (no duplicate)', () => {
+    // `shell` carries the Layout's own <title>t</title>; the resolved hoofd
+    // title must be the document's ONLY title, not a second one after it.
+    const out = assembleDocument({ html: shell, head: { title: 'Real' } });
+    expect(titleCount(out)).toBe(1);
+    expect(out).toContain('<title>Real</title>');
+    expect(out).not.toContain('<title>t</title>');
+  });
+
+  it('strips an EMPTY Layout <title> (as <Head/> with no defaultTitle renders it)', () => {
+    // `<Head/>` renders `<title></title>`. The resolved title must replace it,
+    // not sit after it. Guards the zero-width match in stripHeadTitle's
+    // `[\s\S]*?`: a `[\s\S]+?` mutant leaves the empty tag and ships two titles.
+    const emptyTitleShell =
+      '<html><head><title></title></head><body>x</body></html>';
+    const out = assembleDocument({
+      html: emptyTitleShell,
+      head: { title: 'Real' },
+    });
+    expect(titleCount(out)).toBe(1);
+    expect(out).toContain('<title>Real</title>');
+  });
+
+  it('leaves a body inline-SVG <title> untouched when the head has no static title', () => {
+    // The load-bearing case for stripHeadTitle's head-slice scoping: the first
+    // <title> in document order lives in the BODY (the head has none). Without
+    // the `slice(0, headEnd)`, the strip would delete the SVG's accessible name.
+    const svgShell =
+      '<html><head></head><body><svg viewBox="0 0 1 1"><title>Icon label</title></svg></body></html>';
+    const out = assembleDocument({ html: svgShell, head: { title: 'Real' } });
+    const headHtml = out.slice(0, out.indexOf('</head>'));
+    expect(titleCount(headHtml)).toBe(1);
+    expect(headHtml).toContain('<title>Real</title>');
+    // The SVG's own <title> (in the body) survives.
+    expect(out).toContain('<title>Icon label</title>');
+  });
+
+  it('keeps the Layout static <title> when no title is resolved (fallback path unchanged)', () => {
+    const out = assembleDocument({ html: shell, head: {} });
+    expect(titleCount(out)).toBe(1);
+    expect(out).toContain('<title>t</title>');
+  });
+});

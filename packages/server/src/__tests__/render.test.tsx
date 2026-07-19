@@ -3,7 +3,12 @@ import { Hono } from 'hono';
 import { useTitle, useLang, useMeta, useLink } from 'hoofd/preact';
 import type { JSX } from 'preact';
 import { LocationProvider, useLocation } from 'preact-iso';
-import { defineApp, defineServerMiddleware, redirect } from '@hono-preact/iso';
+import {
+  defineApp,
+  defineServerMiddleware,
+  redirect,
+  Head,
+} from '@hono-preact/iso';
 import { env } from '@hono-preact/iso/internal/runtime';
 import { render as renderOutcome } from '@hono-preact/iso/page';
 import { renderPage } from '../render.js';
@@ -371,5 +376,98 @@ describe('renderPage', () => {
     const htmlB = await resB.text();
     expect(htmlA).toContain('>/route-a<');
     expect(htmlB).toContain('>/route-b<');
+  });
+});
+
+// A layout that uses the framework's <Head> component (which renders a static
+// <title>). This is the shape every scaffolded app and the docs site use, and
+// the shape none of the tests above exercise (they all use a bare <head></head>
+// with no static title). See issue #293.
+function headLayout(
+  opts: { defaultTitle?: string },
+  ...children: JSX.Element[]
+): JSX.Element {
+  return (
+    <html lang="en">
+      <Head defaultTitle={opts.defaultTitle} />
+      <body>
+        <main id="app">{children}</main>
+      </body>
+    </html>
+  );
+}
+
+const titleCount = (html: string): number =>
+  (html.match(/<title[\s>]/gi) ?? []).length;
+
+describe('renderPage — single <title> for <Head>-based layouts (#293)', () => {
+  it('emits exactly one <title>, carrying the useTitle value, not the Head default', async () => {
+    function Page() {
+      useTitle('Real Page Title');
+      return <div>hi</div>;
+    }
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, headLayout({ defaultTitle: 'Fallback' }, <Page />))
+    );
+    const html = await (await app.request('http://localhost/')).text();
+
+    expect(titleCount(html)).toBe(1);
+    expect(html).toContain('<title>Real Page Title</title>');
+    expect(html).not.toContain('<title>Fallback</title>');
+  });
+
+  it('keeps the Head default as the single title when no page sets one', async () => {
+    function Page() {
+      return <div>hi</div>;
+    }
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, headLayout({ defaultTitle: 'Fallback' }, <Page />))
+    );
+    const html = await (await app.request('http://localhost/')).text();
+
+    expect(titleCount(html)).toBe(1);
+    expect(html).toContain('<title>Fallback</title>');
+  });
+
+  it('renderPage defaultTitle replaces the Head static title (one title, no duplicate)', async () => {
+    function Page() {
+      return <div>hi</div>;
+    }
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, headLayout({ defaultTitle: 'LayoutDefault' }, <Page />), {
+        defaultTitle: 'RenderDefault',
+      })
+    );
+    const html = await (await app.request('http://localhost/')).text();
+
+    expect(titleCount(html)).toBe(1);
+    expect(html).toContain('<title>RenderDefault</title>');
+  });
+
+  it('does not touch a <title> inside a body inline-SVG when replacing the head title', async () => {
+    function Page() {
+      useTitle('Real Page Title');
+      return (
+        <svg viewBox="0 0 1 1">
+          <title>Icon accessible name</title>
+          <rect width="1" height="1" />
+        </svg>
+      );
+    }
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, headLayout({ defaultTitle: 'Fallback' }, <Page />))
+    );
+    const html = await (await app.request('http://localhost/')).text();
+
+    // The SVG's <title> survives; only the head's static title is replaced.
+    expect(html).toContain('<title>Icon accessible name</title>');
+    const headHtml = html.slice(0, html.indexOf('</head>'));
+    expect(titleCount(headHtml)).toBe(1);
+    expect(headHtml).toContain('<title>Real Page Title</title>');
+    expect(headHtml).not.toContain('<title>Fallback</title>');
   });
 });
