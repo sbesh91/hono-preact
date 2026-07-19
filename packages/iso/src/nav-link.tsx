@@ -65,7 +65,14 @@ export function NavLink(props: NavLinkProps): VNode {
       .filter(Boolean)
       .join(' ') || undefined;
 
-  const ariaCurrent = ariaCurrentProp ?? (active ? 'page' : undefined);
+  // Presence check, not nullish-coalesce: an explicit `aria-current={undefined}`
+  // must suppress the computed value, which requires distinguishing "written as
+  // undefined" from "omitted". Both the classic-`h` and jsx-runtime transforms
+  // keep a written-but-undefined key present in the props object (and drop an
+  // omitted one), so `in` is the reliable signal. Destructuring above does not
+  // remove the key from `props`.
+  const ariaCurrent =
+    'aria-current' in props ? ariaCurrentProp : active ? 'page' : undefined;
 
   const handleClick = (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => {
     // Keyed to the resolved href: if no navigated flush follows (a same-URL
