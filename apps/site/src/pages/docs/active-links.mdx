@@ -78,6 +78,8 @@ import { NavLink } from 'hono-preact';
 
 Any `class` you pass is always applied; `activeClass` / `inactiveClass` are merged on top per state. Other anchor props (`target`, `rel`, `data-*`) pass straight through.
 
+Pass your own `aria-current` to override the computed value, including `aria-current={undefined}` to opt out entirely (the link still gets its active class, just no `aria-current` attribute). Active state is path-only: it cannot see the query string, so if a set of links differ only by their query (e.g. `?tab=`), manage `aria-current` yourself.
+
 Use `exact={false}` for section links, and `match` when the link target differs from the pattern you want to highlight on:
 
 ```tsx
@@ -119,7 +121,7 @@ option has no effect.
 
 ## API reference
 
-`<NavLink>` forwards any other `<a>` attribute (e.g. `target`, `rel`, `data-*`) to the underlying anchor and sets `aria-current="page"` while the link is active.
+`<NavLink>` forwards any other `<a>` attribute (e.g. `target`, `rel`, `data-*`) to the underlying anchor and sets `aria-current="page"` while the link is active. A caller-supplied `aria-current` always wins, and `aria-current={undefined}` suppresses the computed value. Because active detection is path-only, links that differ only by query string need their `aria-current` managed explicitly.
 
 | Prop            | Type      | Default  | Description                                                     |
 | --------------- | --------- | -------- | --------------------------------------------------------------- |

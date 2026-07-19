@@ -125,6 +125,38 @@ describe('NavLink', () => {
     expect(getByText('Docs').getAttribute('aria-current')).toBe('false');
   });
 
+  // The suppression is a presence check on the `aria-current` prop, so an
+  // explicit `aria-current={undefined}` opts out of the computed value even on
+  // an active path (an omitted prop still computes `page`). Distinguishing the
+  // two relies on the JSX transform keeping the written-but-undefined key
+  // present in props.
+  it('suppresses the computed aria-current when aria-current is explicitly undefined', () => {
+    history.replaceState(null, '', '/x');
+    const { getByText } = render(
+      <LocationProvider>
+        <NavLink href="/x" aria-current={undefined} activeClass="on">
+          X
+        </NavLink>
+      </LocationProvider>
+    );
+    const a = getByText('X') as HTMLAnchorElement;
+    expect(a.getAttribute('aria-current')).toBeNull();
+    // Opting out of aria-current must not disable active-class styling.
+    expect(a.getAttribute('class')).toBe('on');
+  });
+
+  it('passes an explicit aria-current="page" through on an inactive path', () => {
+    history.replaceState(null, '', '/other');
+    const { getByText } = render(
+      <LocationProvider>
+        <NavLink href="/docs" aria-current="page">
+          Docs
+        </NavLink>
+      </LocationProvider>
+    );
+    expect(getByText('Docs').getAttribute('aria-current')).toBe('page');
+  });
+
   // These four wrap in <LocationProvider>, unlike the verbatim brief snippet,
   // because NavLink's useRouteActive calls useLocation() and throws without a
   // location context ancestor (see every other test in this file).
