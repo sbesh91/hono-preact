@@ -37,6 +37,11 @@ export async function bundleSize(entryContents, resolveDir) {
     platform: 'browser',
     write: false,
     external: EXTERNAL,
+    // Match Vite's production `define` so DEV-gated framework code (the
+    // inert-class warning, ws-lifecycle dev traps, etc.) is dropped before we
+    // measure. Without this the probe over-reports: it sizes code Vite would
+    // strip from a consumer's production build.
+    define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true' },
     legalComments: 'none',
     logLevel: 'silent',
   });
@@ -67,7 +72,10 @@ export async function measureSectionA(isoDist) {
   const sectionA = { core: { total: core, marginal: core } };
   for (const [bucket, modules] of Object.entries(FEATURE_MODULES)) {
     const total = await bundleSize(entryFor(modules, isoDist), ROOT);
-    const combined = await bundleSize(entryFor([...CORE_MODULES, ...modules], isoDist), ROOT);
+    const combined = await bundleSize(
+      entryFor([...CORE_MODULES, ...modules], isoDist),
+      ROOT
+    );
     sectionA[bucket] = { total, marginal: Math.max(0, combined - core) };
   }
   return sectionA;
@@ -81,7 +89,10 @@ export async function measureSectionC(uiDist) {
   const sectionC = { 'ui-core': { total: uiCore, marginal: uiCore } };
   for (const [name, modules] of Object.entries(COMPONENT_MODULES)) {
     const total = await bundleSize(entryFor(modules, uiDist), ROOT);
-    const combined = await bundleSize(entryFor([...UI_CORE_MODULES, ...modules], uiDist), ROOT);
+    const combined = await bundleSize(
+      entryFor([...UI_CORE_MODULES, ...modules], uiDist),
+      ROOT
+    );
     sectionC[name] = { total, marginal: Math.max(0, combined - uiCore) };
   }
   return sectionC;

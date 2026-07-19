@@ -59,10 +59,23 @@ describe('parseServerLoaders', () => {
     expect(entries[0].name).toBe('valid');
   });
 
-  it('skips properties with non-Identifier keys (e.g. string literal keys)', () => {
+  it('accepts string-literal (hyphenated) keys, mirroring serverActions', () => {
     const program = parseProgram(`
       export const serverLoaders = {
         "string-key": defineLoader(async () => ({})),
+        valid: defineLoader(async () => ({})),
+      };
+    `);
+    const entries = parseServerLoaders(program);
+    expect(entries).toHaveLength(2);
+    expect(entries[0].name).toBe('string-key');
+    expect(entries[1].name).toBe('valid');
+  });
+
+  it('skips properties with non-Identifier, non-string-literal keys (numeric)', () => {
+    const program = parseProgram(`
+      export const serverLoaders = {
+        1: defineLoader(async () => ({})),
         valid: defineLoader(async () => ({})),
       };
     `);

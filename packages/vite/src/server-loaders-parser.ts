@@ -38,8 +38,11 @@ export function isLoaderCall(call: CallExpression): boolean {
 /**
  * Walk a parsed program for `export const serverLoaders = { name: defineLoader(fn, opts?), ... }`.
  * Returns one entry per object property whose value is a defineLoader(...) call.
- * Non-matching properties (spread elements, computed keys, non-call values) are silently skipped.
- * If `serverLoaders` is absent or has the wrong shape, returns [].
+ * The property key may be a bare identifier (`summary:`) or a string literal
+ * (`'my-loader':`); both yield the loader name threaded into the client stub.
+ * Non-matching properties (spread elements, computed/other-typed keys, non-call
+ * values) are silently skipped. If `serverLoaders` is absent or has the wrong
+ * shape, returns [].
  */
 export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
   const entries: ParsedLoaderEntry[] = [];
@@ -63,10 +66,20 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
       for (const prop of obj.properties) {
         if (
           prop.type !== 'ObjectProperty' ||
-          prop.key.type !== 'Identifier' ||
           prop.value.type !== 'CallExpression'
         )
           continue;
+
+        // The loader name is the property key. Accept both bare identifier keys
+        // (`summary:`) and string-literal keys (`'my-loader':`); any other key
+        // shape (numeric, computed expression) yields no name and is skipped.
+        const name =
+          prop.key.type === 'Identifier'
+            ? prop.key.name
+            : prop.key.type === 'StringLiteral'
+              ? prop.key.value
+              : undefined;
+        if (name === undefined) continue;
 
         const call = prop.value;
         if (!isLoaderCall(call)) continue;
@@ -84,7 +97,7 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
         const routeBound = call.callee.type === 'MemberExpression';
 
         entries.push({
-          name: prop.key.name,
+          name,
           call,
           optsArg,
           routeBound,
