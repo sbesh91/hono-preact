@@ -28,6 +28,7 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "README.md"
   ],
   "type": "module",
@@ -76,6 +77,8 @@
   "scripts": {
     "build": "tsc && node scripts/consolidate.mjs",
     "dev": "tsc --watch",
+    "prepack": "node scripts/publish-manifest.mjs prepack",
+    "postpack": "node scripts/publish-manifest.mjs postpack",
     "prepublishOnly": "tsc && node scripts/consolidate.mjs"
   },
   "dependencies": {

@@ -9,11 +9,11 @@ A small full-stack framework. Hono on the edge, Preact in the browser, manifest 
 ## Install
 
 ```bash
-pnpm add hono-preact hono preact 'preact-iso@github:preactjs/preact-iso#v3' preact-render-to-string hoofd
+pnpm add hono-preact hono preact 'preact-iso@github:preactjs/preact-iso#22460942e6e0ff9b9d4a8a9cf16222ad59797777' preact-render-to-string hoofd
 pnpm add -D vite
 ```
 
-> `preact-iso` must be the v3 GitHub branch (`github:preactjs/preact-iso#v3`); the npm release is still 2.x. The scaffolder pins this for you.
+> `preact-iso` comes from GitHub, pinned to an immutable v3 commit (`github:preactjs/preact-iso#22460942e6e0ff9b9d4a8a9cf16222ad59797777`); the npm release is still 2.x. The scaffolder pins this for you.
 
 ## Quick start
 

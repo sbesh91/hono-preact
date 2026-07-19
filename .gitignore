@@ -40,6 +40,10 @@ lerna-debug.log*
 .claude/worktrees/
 .tmp
 
+# transient pack-time manifest backup (packages/hono-preact prepack/postpack);
+# only lingers if a pack is interrupted before postpack restores package.json
+package.json.bak
+
 # lighthouse ci run output (regenerated on every `lhci collect`)
 .lighthouseci/
 
