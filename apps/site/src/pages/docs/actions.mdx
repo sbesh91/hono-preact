@@ -701,7 +701,7 @@ surfaces as a `TimeoutError` instance (with `kind: 'timeout'` and the original
 
 ## The server/client boundary
 
-`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionRef` with the module and action name. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders` or `serverActions`. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
+`serverOnlyPlugin` rewrites `serverActions` imports in the client bundle with a Proxy: each property access returns an `ActionRef` with the module and action name. `serverLoaderValidationPlugin` enforces that `.server.*` files only export `serverLoaders`, `serverActions`, `serverRooms`, or `serverSockets`. See [Overview: The server/client boundary](/docs#the-serverclient-boundary) for the full explanation.
 
 ## Security: SameSite cookies on form posts
 
