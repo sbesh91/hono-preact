@@ -11,6 +11,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import { nav } from './src/pages/docs/nav.js';
 import { generateLlmsFiles } from './src/llms/generate-llms.js';
 import { docsIndexPlugin } from './src/llms/vite-plugin-docs-index.js';
+import { workspaceAliases } from './src/workspace-aliases.js';
 
 // `__dirname` is not defined in native ESM; Vite's esbuild loader silently
 // polyfills it today, but copying this config into a plain `.mjs` or running
@@ -44,110 +45,18 @@ export default defineConfig((env) => ({
     __HONO_PREACT_VERSION__: JSON.stringify(frameworkVersion),
   },
   resolve: {
+    // Resolve framework subpaths to workspace `src/` (not published `dist/`,
+    // which workerd refuses) so the dev server and build see source directly.
+    // Generated from each package's `exports` map so a newly added subpath is
+    // covered automatically rather than needing a hand-added entry here
+    // (issue #290). Sorted longest-find first, ahead of the `@` app alias, so
+    // subpath aliases win under Vite's first-match string matching.
     alias: [
-      // Umbrella subpaths (longest-prefix first).
-      {
-        find: 'hono-preact/internal/runtime',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/internal-runtime.ts'
-        ),
-      },
-      {
-        find: 'hono-preact/internal',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/internal.ts'
-        ),
-      },
-      {
-        find: 'hono-preact/server/internal/cloudflare',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/server-internal-cloudflare.ts'
-        ),
-      },
-      {
-        find: 'hono-preact/server/internal/runtime',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/server-internal-runtime.ts'
-        ),
-      },
-      {
-        find: 'hono-preact/server',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/server.ts'
-        ),
-      },
-      {
-        find: 'hono-preact/vite',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/vite.ts'
-        ),
-      },
-      {
-        find: 'hono-preact/adapter-cloudflare',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/adapter-cloudflare.ts'
-        ),
-      },
-      {
-        find: 'hono-preact/page',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/page.ts'
-        ),
-      },
-      {
-        find: 'hono-preact',
-        replacement: resolve(
-          __dirname,
-          '../../packages/hono-preact/src/index.ts'
-        ),
-      },
-      // Workspace packages kept so the umbrella's `export * from '@hono-preact/iso'`
-      // chains through to source for HMR.
-      {
-        find: '@hono-preact/iso/internal/runtime',
-        replacement: resolve(
-          __dirname,
-          '../../packages/iso/src/internal-runtime.ts'
-        ),
-      },
-      {
-        find: '@hono-preact/iso/internal',
-        replacement: resolve(__dirname, '../../packages/iso/src/internal.ts'),
-      },
-      {
-        find: '@hono-preact/iso/page',
-        replacement: resolve(__dirname, '../../packages/iso/src/page-only.ts'),
-      },
-      {
-        find: '@hono-preact/iso',
-        replacement: resolve(__dirname, '../../packages/iso/src/index.ts'),
-      },
-      {
-        find: '@hono-preact/server/internal/cloudflare',
-        replacement: resolve(
-          __dirname,
-          '../../packages/server/src/internal-cloudflare.ts'
-        ),
-      },
-      {
-        find: '@hono-preact/server/internal/runtime',
-        replacement: resolve(
-          __dirname,
-          '../../packages/server/src/internal-runtime.ts'
-        ),
-      },
-      {
-        find: '@hono-preact/server',
-        replacement: resolve(__dirname, '../../packages/server/src/index.ts'),
-      },
+      ...workspaceAliases([
+        resolve(__dirname, '../../packages/hono-preact'),
+        resolve(__dirname, '../../packages/iso'),
+        resolve(__dirname, '../../packages/server'),
+      ]),
       { find: '@', replacement: resolve(__dirname, './src') },
     ],
   },

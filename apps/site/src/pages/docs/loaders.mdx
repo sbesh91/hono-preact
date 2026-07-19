@@ -528,7 +528,7 @@ The loader-cache registry is keyed off `Symbol.for('@hono-preact/iso/loaderCache
 
 ## Timeouts
 
-Loaders get a 30-second deadline by default. Override with `timeoutMs`:
+`timeoutMs` sets a per-loader deadline on the loader RPC path, the request the client issues when it navigates. It defaults to 30 seconds. Override it per loader:
 
 ```ts
 export const serverLoaders = {
@@ -548,6 +548,8 @@ export const serverLoaders = {
 ```
 
 Pass `timeoutMs: false` to opt out entirely. When the deadline fires, the loader's `ctx.signal` aborts, the server responds with 504, and the client receives a `TimeoutError`.
+
+`timeoutMs` governs the loader RPC path (client navigation) only. It is not enforced during the initial SSR render: there the loader runs inline as the page prerenders, with no `timeoutMs` deadline applied.
 
 ## Page bindings with `definePage`
 

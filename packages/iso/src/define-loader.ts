@@ -274,7 +274,9 @@ export type DefineLoaderOptions<T> = {
    * its configured default (30s). Pass `false` to disable the timeout for
    * this loader (rely solely on the request signal). Streaming loaders
    * (AsyncGenerator fn, live or not) default to `false` (no 30s cap, since a
-   * stream legitimately runs long) unless this is set explicitly.
+   * stream legitimately runs long) unless this is set explicitly. The
+   * deadline is enforced on the loader RPC path (client navigation) only; the
+   * initial SSR render applies no `timeoutMs`.
    */
   timeoutMs?: number | false;
   /**
