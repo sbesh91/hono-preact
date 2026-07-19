@@ -84,11 +84,11 @@ Full walkthrough: [Docs · Quick start](https://framework.sbesh.com/docs/quick-s
 Adding hono-preact to an existing project instead of scaffolding a new one:
 
 ```bash
-pnpm add hono-preact hono preact 'preact-iso@github:preactjs/preact-iso#v3' preact-render-to-string hoofd
+pnpm add hono-preact hono preact 'preact-iso@github:preactjs/preact-iso#22460942e6e0ff9b9d4a8a9cf16222ad59797777' preact-render-to-string hoofd
 pnpm add -D vite
 ```
 
-> `preact-iso` must be the v3 GitHub branch (`github:preactjs/preact-iso#v3`); the npm release is still 2.x and lacks the `RouteHook` shape (`pathParams`/`searchParams`) the framework relies on. The scaffolder pins this for you.
+> `preact-iso` comes from GitHub, pinned to an immutable v3 commit (`github:preactjs/preact-iso#22460942e6e0ff9b9d4a8a9cf16222ad59797777`); the npm release is still 2.x and lacks the `RouteHook` shape (`pathParams`/`searchParams`) the framework relies on. The scaffolder pins this for you.
 
 ## Status
 
