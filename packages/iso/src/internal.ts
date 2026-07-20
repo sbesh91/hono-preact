@@ -71,6 +71,12 @@ export {
 export type { ServerLoaderStream } from './internal/streaming-ssr.js';
 
 export {
+  recordServerDeny,
+  takeServerDeny,
+} from './internal/server-deny-registry.js';
+export type { ServerDenyRecord } from './internal/server-deny-registry.js';
+
+export {
   beginSubmit,
   endSubmit,
   isPending,
