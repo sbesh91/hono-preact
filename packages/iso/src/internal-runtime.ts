@@ -88,6 +88,10 @@ export {
   isReservedParamName,
   reservedParamNamesIn,
 } from './internal/param-slots.js';
+// Route-param capture (preact-iso `exec`) shared with @hono-preact/server's
+// page-actions handler, so a route-bound action's guard sees exactly the
+// params the client router computes for the same URL.
+export { matchRouteParams } from './internal/match-route.js';
 export * from './internal/contract.js';
 export {
   validateWithSchema,

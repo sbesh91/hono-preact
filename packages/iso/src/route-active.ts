@@ -1,4 +1,5 @@
-import { useLocation, exec } from 'preact-iso';
+import { useLocation } from 'preact-iso';
+import { matchRouteParams } from './internal/match-route.js';
 import type { RouteParams, RoutePattern } from './internal/typed-routes.js';
 
 export interface RouteMatchOptions {
@@ -7,37 +8,17 @@ export interface RouteMatchOptions {
 }
 
 /**
- * preact-iso types `exec` as always returning a `MatchProps` whose captured
- * params are `any`, but at runtime it returns `undefined` on no match. This
- * helper pins the half we use to a precise type so callers stay cast-free.
- */
-function execParams(
-  path: string,
-  route: string
-): Record<string, string> | undefined {
-  return exec(path, route)?.pathParams;
-}
-
-/**
  * Test `path` against a route pattern (same grammar as `<Route path>`).
  * Returns the captured params on a match, else null. In non-exact mode a
- * descendant path also matches (`/a` matches `/a/b`).
+ * descendant path also matches (`/a` matches `/a/b`). Delegates to the shared
+ * `matchRouteParams` so client and server capture params identically.
  */
 export function matchPath(
   path: string,
   route: string,
   exact: boolean
 ): Record<string, string> | null {
-  const direct = execParams(path, route);
-  if (direct) return direct;
-  if (!exact) {
-    // Strip a trailing slash before appending `/*`. A route already ending in
-    // `*` becomes e.g. `/files/*/*`, which never yields a false match because
-    // `exec` requires at least one matched segment per `*`.
-    const nested = execParams(path, route.replace(/\/+$/, '') + '/*');
-    if (nested) return nested;
-  }
-  return null;
+  return matchRouteParams(path, route, exact);
 }
 
 export function useRouteMatch<R extends RoutePattern>(
