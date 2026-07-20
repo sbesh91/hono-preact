@@ -1,6 +1,6 @@
 # WebSockets
 
-hono-preact ships two WebSocket layers. The typed socket primitive (`defineSocket` + `useSocket`) gives you a declarative, type-safe duplex channel wired automatically to the framework's shared connection. The raw `upgradeWebSocket` export, imported from `hono-preact`, lets you register any hand-authored WS route in `api.ts` on the same connection, following Hono's own `upgradeWebSocket` pattern; it requires the Node adapter (see below).
+hono-preact ships two WebSocket layers. The typed socket primitive (`defineSocket` + `useSocket`) gives you a declarative, type-safe duplex channel wired automatically to the framework's shared connection. The raw `upgradeWebSocket` export, imported from `hono-preact`, lets you register any hand-authored WS route in `api.ts`, following Hono's own `upgradeWebSocket` pattern. It works on both adapters: on Node it rides the framework's shared connection, and on Cloudflare it upgrades in the worker via a per-route `WebSocketPair`.
 
 For the rules around the `api.ts` mount point and framework-reserved paths, see [Composing Hono Middleware](/docs/hono-middleware).
 
@@ -177,7 +177,7 @@ The params a socket sees, both the `data` factory's second argument and the guar
 
 ### Cloudflare setup
 
-On Cloudflare Workers, `defineSocket` runs inside a per-connection Durable Object, so it needs the `HONO_PREACT_REALTIME` Durable Object binding and migration in `wrangler.jsonc` (the same binding rooms and live-loader pub/sub use). See [Rooms → Cloudflare setup](/docs/rooms#cloudflare-setup) for the binding and migration. (This applies to `defineSocket`; the raw `upgradeWebSocket` path below is separate and Node-only.)
+On Cloudflare Workers, `defineSocket` runs inside a per-connection Durable Object, so it needs the `HONO_PREACT_REALTIME` Durable Object binding and migration in `wrangler.jsonc` (the same binding rooms and live-loader pub/sub use). See [Rooms → Cloudflare setup](/docs/rooms#cloudflare-setup) for the binding and migration. (This applies to `defineSocket`. The raw `upgradeWebSocket` path below is separate and needs no Durable Object binding: it upgrades in the worker via a `WebSocketPair`.)
 
 ### Reconnect behavior
 
@@ -233,7 +233,7 @@ app.get(
 export default app;
 ```
 
-`upgradeWebSocket` resolves its upgrader lazily at request time, and only the Node adapter installs one. Under the Cloudflare adapter a raw WS route throws at request time (`no WebSocket upgrader installed`); on Cloudflare, realtime goes through the typed primitives (`defineSocket`, rooms), which run inside the framework's Durable Object.
+Both adapters install a WebSocket upgrader, so the same `upgradeWebSocket` route works on Node and Cloudflare with identical `onOpen` → `onMessage` → `onClose` semantics. The two runtimes differ only in how the connection is minted: Node shares the framework's single connection (the one that powers `serverSockets`), while Cloudflare mints a fresh `WebSocketPair` per route and needs no Durable Object binding.
 
 ### Node.js
 
@@ -262,7 +262,31 @@ A working end-to-end example lives at `apps/example-node/` in the repo.
 
 ### Cloudflare Workers
 
-The Cloudflare adapter does not install a raw upgrader, so an `upgradeWebSocket` route in `api.ts` fails at request time with `no WebSocket upgrader installed`. Realtime on Cloudflare goes through the typed primitives instead: `defineSocket` / `serverRoute(r).socket` and rooms run inside the framework's `HONO_PREACT_REALTIME` Durable Object (see the Cloudflare setup note above).
+On Cloudflare the same `api.ts` route works unchanged. The adapter upgrades each raw route in the worker via a `WebSocketPair`, so it needs no Durable Object binding (unlike `defineSocket`, which does). `onOpen` fires on Cloudflare just as it does on Node:
+
+```ts
+// src/api.ts
+import { Hono } from 'hono';
+import { upgradeWebSocket } from 'hono-preact';
+
+const app = new Hono();
+
+app.get(
+  '/ws',
+  upgradeWebSocket(() => ({
+    onOpen(_e, ws) {
+      ws.send('ready');
+    },
+    onMessage(event, ws) {
+      ws.send(`echo: ${event.data}`);
+    },
+  }))
+);
+
+export default app;
+```
+
+Each raw route is its own `WebSocketPair` connection; for cross-connection fan-out use rooms, and for the typed duplex primitive use `defineSocket` (which runs in the Durable Object).
 
 ## Avoiding reserved paths
 
@@ -332,7 +356,7 @@ Returns:
 
 ### `upgradeWebSocket(createEvents)`
 
-Wraps Hono's `upgradeWebSocket` pattern, resolved lazily at request time; only the Node adapter installs an upgrader, so this is a Node-adapter API.
+Wraps Hono's `upgradeWebSocket` pattern. Works on both adapters: Node shares the framework connection, Cloudflare upgrades via a per-route `WebSocketPair` (no Durable Object). `onOpen` fires on both.
 
 | Parameter      | Type                                            | Description                                     |
 | -------------- | ----------------------------------------------- | ----------------------------------------------- |
