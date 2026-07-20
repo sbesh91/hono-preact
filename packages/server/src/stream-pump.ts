@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { warnMissingMarker } from './document-shell.js';
 import { maskStreamError } from './sse.js';
@@ -94,6 +95,11 @@ export function streamDocumentResponse(
      * on a plain full-page load, not just the SSE path.
      */
     dev?: boolean;
+    /**
+     * The document HTTP status. Defaults to 200; set to a loader deny's status
+     * when a streaming page also rendered an SSR loader deny.
+     */
+    status?: ContentfulStatusCode;
   }
 ): Response {
   const {
@@ -102,6 +108,7 @@ export function streamDocumentResponse(
     requestSignal,
     bindRequestScope,
     dev = false,
+    status = 200,
   } = opts;
 
   // Split at </body> so we can interleave per-loader chunk script tags between
@@ -252,7 +259,7 @@ export function streamDocumentResponse(
   // `ctx.c` before that yield is sitting in Hono's prepared headers by now;
   // constructing the Response directly would drop it. Cookies written after a
   // yield run in the pump above, once headers are already sent, and are lost.
-  return c.body(responseStream, 200, {
+  return c.body(responseStream, status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Transfer-Encoding': 'chunked',
     // Prevent buffering / transformation by intermediate proxies. nginx honors

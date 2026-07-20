@@ -18,11 +18,15 @@ import {
   runRequestScope,
   captureRequestScope,
   takeServerStreamingLoaders,
+  takeServerDeny,
   dispatchServer,
   partitionUse,
   getActionResultSlot,
 } from '@hono-preact/iso/internal';
-import type { ServerLoaderStream } from '@hono-preact/iso/internal';
+import type {
+  ServerDenyRecord,
+  ServerLoaderStream,
+} from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
 import { getDevGlobalCss } from './dev-global-css.js';
 import { fontPreloadLinkHeader } from './font-preload.js';
@@ -32,7 +36,10 @@ import {
 } from './preload-modules.js';
 import { selectRoutePreload } from './route-preload-match.js';
 import { streamDocumentResponse } from './stream-pump.js';
-import { translateRootOutcome } from './outcome-translation.js';
+import {
+  applyOutcomeHeaders,
+  translateRootOutcome,
+} from './outcome-translation.js';
 
 function buildActionResultContext(): ActionResultContextValue {
   const slot = getActionResultSlot();
@@ -112,6 +119,7 @@ export async function renderPage(
     kind: 'value';
     html: string;
     streamingLoaders: ServerLoaderStream[];
+    serverDeny: ServerDenyRecord | null;
   };
   let rootResult: RootOutcome | RootValue;
   try {
@@ -163,10 +171,17 @@ export async function renderPage(
               </ActionResultContext.Provider>
             );
             const loaders = takeServerStreamingLoaders();
+            // A loader that denied during SSR rendered its errorFallback
+            // in-tree (see iso's DataReader / RouteBoundary) and recorded
+            // the response facts here. Must be read now, still inside
+            // runRequestScope: the AsyncLocalStorage store backing it is
+            // not live once this scope's promise is awaited by the caller.
+            const serverDeny = takeServerDeny();
             return {
               kind: 'value',
               html: rendered.html,
               streamingLoaders: loaders,
+              serverDeny,
             };
           },
         });
@@ -190,6 +205,15 @@ export async function renderPage(
   }
   html = rootResult.html;
   streamingLoaders = rootResult.streamingLoaders;
+
+  // Apply the recorded deny (captured above, still inside runRequestScope) to
+  // the assembled document so the branded page ships at the deny status with
+  // the deny's headers, matching client-navigation output.
+  const serverDeny = rootResult.serverDeny;
+  if (serverDeny) {
+    applyOutcomeHeaders(c, serverDeny.headers);
+    c.status(serverDeny.status);
+  }
 
   // The client entry's static-import closure plus the matched route's own
   // chunks, hinted as `modulepreload` in the document head. Resolving is
@@ -269,5 +293,6 @@ export async function renderPage(
     requestSignal: c.req.raw.signal,
     bindRequestScope,
     dev: options?.dev ?? false,
+    status: serverDeny ? serverDeny.status : undefined,
   });
 }
