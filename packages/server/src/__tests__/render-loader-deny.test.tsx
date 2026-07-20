@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
-import { defineLoader, deny } from '@hono-preact/iso';
+import { defineLoader, deny, redirect, Page } from '@hono-preact/iso';
 import { renderPage } from '../render.js';
 
 const board = defineLoader(async () => {
@@ -35,5 +35,97 @@ describe('SSR loader deny renders errorFallback at the deny status', () => {
     expect(body).toContain("No project named 'nope'.");
     // Baked for hydration:
     expect(body).toContain('data-loader-deny="');
+  });
+});
+
+// A loader with NO local errorFallback, used under a Page that HAS one.
+const bareLoader = defineLoader(async () => {
+  throw deny(404, 'nope');
+});
+const BareView = bareLoader.View(() => <div>never</div>);
+
+describe('SSR loader deny boundary matrix', () => {
+  it('a loader deny with no local fallback is bare text even under a page errorFallback (SSR cannot catch it)', async () => {
+    // A page-level errorFallback cannot catch an SSR loader deny: a throw from
+    // the suspended DataReader subtree escapes ancestor boundaries in
+    // preact-render-to-string; client-side navigation is unaffected.
+    const Layout = () => (
+      <html>
+        <body>
+          <Page
+            errorFallback={(e: Error) => <div class="page-fb">{e.message}</div>}
+          >
+            <BareView />
+          </Page>
+        </body>
+      </html>
+    );
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Layout />));
+    const res = await app.request('http://localhost/x');
+    expect(res.status).toBe(404);
+    const body = await res.text();
+    expect(body).not.toContain('<!doctype html>');
+    expect(body).not.toContain('page-fb');
+    expect(body.trim()).toBe('nope');
+  });
+
+  it('a loader deny with NO fallback anywhere is still bare text at the status', async () => {
+    const Layout = () => (
+      <html>
+        <body>
+          <BareView />
+        </body>
+      </html>
+    );
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Layout />));
+    const res = await app.request('http://localhost/x');
+    expect(res.status).toBe(404);
+    const body = await res.text();
+    expect(body).not.toContain('<!doctype html>');
+    expect(body.trim()).toBe('nope');
+  });
+
+  it('a loader redirect during SSR is a real 302 (not a rendered fallback)', async () => {
+    const redirecting = defineLoader(async () => {
+      throw redirect('/login');
+    });
+    const RedirectingView = redirecting.View(() => <div>never</div>, {
+      errorFallback: <div class="fb">err</div>,
+    });
+    const Layout = () => (
+      <html>
+        <body>
+          <RedirectingView />
+        </body>
+      </html>
+    );
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Layout />));
+    const res = await app.request('http://localhost/x');
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe('/login');
+  });
+
+  it('deny headers ride the document response', async () => {
+    const withHeader = defineLoader(async () => {
+      throw deny(403, 'no', { headers: { 'x-deny': 'yes' } });
+    });
+    const WithHeaderView = withHeader.View(() => <div>never</div>, {
+      errorFallback: (e: Error) => <div class="fb">{e.message}</div>,
+    });
+    const Layout = () => (
+      <html>
+        <body>
+          <WithHeaderView />
+        </body>
+      </html>
+    );
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Layout />));
+    const res = await app.request('http://localhost/x');
+    expect(res.status).toBe(403);
+    expect(res.headers.get('x-deny')).toBe('yes');
   });
 });

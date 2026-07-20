@@ -4,7 +4,6 @@ import type {
   ClientErrorStatusCode,
   ServerErrorStatusCode,
 } from 'hono/utils/http-status';
-import { LOADER_DENY } from './internal/loader-deny-mark.js';
 
 export type ErrorStatusCode = ClientErrorStatusCode | ServerErrorStatusCode;
 export type { RedirectStatusCode };
@@ -50,12 +49,6 @@ export type DenyOutcome = {
   headers: Record<string, string> | undefined;
   data?: unknown;
   code?: DenyCode;
-  /**
-   * Server-only SSR tag: set by `DataReader` when a loader deny with no local
-   * `errorFallback` is rethrown, so an outer `RouteBoundary` renders its own
-   * fallback while an untagged (middleware) deny keeps unwinding to bare text.
-   */
-  readonly [LOADER_DENY]?: true;
 };
 
 export type RenderOutcome = {

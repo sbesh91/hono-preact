@@ -17,7 +17,6 @@ import { ErrorBoundary } from './route-boundary.js';
 import { Envelope } from './envelope.js';
 import type { HydrationAnchor } from './envelope.js';
 import { isDeny } from '../outcomes.js';
-import { markLoaderDeny } from './loader-deny-mark.js';
 import { recordServerDeny } from './server-deny-registry.js';
 import {
   useLoaderRunner,
@@ -73,10 +72,12 @@ function DataReader<T>({
     // A pending promise (Suspense) or any non-deny throw: rethrow unchanged so
     // renderToStringAsync suspends / an outer boundary handles a plain error.
     if (!isDeny(e)) throw e;
-    // A loader deny with no LOCAL errorFallback: tag it and rethrow so an outer
-    // page-level RouteBoundary may render ITS fallback (Task 5); an untagged
-    // middleware deny would not.
-    if (errorFallback == null) throw markLoaderDeny(e);
+    // A loader deny with no LOCAL errorFallback: rethrow so it unwinds to
+    // renderPage's outer catch, which translates it to a bare-text response
+    // at the deny status (a page-level errorFallback cannot catch an SSR
+    // loader deny: a throw from the suspended DataReader subtree escapes
+    // ancestor boundaries in preact-render-to-string).
+    if (errorFallback == null) throw e;
     // Loader-local deny WITH a fallback: record the response facts and render
     // the fallback wrapped in an Envelope carrying the deny marker, so the
     // client seeds a coldError on hydration instead of refetching.

@@ -1,34 +1,7 @@
-import { Component, options } from 'preact';
+import { Component } from 'preact';
 import type { ComponentChildren, FunctionComponent } from 'preact';
 import { isOutcome } from '../outcomes.js';
-import type { DenyOutcome } from '../outcomes.js';
-import { isBrowser } from '../is-browser.js';
-import { isLoaderDeny } from './loader-deny-mark.js';
-import { recordServerDeny } from './server-deny-registry.js';
 import { toError } from './to-error.js';
-
-// `preact-render-to-string` reads this flag off preact's own global `options`
-// object; it is not part of preact's typed `Options` interface (the flag is
-// preact-render-to-string's convention, not preact's), so declare it here
-// rather than reading/writing it through a cast.
-declare module 'preact' {
-  interface Options {
-    errorBoundaries?: boolean;
-  }
-}
-
-// `preact-render-to-string` only invokes `getDerivedStateFromError` /
-// `componentDidCatch` during a string render when this flag is set (its own
-// README documents it as an explicit opt-in); nothing else in this codebase
-// sets it. Without it, `ErrorBoundary` below is dead code on the server: a
-// thrown loader error or tagged deny would unwind straight past every class
-// component and out of `renderToStringAsync`, never reaching an
-// `errorFallback`. Setting it here, at the module that owns the only
-// error-boundary class in the tree, guarantees it is set before any render
-// that could use one. It is a `preact` global, not a `preact-render-to-string`
-// call, so it has no effect on the browser's DOM-diffing render path (which
-// has always supported error boundaries natively, flag or not).
-options.errorBoundaries = true;
 
 type ErrorFallback =
   | ComponentChildren
@@ -39,87 +12,38 @@ type ErrorBoundaryProps = {
   children: ComponentChildren;
 };
 
-type ErrorBoundaryState = { error: Error | null; deny: DenyOutcome | null };
-
-/**
- * True iff `x` is a thenable: a pending SSR suspend signal (e.g. `DataReader`'s
- * `wrapPromise` reader throwing its in-flight promise on the first `read()`),
- * not an application error. `preact-render-to-string`'s OWN generic retry
- * (`error.then(renderNestedChildren)` in its `_renderToString`) only fires
- * when no class error boundary intercepts the throw first; when one DOES
- * (this component, once `options.errorBoundaries` is on), its catch calls
- * `getDerivedStateFromError`/`componentDidCatch` UNCONDITIONALLY, with no
- * thenable check of its own — so a pending promise reaching either hook would
- * otherwise be treated as a real error (`toError` on a `Promise` stringifies
- * to the useless `"[object Promise]"`). Both hooks below must hand a thenable
- * straight back (rethrow) so it keeps propagating past this boundary to that
- * generic retry, which resumes rendering once the promise settles.
- */
-function isThenable(x: unknown): x is PromiseLike<unknown> {
-  return (
-    typeof x === 'object' &&
-    x !== null &&
-    typeof (x as { then?: unknown }).then === 'function'
-  );
-}
-
 export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
-  ErrorBoundaryState
+  { error: Error | null }
 > {
-  state: ErrorBoundaryState = { error: null, deny: null };
+  state = { error: null as Error | null };
 
-  // Outcomes are control-flow, not errors. A SERVER-side, loader-tagged deny is
-  // the one exception we may render (as the route's errorFallback at the deny
-  // status); render() decides based on whether a fallback exists. Everything
-  // else - the client, a redirect/render outcome, or an untagged middleware
-  // deny - rethrows so renderPage's outer catch translates it (a middleware
-  // deny stays bare text, matching the client where it never reaches a
-  // fallback). The same guard lives in componentDidCatch because Preact may
-  // invoke both hooks; whichever fires first must not swallow. A thenable is
-  // checked FIRST, ahead of the outcome check, since it is not an outcome at
-  // all (see `isThenable` above).
-  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
-    if (isThenable(error)) throw error;
-    if (isOutcome(error)) {
-      if (!isBrowser() && isLoaderDeny(error)) {
-        // `error` is already narrowed to `DenyOutcome`, whose `.message` is a
-        // typed string: build the `Error` straight from it rather than
-        // routing through `toError`, which normalizes an arbitrary `unknown`
-        // via `String(err)` and would flatten a plain deny object to
-        // "[object Object]".
-        return { error: new Error(error.message), deny: error };
-      }
-      throw error;
-    }
-    return { error: toError(error), deny: null };
+  // Outcomes (redirect/deny/render) are NOT errors; they are control-flow
+  // signals that the dispatcher / renderPage outer catch is responsible for
+  // translating. If RouteBoundary swallowed them here, every page-scope
+  // throw from `PageMiddlewareHost` (HostConsumer rethrowing a deny on SSR,
+  // for example) would be coerced into `new Error(String(outcome))` and
+  // surfaced as the fallback UI, with no 302 / 403 / etc. reaching the
+  // network. Re-throw outcomes so the outer handler sees them. The same
+  // guard lives in `componentDidCatch` because Preact invokes both hooks
+  // when the boundary catches; whichever fires first must not swallow.
+  static getDerivedStateFromError(error: unknown) {
+    if (isOutcome(error)) throw error;
+    return { error: toError(error) };
   }
 
   componentDidCatch(error: unknown) {
-    if (isThenable(error)) throw error;
-    if (isOutcome(error) && !(!isBrowser() && isLoaderDeny(error))) throw error;
+    if (isOutcome(error)) throw error;
   }
 
   reset = () => {
-    this.setState({ error: null, deny: null });
+    this.setState({ error: null });
   };
 
   render() {
-    const { error, deny } = this.state;
+    const { error } = this.state;
     if (!error) return this.props.children;
     const f = this.props.fallback;
-    if (deny) {
-      // No fallback here: unwind to an outer boundary (which may have one).
-      if (f == null) throw deny;
-      // Record the response facts so renderPage sets the document status.
-      recordServerDeny({ status: deny.status, headers: deny.headers });
-    }
-    // Server: a caught error with no fallback must propagate so renderPage /
-    // Hono surface the failure (a 500), matching the behavior before server
-    // error boundaries were enabled. Rendering null here would silently ship a
-    // blank 200. On the client, a fallback-less boundary keeps rendering null
-    // (its long-standing behavior).
-    if (f == null && !isBrowser()) throw error;
     if (typeof f === 'function') return f(error, this.reset);
     if (f) return f;
     return null;
