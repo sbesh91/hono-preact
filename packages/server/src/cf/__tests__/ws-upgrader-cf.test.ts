@@ -112,4 +112,46 @@ describe('makeCfWebSocketUpgrader', () => {
     const listened = server.addEventListener.mock.calls.map((c) => c[0]);
     expect(listened).toEqual(['message']);
   });
+
+  it('keeps the handshake alive when onOpen throws (Node parity)', async () => {
+    const { client, server } = installGlobals();
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const upgrader = makeCfWebSocketUpgrader();
+    const handler = upgrader(() => ({
+      onOpen() {
+        throw new Error('boom');
+      },
+    }));
+    const res = (await handler(ctxWithUpgrade(true), vi.fn())) as unknown as {
+      status: number;
+      webSocket: unknown;
+    };
+    // A thrown onOpen is logged, not propagated: the 101 still returns and the
+    // client socket is handed back (on Node the connection stays open too).
+    expect(res.status).toBe(101);
+    expect(res.webSocket).toBe(client);
+    expect(server.accept).toHaveBeenCalledOnce();
+    expect(errSpy).toHaveBeenCalledOnce();
+    errSpy.mockRestore();
+  });
+
+  it('swallows a throwing onMessage listener instead of propagating', async () => {
+    const { server } = installGlobals();
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const upgrader = makeCfWebSocketUpgrader();
+    const handler = upgrader(() => ({
+      onMessage() {
+        throw new Error('boom');
+      },
+    }));
+    await handler(ctxWithUpgrade(true), vi.fn());
+    const messageListener = server.listeners['message'];
+    expect(messageListener).toBeTypeOf('function');
+    // Invoking the registered listener must not throw out (Node wraps it too).
+    expect(() =>
+      messageListener(new MessageEvent('message', { data: 'x' }))
+    ).not.toThrow();
+    expect(errSpy).toHaveBeenCalledOnce();
+    errSpy.mockRestore();
+  });
 });

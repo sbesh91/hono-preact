@@ -18,6 +18,19 @@ import type { WebSocketUpgrader } from '@hono-preact/iso/internal/runtime';
  * connector: `/__sockets` (defineSocket / rooms) routes through the connector
  * and never reaches this upgrader.
  */
+
+// Run a user WS handler so a throw is logged, not propagated. On Cloudflare an
+// unguarded onOpen throw (it runs before the 101 Response is returned) would
+// abort the handshake, while Node swallows it and keeps the connection open.
+// Mirrors @hono/node-ws and the socket open() wrapper in realtime-do.ts.
+function runGuarded(run: () => void): void {
+  try {
+    run();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 export function makeCfWebSocketUpgrader(): WebSocketUpgrader {
   return (
     createEvents: (c: Context) => WSEvents | Promise<WSEvents>
@@ -45,17 +58,21 @@ export function makeCfWebSocketUpgrader(): WebSocketUpgrader {
       });
       if (events.onMessage) {
         server.addEventListener('message', (evt) =>
-          events.onMessage?.(evt, ws)
+          runGuarded(() => events.onMessage?.(evt, ws))
         );
       }
       if (events.onClose) {
-        server.addEventListener('close', (evt) => events.onClose?.(evt, ws));
+        server.addEventListener('close', (evt) =>
+          runGuarded(() => events.onClose?.(evt, ws))
+        );
       }
       if (events.onError) {
-        server.addEventListener('error', (evt) => events.onError?.(evt, ws));
+        server.addEventListener('error', (evt) =>
+          runGuarded(() => events.onError?.(evt, ws))
+        );
       }
       server.accept();
-      events.onOpen?.(new Event('open'), ws);
+      runGuarded(() => events.onOpen?.(new Event('open'), ws));
       return new Response(null, { status: 101, webSocket: client });
     };
   };
