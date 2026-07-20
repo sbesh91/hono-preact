@@ -16,6 +16,9 @@ import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
 import { Envelope } from './envelope.js';
 import type { HydrationAnchor } from './envelope.js';
+import { isDeny } from '../outcomes.js';
+import { markLoaderDeny } from './loader-deny-mark.js';
+import { recordServerDeny } from './server-deny-registry.js';
 import {
   useLoaderRunner,
   type AccumulateOptions,
@@ -53,13 +56,44 @@ const EMPTY_LOCATION: RouteHook = Object.freeze({
 function DataReader<T>({
   reader,
   accumulate,
+  errorFallback,
   children,
 }: {
   reader: { read: () => T };
   accumulate?: AccumulateOptions;
+  errorFallback?:
+    | ComponentChildren
+    | ((err: Error, reset: () => void) => ComponentChildren);
   children: ComponentChildren;
 }) {
-  const raw = reader.read();
+  let raw: T;
+  try {
+    raw = reader.read();
+  } catch (e) {
+    // A pending promise (Suspense) or any non-deny throw: rethrow unchanged so
+    // renderToStringAsync suspends / an outer boundary handles a plain error.
+    if (!isDeny(e)) throw e;
+    // A loader deny with no LOCAL errorFallback: tag it and rethrow so an outer
+    // page-level RouteBoundary may render ITS fallback (Task 5); an untagged
+    // middleware deny would not.
+    if (errorFallback == null) throw markLoaderDeny(e);
+    // Loader-local deny WITH a fallback: record the response facts and render
+    // the fallback wrapped in an Envelope carrying the deny marker, so the
+    // client seeds a coldError on hydration instead of refetching.
+    recordServerDeny({ status: e.status, headers: e.headers });
+    const err = new Error(e.message);
+    const rendered =
+      typeof errorFallback === 'function'
+        ? // On the server there is no client runner to reset; the real reload is
+          // wired on hydration. A noop keeps the (error, reset) signature.
+          errorFallback(err, NOOP_RESET)
+        : errorFallback;
+    return (
+      <Envelope anchor={{ kind: 'deny', message: e.message }}>
+        {rendered}
+      </Envelope>
+    );
+  }
   // Project to the same public union the client carries on context, keyed on the
   // CONSUMPTION FORM (`accumulate`), so SSR and the client's FIRST render agree
   // (no hydration mismatch):
@@ -88,6 +122,8 @@ function DataReader<T>({
     </LoaderDataContext.Provider>
   );
 }
+
+const NOOP_RESET = () => {};
 
 type LoaderHostProps<T> = {
   loader: LoaderRef<T, boolean>;
@@ -201,7 +237,11 @@ export function LoaderHost<T>({
       <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
     </LoaderDataContext.Provider>
   ) : (
-    <DataReader reader={reader} accumulate={accumulate}>
+    <DataReader
+      reader={reader}
+      accumulate={accumulate}
+      errorFallback={errorFallback}
+    >
       {children}
     </DataReader>
   );

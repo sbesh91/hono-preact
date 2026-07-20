@@ -41,6 +41,28 @@ type ErrorBoundaryProps = {
 
 type ErrorBoundaryState = { error: Error | null; deny: DenyOutcome | null };
 
+/**
+ * True iff `x` is a thenable: a pending SSR suspend signal (e.g. `DataReader`'s
+ * `wrapPromise` reader throwing its in-flight promise on the first `read()`),
+ * not an application error. `preact-render-to-string`'s OWN generic retry
+ * (`error.then(renderNestedChildren)` in its `_renderToString`) only fires
+ * when no class error boundary intercepts the throw first; when one DOES
+ * (this component, once `options.errorBoundaries` is on), its catch calls
+ * `getDerivedStateFromError`/`componentDidCatch` UNCONDITIONALLY, with no
+ * thenable check of its own — so a pending promise reaching either hook would
+ * otherwise be treated as a real error (`toError` on a `Promise` stringifies
+ * to the useless `"[object Promise]"`). Both hooks below must hand a thenable
+ * straight back (rethrow) so it keeps propagating past this boundary to that
+ * generic retry, which resumes rendering once the promise settles.
+ */
+function isThenable(x: unknown): x is PromiseLike<unknown> {
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    typeof (x as { then?: unknown }).then === 'function'
+  );
+}
+
 export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
@@ -54,8 +76,11 @@ export class ErrorBoundary extends Component<
   // deny - rethrows so renderPage's outer catch translates it (a middleware
   // deny stays bare text, matching the client where it never reaches a
   // fallback). The same guard lives in componentDidCatch because Preact may
-  // invoke both hooks; whichever fires first must not swallow.
+  // invoke both hooks; whichever fires first must not swallow. A thenable is
+  // checked FIRST, ahead of the outcome check, since it is not an outcome at
+  // all (see `isThenable` above).
   static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
+    if (isThenable(error)) throw error;
     if (isOutcome(error)) {
       if (!isBrowser() && isLoaderDeny(error)) {
         // `error` is already narrowed to `DenyOutcome`, whose `.message` is a
@@ -71,6 +96,7 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: unknown) {
+    if (isThenable(error)) throw error;
     if (isOutcome(error) && !(!isBrowser() && isLoaderDeny(error))) throw error;
   }
 
