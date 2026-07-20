@@ -72,7 +72,7 @@ The first argument is `ctx: ActionCtx`, which has two fields: `signal` (an `Abor
 
 ### Route-bound actions
 
-Like loaders, an action can be bound to its route with `serverRoute(r)`. Calling `.action(fn)` is otherwise identical to `defineAction` (an action reads its data from the payload, so there is no typed `location`), and it accepts the same options (`use`, `timeoutMs`, `input`). It types the payload the same three ways too (see [Typing the payload](#typing-the-payload)) — the example below infers it from an `input` schema, so no `<Payload, Result>` generics are needed:
+Like loaders, an action can be bound to its route with `serverRoute(r)`. Calling `.action(fn)` is otherwise identical to `defineAction`: the action body's `ctx` still carries no typed `location` and reads its data from the payload, while the route's guard chain gates the request with a route-authoritative `location` matched against this route's pattern (see [Middleware](/docs/middleware)). It accepts the same options (`use`, `timeoutMs`, `input`) and types the payload the same three ways too (see [Typing the payload](#typing-the-payload)); the example below infers it from an `input` schema, so no `<Payload, Result>` generics are needed:
 
 ```ts
 import { serverRoute } from 'hono-preact';

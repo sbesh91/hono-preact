@@ -140,7 +140,13 @@ When multiple ancestors each carry `use`, they compose outer-to-inner in tree or
 
 `defineServerMiddleware` runs on the server side: during SSR, during the page-tsx pre-render, and during loader/action RPC calls. It receives the Hono `Context`, so cookies, headers, and signed-cookie helpers work as you'd expect.
 
-The context's shape follows the scope: page and loader scope carry a `location` (path and search params), while action scope does not (`ServerActionCtx` is `{ c, signal, scope, module, action, payload }`). A guard that reads `ctx.location.pathParams`, such as a per-resource gate declared on a route node, therefore applies to renders and loaders only; enforce the same rule for actions inside the action body, which receives the `input` schema's validated payload.
+The context's shape follows the scope: page and loader scope carry a `location`
+(path and search params), and route-bound action scope does too. A per-resource
+gate declared on a route node that reads `ctx.location.pathParams` therefore
+applies to renders, loaders, and route-bound actions (`serverRoute(r).action`)
+alike. Two cases carry no location: a bare `defineAction` (route-independent, so
+bind it with `serverRoute(r)` or give it a unit-level `use` to gate it), and the
+in-process `call()` path (server-to-server, which runs no route-node middleware).
 
 `defineClientMiddleware` runs only on the browser side, when the user navigates intra-app. It receives a minimal context with `scope: 'page'` and `location`; there's no Hono context because there's no server request.
 
