@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Context, Next } from 'hono';
+import type { WSEvents } from 'hono/ws';
 import { makeCfWebSocketUpgrader } from '../ws-upgrader-cf.js';
 
 // A fake workerd server socket recording the call order of accept / listener
@@ -54,11 +55,15 @@ function installGlobals() {
   return { client, server, responses };
 }
 
-function ctxWithUpgrade(hasUpgrade: boolean): Context {
+function ctxWithUpgrade(
+  hasUpgrade: boolean,
+  upgradeValue = 'websocket'
+): Context {
   return {
     req: {
+      url: 'https://example.com/ws',
       header: (k: string) =>
-        k === 'Upgrade' && hasUpgrade ? 'websocket' : undefined,
+        k === 'Upgrade' && hasUpgrade ? upgradeValue : undefined,
     },
   } as unknown as Context;
 }
@@ -111,6 +116,41 @@ describe('makeCfWebSocketUpgrader', () => {
     await handler(ctxWithUpgrade(true), vi.fn());
     const listened = server.addEventListener.mock.calls.map((c) => c[0]);
     expect(listened).toEqual(['message']);
+  });
+
+  it('upgrades on a case-insensitive Upgrade header value (Node parity)', async () => {
+    const { client } = installGlobals();
+    const upgrader = makeCfWebSocketUpgrader();
+    const handler = upgrader(() => ({ onMessage() {} }));
+    // `Upgrade: WebSocket` (mixed case) is a valid RFC 6455 token; Node upgrades
+    // it, so Cloudflare must too.
+    const res = (await handler(
+      ctxWithUpgrade(true, 'WebSocket'),
+      vi.fn()
+    )) as unknown as { status: number; webSocket: unknown };
+    expect(res.status).toBe(101);
+    expect(res.webSocket).toBe(client);
+  });
+
+  it('exposes the request URL on ws.url (Node parity)', async () => {
+    installGlobals();
+    const upgrader = makeCfWebSocketUpgrader();
+    let seenUrl: URL | null = null;
+    // Annotate the factory return as WSEvents so onOpen's params are typed (a
+    // union return type would not flow contextual types to the object literal).
+    const handler = upgrader(
+      (): WSEvents => ({
+        onOpen(_e, ws) {
+          seenUrl = ws.url;
+        },
+      })
+    );
+    await handler(ctxWithUpgrade(true), vi.fn());
+    // Node's @hono/node-ws sets ws.url to the request URL; the workerd server
+    // socket has none, so the upgrader must supply c.req.url for parity.
+    expect(seenUrl).toBeInstanceOf(URL);
+    // String(URL) is its href; avoids narrowing the closure-assigned local.
+    expect(String(seenUrl)).toBe('https://example.com/ws');
   });
 
   it('keeps the handshake alive when onOpen throws (Node parity)', async () => {

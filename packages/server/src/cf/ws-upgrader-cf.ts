@@ -36,7 +36,9 @@ export function makeCfWebSocketUpgrader(): WebSocketUpgrader {
     createEvents: (c: Context) => WSEvents | Promise<WSEvents>
   ): MiddlewareHandler => {
     return async (c, next) => {
-      if (c.req.header('Upgrade') !== 'websocket') {
+      // Case-insensitive per RFC 6455 (and matching @hono/node-ws), so a client
+      // sending `Upgrade: WebSocket` upgrades on Cloudflare just as on Node.
+      if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
         await next();
         return;
       }
@@ -53,7 +55,9 @@ export function makeCfWebSocketUpgrader(): WebSocketUpgrader {
         get readyState() {
           return server.readyState;
         },
-        url: server.url ? new URL(server.url) : null,
+        // The workerd server socket has no meaningful `url`; use the request URL
+        // so `ws.url` carries the same value handlers see on Node (@hono/node-ws).
+        url: new URL(c.req.url),
         send: (source) => server.send(source),
       });
       if (events.onMessage) {
