@@ -235,6 +235,8 @@ const StatsView = statsLoader.View(({ status, data }) => {
 
 This `error` arm handles a reload that fails after the first load succeeded. A cold first-load failure routes to the error boundary and `errorFallback` instead. See [Loading States](/docs/loading-states) for the distinction.
 
+During SSR, a cold first-load failure with a local `errorFallback` (including a loader that throws `deny(status, message)`) renders that `errorFallback` into the full document at the failure's status, and hydrates without refetching. A loader that fails without a local `errorFallback` responds with the status and a plain-text body.
+
 ### `.View(render, { initial, reduce })`: streaming loaders
 
 Streaming loaders use the accumulating form. Each chunk is folded into accumulated state and the render function receives a `StreamState<Acc>` discriminated union:
