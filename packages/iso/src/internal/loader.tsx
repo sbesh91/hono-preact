@@ -251,10 +251,22 @@ export function LoaderHost<T>({
     if (errorFallback != null) {
       // Local error UI. `reset` re-enters the loader (clears the error and
       // refetches), mirroring the old ErrorBoundary `reset` semantics.
-      body =
+      const rendered =
         typeof errorFallback === 'function'
           ? errorFallback(view.error, reload)
           : errorFallback;
+      // Hydration parity: a baked-deny coldError (seeded from the SSR marker,
+      // Task 7) re-wraps the fallback in the SAME `data-loader-deny` Envelope
+      // the server emitted (Task 6), so the client DOM matches the server DOM
+      // under the shared `useId` and no mismatch / refetch occurs. A pure
+      // client-nav coldError (a real failed fetch, no baked marker) stays bare.
+      body = view.fromBakedDeny ? (
+        <Envelope anchor={{ kind: 'deny', message: view.error.message }}>
+          {rendered}
+        </Envelope>
+      ) : (
+        rendered
+      );
     } else {
       // No local handler: re-throw so an OUTER boundary (a page-level
       // `errorFallback` / `RouteBoundary`) catches it, exactly as the thrown
