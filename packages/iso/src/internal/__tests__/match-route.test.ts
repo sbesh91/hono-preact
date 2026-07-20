@@ -3,9 +3,9 @@ import { matchRouteParams } from '../match-route.js';
 
 describe('matchRouteParams', () => {
   it('captures params on an exact match', () => {
-    expect(matchRouteParams('/projects/p1', '/projects/:projectId', true)).toEqual(
-      { projectId: 'p1' }
-    );
+    expect(
+      matchRouteParams('/projects/p1', '/projects/:projectId', true)
+    ).toEqual({ projectId: 'p1' });
   });
 
   it('returns null when a descendant path does not match in exact mode', () => {
@@ -21,6 +21,8 @@ describe('matchRouteParams', () => {
   });
 
   it('returns null for an unrelated path even in non-exact mode', () => {
-    expect(matchRouteParams('/other/x', '/projects/:projectId', false)).toBeNull();
+    expect(
+      matchRouteParams('/other/x', '/projects/:projectId', false)
+    ).toBeNull();
   });
 });
