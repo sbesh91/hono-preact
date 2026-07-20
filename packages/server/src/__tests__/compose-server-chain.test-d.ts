@@ -23,6 +23,11 @@ function _ctxNarrowingProbe() {
   >();
   // A loader ctx carries module/loader; it must NOT collapse to the action arm.
   expectTypeOf<ServerCtx<'loader'>>().not.toEqualTypeOf<ServerActionCtx>();
+  // Action ctx carries an OPTIONAL route-authoritative location (#288): present
+  // for route-bound actions, absent for bare actions and the call() path.
+  expectTypeOf<ServerActionCtx['location']>().toEqualTypeOf<
+    ServerLoaderCtx['location'] | undefined
+  >();
 }
 
 // ComposedServerChain<S> threads the scope into serverMw and keeps the

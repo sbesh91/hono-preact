@@ -4,8 +4,9 @@ import { archivedGateServer, archivedOutcomeFor } from '../archived-gate.js';
 import { resetDemoData, getProjectBySlug } from '../data.js';
 
 // The gate branches on scope: page scope swaps the tree via render() (a
-// page-scope-only outcome), loader scope denies 410, action scope passes
-// through (actions carry no location).
+// page-scope-only outcome), while loader scope denies 410 and action scope
+// denies 403. Route-bound actions now carry a route-authoritative location
+// (#288), so the same per-resource rule covers them.
 //
 // A hand-built ServerCtx can't structurally satisfy Hono's Context (private
 // fields make it effectively nominal, see project-board.server.ts's
@@ -38,8 +39,14 @@ describe('archivedGateServer', () => {
     expect(archivedOutcomeFor('loader', 'inf')).toBeUndefined();
   });
 
-  it('passes actions through regardless of project state', () => {
-    expect(archivedOutcomeFor('action', 'legacy')).toBeUndefined();
+  it('denies an action on an archived project (403)', () => {
+    const outcome = archivedOutcomeFor('action', 'legacy');
+    expect(outcome && isDeny(outcome)).toBe(true);
+    if (outcome && isDeny(outcome)) expect(outcome.status).toBe(403);
+  });
+
+  it('passes an action on a live project through', () => {
+    expect(archivedOutcomeFor('action', 'inf')).toBeUndefined();
   });
 
   it('is registered as server middleware', () => {

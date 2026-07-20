@@ -26,6 +26,15 @@ export type ServerActionCtx = ServerBaseCtx & {
   module: string;
   action: string;
   payload: unknown;
+  /**
+   * Route-authoritative location for route-bound actions
+   * (`serverRoute(r).action`): the invoking page URL matched against the
+   * action's own declared pattern, so a route-node guard can gate action scope
+   * by `ctx.location.pathParams` exactly as it does page and loader scope.
+   * Absent for a bare `defineAction` (route-independent, runs no route-node page
+   * tier) and for the in-process `call()` path (runs no route-node middleware).
+   */
+  location?: RouteHook;
 };
 
 export type ServerCtx<S extends Scope = Scope> = S extends 'page'

@@ -120,10 +120,12 @@ export interface RouteBinder<RouteId extends string> {
    * EXACT route pattern rather than fuzzy-matching the POST URL, closing the
    * `/a/:x` vs `/a/:y` collision window that a bare `defineAction` is subject to.
    *
-   * Unlike `.loader`, there is no `ctx.location`/param typing: an action's
-   * `ActionCtx` carries only `c`, `signal`, and `call`, and the action reads its
-   * data from the validated `payload`. The overloads therefore mirror
-   * `defineAction`: pass `{ input }` to validate and infer the payload type.
+   * The guard chain resolved for this action runs with a route-authoritative
+   * `location` (path and search params matched against this route's pattern),
+   * the same as `.loader`. The action body itself still receives only `c`,
+   * `signal`, and `call` on `ActionCtx`, reading its data from the validated
+   * `payload`; the overloads therefore mirror `defineAction`: pass `{ input }`
+   * to validate and infer the payload type.
    */
   action<TInput extends StandardSchemaV1, TResult, TChunk = never>(
     fn: ActionFn<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>,
