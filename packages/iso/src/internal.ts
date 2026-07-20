@@ -35,6 +35,8 @@ export {
 } from './internal/route-locations.js';
 
 export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
+export { getPreloadedDeny, deletePreloadedDeny } from './internal/preload.js';
+export type { PreloadedDeny } from './internal/preload.js';
 export {
   runRequestScope,
   getRequestStore,
