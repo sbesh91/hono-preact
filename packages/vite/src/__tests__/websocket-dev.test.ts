@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const exampleNodeRoot = resolve(here, '../../../../apps/example-node');
 const cfWsRoot = resolve(here, 'fixtures/cf-ws');
+const cfFwWsRoot = resolve(here, 'fixtures/cf-fw-ws');
 
 // Generous timeouts: starting a real Vite dev server (and, for the Cloudflare
 // case, workerd) takes noticeably longer than an in-memory unit test.
@@ -28,6 +29,33 @@ function echoOverWs(port: number, message: string): Promise<string> {
       clearTimeout(timer);
       ws.close();
       res(data.toString());
+    });
+    ws.on('error', (err) => {
+      clearTimeout(timer);
+      rej(err);
+    });
+  });
+}
+
+// Collects the first frame (the onOpen 'ready' push), then sends `message` and
+// resolves with [firstFrame, echoFrame]. Proves onOpen parity + echo on CF.
+function readyThenEcho(port: number, message: string): Promise<string[]> {
+  return new Promise<string[]>((res, rej) => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    const frames: string[] = [];
+    const timer = setTimeout(() => {
+      ws.close();
+      rej(new Error('ws timeout'));
+    }, 15_000);
+    ws.on('message', (data) => {
+      frames.push(data.toString());
+      if (frames.length === 1) {
+        ws.send(message);
+      } else {
+        clearTimeout(timer);
+        ws.close();
+        res(frames);
+      }
     });
     ws.on('error', (err) => {
       clearTimeout(timer);
@@ -78,5 +106,34 @@ describe('Cloudflare adapter: WebSocket in dev', () => {
   it('echoes a message over /ws', async () => {
     const reply = await echoOverWs(serverPort(server), 'hello');
     expect(reply).toBe('echo: hello');
+  }, 20_000);
+});
+
+describe('Cloudflare framework adapter: raw upgradeWebSocket', () => {
+  let server: ViteDevServer;
+  let originalCwd: string;
+
+  beforeAll(async () => {
+    // Same reason as the Node adapter block above: honoPreact() writes its
+    // generated server-entry files relative to process.cwd(), and (unlike the
+    // plain @cloudflare/vite-plugin cf-ws fixture, whose wrangler `main` is a
+    // static file) this fixture's `main` IS that generated file, so it must
+    // land under the fixture root before the Cloudflare plugin's `config`
+    // hook reads `main` off wrangler.jsonc.
+    originalCwd = process.cwd();
+    process.chdir(cfFwWsRoot);
+    server = await createServer({ root: cfFwWsRoot, server: { port: 0 } });
+    await server.listen();
+  }, 60_000);
+
+  afterAll(async () => {
+    await server?.close();
+    process.chdir(originalCwd);
+  });
+
+  it('fires onOpen (parity) then echoes over /ws with no Durable Object', async () => {
+    const [ready, echo] = await readyThenEcho(serverPort(server), 'hello');
+    expect(ready).toBe('ready');
+    expect(echo).toBe('echo: hello');
   }, 20_000);
 });
