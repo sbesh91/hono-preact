@@ -2,7 +2,12 @@ import type { RouteHook } from 'preact-iso';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { LoaderRef } from '../define-loader.js';
 import { isBrowser } from '../is-browser.js';
-import { getPreloadedData, deletePreloadedData } from './preload.js';
+import {
+  getPreloadedData,
+  deletePreloadedData,
+  getPreloadedDeny,
+  deletePreloadedDeny,
+} from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
 import { runLoader } from './loader-runner.js';
@@ -124,6 +129,19 @@ export function useLoaderRunner<T>(
     }
   });
 
+  // SSR-baked deny seed: set on the first client render when a `data-loader-deny`
+  // marker is present. While set, the view projects a coldError from it and NO
+  // fetch runs. A reload() clears it so a real fetch takes over.
+  const bakedDenyRef = useRef<Error | null>(null);
+  const denyConsumedRef = useRef(false);
+  const denyClearedRef = useRef(false);
+  useEffect(() => {
+    if (denyConsumedRef.current && !denyClearedRef.current) {
+      denyClearedRef.current = true;
+      deletePreloadedDeny(id);
+    }
+  });
+
   // True while a fetch is in flight: a cold load (no value yet) or an explicit
   // reload. Tracked via a ref so reload() can read it without recapturing on
   // every state change, and so the wrapPromise branch below can flip it
@@ -187,6 +205,9 @@ export function useLoaderRunner<T>(
   );
 
   const runReload = useCallback(() => {
+    // A reload supersedes the SSR-baked deny: drop the seed so the view projects
+    // from the real phase (loading -> success/coldError) as the refetch runs.
+    bakedDenyRef.current = null;
     inFlightRef.current = true;
     // Enter `revalidating` retaining the prior value (stale-while-revalidate);
     // with NO settled value fall back to a cold `loading`. Presence is
@@ -475,15 +496,33 @@ export function useLoaderRunner<T>(
       // navigation never shows `loading` and lands on stale/`null` data). Gate
       // the read on first-render, exactly like the cache branch.
       const isFirstRender = readerRef.current === null;
-      const preloaded: SyncValue<T> = isFirstRender
-        ? getPreloadedData<T>(id)
-        : { present: false };
-      if (preloaded.present) {
-        readerRef.current = buildPreloadReader(preloaded);
-      } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
-        readerRef.current = buildCacheReader();
+
+      // Baked-deny seed takes precedence over any value preload/cache/fetch: a
+      // denied loader wrote NO `data-loader`, only `data-loader-deny`.
+      const bakedDeny =
+        isFirstRender && isBrowser()
+          ? getPreloadedDeny(id)
+          : ({ present: false } as const);
+      if (bakedDeny.present) {
+        denyConsumedRef.current = true;
+        bakedDenyRef.current = new Error(bakedDeny.message);
+        // Stub reader: the client never reads it; reload() rebuilds a real one.
+        readerRef.current = { read: () => undefined as unknown as T };
       } else {
-        readerRef.current = buildColdFetchReader();
+        const preloaded: SyncValue<T> = isFirstRender
+          ? getPreloadedData<T>(id)
+          : { present: false };
+        if (preloaded.present) {
+          readerRef.current = buildPreloadReader(preloaded);
+        } else if (
+          isBrowser() &&
+          isFirstRender &&
+          loaderRef.cache.has(locKey)
+        ) {
+          readerRef.current = buildCacheReader();
+        } else {
+          readerRef.current = buildColdFetchReader();
+        }
       }
     }
   }
@@ -510,8 +549,18 @@ export function useLoaderRunner<T>(
       }
     : toLoaderView(phase, syncRef.current);
 
+  // While the baked-deny seed is active, project it over whatever `view` would
+  // otherwise show (the phase is still `loading`, since no fetch ran): a
+  // coldError carrying `fromBakedDeny: true` so `loader.tsx` routes to
+  // `errorFallback` exactly like a real cold error, and Task 8 can re-wrap it
+  // in a matching Envelope.
+  const finalView: RunnerView<T> =
+    bakedDenyRef.current !== null
+      ? { kind: 'coldError', error: bakedDenyRef.current, fromBakedDeny: true }
+      : view;
+
   return {
-    view,
+    view: finalView,
     reload,
     reloading,
     // Non-null here: every branch above assigns `readerRef.current` before

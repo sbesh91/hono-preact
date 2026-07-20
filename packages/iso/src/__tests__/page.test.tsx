@@ -12,6 +12,8 @@ import { HonoRequestContext } from '../internal/contexts.js';
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
+  getPreloadedDeny: vi.fn(() => ({ present: false })),
+  deletePreloadedDeny: vi.fn(),
 }));
 
 // The loader tests below exercise the CLIENT render contract through <Page>:

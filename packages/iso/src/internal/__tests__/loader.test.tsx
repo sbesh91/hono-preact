@@ -22,6 +22,8 @@ import {
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
+  getPreloadedDeny: vi.fn(() => ({ present: false })),
+  deletePreloadedDeny: vi.fn(),
 }));
 
 const loc = {

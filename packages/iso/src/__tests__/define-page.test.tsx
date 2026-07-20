@@ -14,6 +14,8 @@ const fakeC = {} as Context;
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
+  getPreloadedDeny: vi.fn(() => ({ present: false })),
+  deletePreloadedDeny: vi.fn(),
 }));
 
 // Browser mode: loaders are state-based (no Suspense). The loader.View test
