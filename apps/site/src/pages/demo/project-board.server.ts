@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { defineAction, deny, publish, serverRoute } from 'hono-preact';
+import { deny, publish, serverRoute } from 'hono-preact';
 import {
   getProjectBySlug,
   listTasksForProject,
@@ -139,7 +139,7 @@ export const serverLoaders = {
 };
 
 export const serverActions = {
-  createTask: defineAction(
+  createTask: route.action(
     async (ctx, input) => {
       const user = await currentUser(ctx.c);
       if (!user) throw deny(401, 'Sign in to create tasks.');
@@ -154,7 +154,7 @@ export const serverActions = {
   // One action drives both moves and priority changes so a single
   // useOptimisticAction can cover drag + menu interactions. The schema
   // types the payload; no generics needed.
-  patchTask: defineAction(
+  patchTask: route.action(
     async (ctx, input): Promise<{ ok: true }> => {
       const user = await currentUser(ctx.c);
       if (input.status === 'done') {
@@ -177,7 +177,7 @@ export const serverActions = {
     { input: PatchTaskSchema }
   ),
 
-  deleteTask: defineAction(
+  deleteTask: route.action(
     async (ctx, input): Promise<{ ok: true }> => {
       const user = await currentUser(ctx.c);
       if (!user) throw deny(401, 'Sign in to delete tasks.');
@@ -191,7 +191,7 @@ export const serverActions = {
   // so on Workers a restore may land on a fresh isolate and find nothing;
   // denying 404 lets the client surface "undo expired" honestly. Reuses
   // DeleteTaskSchema: the payload is the same single taskId.
-  restoreTask: defineAction(
+  restoreTask: route.action(
     async (ctx, input) => {
       const user = await currentUser(ctx.c);
       if (!user) throw deny(401, 'Sign in to restore tasks.');
