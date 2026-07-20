@@ -152,4 +152,13 @@ describe('cloudflareAdapter', () => {
   it('exposes a vitePlugins function', () => {
     expect(typeof cloudflareAdapter().vitePlugins).toBe('function');
   });
+
+  it('wrapEntry installs the raw-WS upgrader for api.ts upgradeWebSocket routes', () => {
+    const tail = cloudflareAdapter().wrapEntry(ctx);
+    // Imported from the CF-only server door alongside the connector/DO.
+    expect(tail).toContain('makeCfWebSocketUpgrader');
+    // installWebSocketUpgrader is grouped with the other iso-runtime installers.
+    expect(tail).toContain('installWebSocketUpgrader,');
+    expect(tail).toContain('installWebSocketUpgrader(makeCfWebSocketUpgrader());');
+  });
 });

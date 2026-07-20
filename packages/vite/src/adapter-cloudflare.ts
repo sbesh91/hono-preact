@@ -107,10 +107,12 @@ export function cloudflareAdapter(
         `  installSocketRegistry,\n` +
         `  buildSocketRegistry,\n` +
         `  makeAssetsPreloadReader,\n` +
+        `  makeCfWebSocketUpgrader,\n` +
         `} from 'hono-preact/server/internal/cloudflare';\n` +
         `import {\n` +
         `  installRealtimeConnector,\n` +
         `  installPubSubBackend,\n` +
+        `  installWebSocketUpgrader,\n` +
         `} from 'hono-preact/internal/runtime';\n` +
         `import { installPreloadModules } from 'hono-preact/server/internal/runtime';\n` +
         `\n` +
@@ -134,6 +136,13 @@ export function cloudflareAdapter(
           realtimeBinding
         )})\n` +
         `);\n` +
+        `\n` +
+        `// Raw \`upgradeWebSocket\` routes in api.ts upgrade in the worker via a\n` +
+        `// WebSocketPair (no Durable Object; the DO is only for fan-out state).\n` +
+        `// This upgrader fires onOpen for parity with the Node adapter, unlike\n` +
+        `// hono/cloudflare-workers. Independent of the realtime connector above:\n` +
+        `// /__sockets goes through the connector, never this upgrader.\n` +
+        `installWebSocketUpgrader(makeCfWebSocketUpgrader());\n` +
         `\n` +
         `// Re-export the Durable Object class under the name wrangler.jsonc binds.\n` +
         `export class ${realtimeClass} extends __HonoPreactRealtimeDO {}\n` +

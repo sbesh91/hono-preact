@@ -32,3 +32,4 @@ export {
   getRealtimeRuntime,
 } from './cf/cf-pubsub.js';
 export { makeAssetsPreloadReader } from './cf/preload-reader.js';
+export { makeCfWebSocketUpgrader } from './cf/ws-upgrader-cf.js';
