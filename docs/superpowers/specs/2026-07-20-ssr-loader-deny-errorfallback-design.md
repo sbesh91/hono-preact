@@ -2,6 +2,34 @@
 
 Closes #287.
 
+## Design revision (2026-07-20, during implementation)
+
+One part of the design below did not survive contact with the renderer and was
+dropped: **page-level `errorFallback` catching a loader deny that has no local
+`errorFallback`, during SSR.** It is technically infeasible. `preact-render-to-string`
+does not propagate a value thrown from within a suspended subtree (the loader's
+`DataReader`) to an ancestor error boundary; the throw escapes straight out of
+the render (confirmed with two isolated diagnostics, including a "trampoline"
+that returns successfully from the retry and throws from a child, which also
+escaped). Enabling `options.errorBoundaries` did not help and additionally broke
+the loader's own Suspense mechanism, so it was removed. What ships:
+
+- Loader deny **with a local `errorFallback`**: renders the branded fallback in
+  a full document at the deny status, with the hydration bake. (The #287 repro,
+  the demo board View, has a local `errorFallback`, so it is fully fixed.)
+- Loader deny **without** a local `errorFallback` (whether or not a page-level
+  `errorFallback` exists): bare text at the deny status, as today.
+- Redirect during SSR: real 302. Deny headers ride the response. Middleware-scope
+  deny: bare text. Client-side navigation is unchanged (the client boundary still
+  catches loader errors as before).
+
+Consequently the sections below describing the loader-deny tag (§2a), the
+`ErrorBoundary` server-deny branch (§2), and the page-level row of the fallback
+table are historical: that machinery was built and then reverted. The rest
+(the per-request registry, the `data-loader-deny` hydration channel, the
+`DataReader` local-fallback bake, the client seed and re-wrap, and the
+`renderPage` status application) shipped as described.
+
 ## Problem
 
 When a page loader throws `deny()` during SSR, the response short-circuits to a
