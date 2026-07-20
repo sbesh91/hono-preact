@@ -1,6 +1,7 @@
 // Hand-authored Hono routes mounted by the framework (the plugin auto-loads
 // src/api.ts when present; the default export must be the Hono app).
 import { Hono } from 'hono';
+import { upgradeWebSocket } from 'hono-preact';
 import { listAllTasks, listProjects } from './demo/data.js';
 
 const app = new Hono();
@@ -13,9 +14,19 @@ app.get('/api/demo/health', (c) =>
   })
 );
 
-// No raw WebSocket route here: upgradeWebSocket requires the Node adapter's
-// upgrader, and this site deploys on the Cloudflare adapter, which does not
-// install one (issue #282 finding; the framework's own /__sockets realtime
-// path works fine, it rides the Durable Object instead).
+// Raw WebSocket route. Works on both adapters: on Cloudflare it upgrades via a
+// WebSocketPair in the worker (no Durable Object), firing onOpen for parity
+// with Node.
+app.get(
+  '/api/demo/echo',
+  upgradeWebSocket(() => ({
+    onOpen(_e, ws) {
+      ws.send('ready');
+    },
+    onMessage(event, ws) {
+      ws.send(`echo: ${event.data}`);
+    },
+  }))
+);
 
 export default app;
