@@ -88,6 +88,12 @@ export class ErrorBoundary extends Component<
       // Record the response facts so renderPage sets the document status.
       recordServerDeny({ status: deny.status, headers: deny.headers });
     }
+    // Server: a caught error with no fallback must propagate so renderPage /
+    // Hono surface the failure (a 500), matching the behavior before server
+    // error boundaries were enabled. Rendering null here would silently ship a
+    // blank 200. On the client, a fallback-less boundary keeps rendering null
+    // (its long-standing behavior).
+    if (f == null && !isBrowser()) throw error;
     if (typeof f === 'function') return f(error, this.reset);
     if (f) return f;
     return null;

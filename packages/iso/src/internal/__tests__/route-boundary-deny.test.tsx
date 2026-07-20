@@ -79,4 +79,17 @@ describe('RouteBoundary server deny handling', () => {
       expect(takeServerDeny()).toBeNull();
     });
   });
+
+  it('rethrows a plain Error when there is no fallback (server)', async () => {
+    await runRequestScope(async () => {
+      expect(() =>
+        renderToString(
+          <RouteBoundary>
+            <Thrower error={new Error('boom')} />
+          </RouteBoundary>
+        )
+      ).toThrow('boom');
+      expect(takeServerDeny()).toBeNull();
+    });
+  });
 });
