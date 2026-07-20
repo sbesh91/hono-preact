@@ -93,14 +93,20 @@ is a hydration concern carried separately by the anchor (below). Exported via
 ### 2. `ErrorBoundary` gains server-deny handling (page-level + general)
 
 `packages/iso/src/internal/route-boundary.tsx`. Today the boundary rethrows all
-outcomes. New behavior:
+outcomes. New behavior — but it must render a fallback ONLY for a deny that
+originated from a **loader**, never a middleware-scope deny. On the client a
+middleware deny is applied by `PageMiddlewareHost` (navigation), never rendered
+by an `errorFallback`; letting a page-level `errorFallback` catch a middleware
+deny on the server would be a new SSR/client divergence. Loader denies are
+tagged (§2a) so the boundary can tell them apart:
 
 ```ts
 static getDerivedStateFromError(error: unknown) {
   if (isOutcome(error)) {
-    // Server-side deny with (potentially) a fallback: capture it so render()
-    // can decide. Client, or any non-deny outcome (redirect/render): unwind.
-    if (!isBrowser() && isDeny(error)) {
+    // A LOADER deny (tagged) on the server may render this boundary's fallback.
+    // Everything else — the client, redirect/render outcomes, or an untagged
+    // middleware deny — unwinds so the outer handler translates it (bare text).
+    if (!isBrowser() && isLoaderDeny(error)) {
       return { error: toError(error), deny: error };
     }
     throw error;
@@ -139,6 +145,33 @@ non-deny outcomes (still rethrown). Client boundaries never see raw outcomes
 anyway — client-nav decodes a deny envelope to an `Error` before it reaches any
 boundary.
 
+### 2a. Loader-deny tag
+
+New `packages/iso/src/internal/loader-deny-mark.ts`. A `Symbol.for(...)` key
+declared as an optional field on `DenyOutcome` (no cast — the repo's type-cast
+guidance: declare the symbol key on the value's type, narrow with `in`):
+
+```ts
+export const LOADER_DENY = Symbol.for('@hono-preact/loader-deny');
+
+// Mutates the outcome in place so the tag rides it up the tree. Returns it for
+// chaining a rethrow.
+export function markLoaderDeny(o: DenyOutcome): DenyOutcome {
+  o[LOADER_DENY] = true;
+  return o;
+}
+
+export function isLoaderDeny(x: unknown): x is DenyOutcome {
+  return isDeny(x) && (x as DenyOutcome)[LOADER_DENY] === true;
+}
+```
+
+`DenyOutcome` (`outcomes.ts:45`) gains `readonly [LOADER_DENY]?: true`. Only
+`DataReader` (§3), on the no-local-fallback rethrow, sets the tag. Middleware
+denies (surfaced by `HostConsumer`/`PageMiddlewareHost`) are never tagged, so
+they keep unwinding to bare text — preserving the non-goal and keeping
+`render-honocontext.test.tsx:80-104` green for the right reason.
+
 ### 3. Loader-local interception + hydration bake
 
 `packages/iso/src/internal/loader.tsx`. `DataReader` is server-only. Thread the
@@ -154,9 +187,10 @@ function DataReader({ reader, accumulate, errorFallback, children }) {
     if (!isDeny(e)) throw e;
     // Loader-local deny with a fallback: record status, render the fallback
     // wrapped in an Envelope carrying the deny marker so hydration seeds
-    // coldError instead of refetching. No local fallback: rethrow so an outer
-    // (page-level) boundary handles it — bubbles to Page's RouteBoundary.
-    if (errorFallback == null) throw e;
+    // coldError instead of refetching. No local fallback: TAG it as a loader
+    // deny and rethrow so an outer (page-level) RouteBoundary can render its
+    // own fallback (§2) — an untagged middleware deny would not.
+    if (errorFallback == null) throw markLoaderDeny(e);
     recordServerDeny({ status: e.status, headers: e.headers });
     const err = toError(e);
     return (
@@ -272,15 +306,16 @@ loader throws deny(404)
         ▼
 DataReader.read() throws  ──has local errorFallback?──┐
         │ yes                                          │ no
-        ▼                                              ▼ rethrow
+        ▼                                              ▼ markLoaderDeny + rethrow
 recordServerDeny(404)                          bubbles up tree
 render fallback in <Envelope kind:'deny'>              │
 data-loader-deny={message}                             ▼
-        │                                    RouteBoundary(page fb)?
+        │                                    RouteBoundary(page fb) + isLoaderDeny?
         │                              ┌── yes: recordServerDeny(404)
         │                              │        render page fallback (no bake)
         │                              └── no:  rethrow → translateRootOutcome
         │                                       → bare text @ 404 (unchanged)
+        │                                 (a middleware deny is untagged → here)
         ▼
 prerender resolves → renderPage: takeServerDeny() → c.status(404) + headers
         ▼
@@ -317,7 +352,9 @@ render fallback in <Envelope kind:'deny'> → DOM matches SSR, no flash
 | File | Change |
 | --- | --- |
 | `packages/iso/src/internal/server-deny-registry.ts` | **new**: record/take + type |
-| `packages/iso/src/internal/route-boundary.tsx` | server-deny handling in `ErrorBoundary` |
+| `packages/iso/src/internal/loader-deny-mark.ts` | **new**: `LOADER_DENY` symbol, `markLoaderDeny`, `isLoaderDeny` |
+| `packages/iso/src/outcomes.ts` | `DenyOutcome` gains optional `[LOADER_DENY]?: true` |
+| `packages/iso/src/internal/route-boundary.tsx` | server-deny handling in `ErrorBoundary` (tagged loader denies only) |
 | `packages/iso/src/internal/loader.tsx` | `DataReader` deny interception + bake; client coldError re-wrap |
 | `packages/iso/src/internal/envelope.tsx` | `HydrationAnchor` deny kind → `data-loader-deny` |
 | `packages/iso/src/internal/preload.ts` | `getPreloadedDeny` |
