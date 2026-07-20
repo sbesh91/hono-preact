@@ -262,7 +262,7 @@ A working end-to-end example lives at `apps/example-node/` in the repo.
 
 ### Cloudflare Workers
 
-On Cloudflare the same `api.ts` route works unchanged. The adapter upgrades each raw route in the worker via a `WebSocketPair`, so it needs no Durable Object binding (unlike `defineSocket`, which does). `onOpen` fires on Cloudflare just as it does on Node:
+The same `api.ts` route runs on Cloudflare with no adapter-specific code. The adapter upgrades each raw route in the worker via a `WebSocketPair`, so it needs no Durable Object binding (unlike `defineSocket`, which does). `onOpen` fires on Cloudflare just as it does on Node:
 
 ```ts
 // src/api.ts
