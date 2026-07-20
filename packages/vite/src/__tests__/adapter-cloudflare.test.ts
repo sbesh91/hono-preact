@@ -159,6 +159,8 @@ describe('cloudflareAdapter', () => {
     expect(tail).toContain('makeCfWebSocketUpgrader');
     // installWebSocketUpgrader is grouped with the other iso-runtime installers.
     expect(tail).toContain('installWebSocketUpgrader,');
-    expect(tail).toContain('installWebSocketUpgrader(makeCfWebSocketUpgrader());');
+    expect(tail).toContain(
+      'installWebSocketUpgrader(makeCfWebSocketUpgrader());'
+    );
   });
 });
