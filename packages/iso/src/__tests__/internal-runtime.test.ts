@@ -101,6 +101,11 @@ describe('iso /internal/runtime door', () => {
       // by defineRoutes's route-tree validator and serverRoute's binder so a
       // route-bound loader/action/socket/room is rejected on the same rule.
       'reservedParamNamesIn',
+      // Route-param capture (preact-iso `exec`) shared with
+      // @hono-preact/server's page-actions handler, so a route-bound action's
+      // guard sees exactly the params the client router computes for the
+      // invoking URL.
+      'matchRouteParams',
     ]);
     const actual = new Set(Object.keys(runtime));
     expect([...actual].sort()).toEqual([...expected].sort());
