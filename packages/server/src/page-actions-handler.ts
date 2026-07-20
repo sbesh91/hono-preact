@@ -20,6 +20,7 @@ import {
   FORM_ACTION_FIELD,
   coerceActionInput,
   collectFormData,
+  matchRouteParams,
 } from '@hono-preact/iso/internal/runtime';
 import { applyOutcomeHeaders } from './outcome-translation.js';
 import {
@@ -259,7 +260,8 @@ export function pageActionsHandler(
         : c.text(parsed.error, parsed.status);
     }
     const { module, action, payload } = parsed;
-    const urlPath = new URL(c.req.url).pathname;
+    const url = new URL(c.req.url);
+    const urlPath = url.pathname;
     const map = await resolverByPath(urlPath);
     const byPathHit = map.get(action);
     // A route-attached action resolves by URL; a src/server registry action is
@@ -334,6 +336,29 @@ export function pageActionsHandler(
     const { serverMw, observers, resolvedTimeoutMs, timeoutSignal, signal } =
       composed.chain;
     const actionCtx = { c, signal, call: createCaller(c).call };
+    // Route-authoritative location for route-bound actions (#288): match the
+    // invoking page URL against the action's own declared pattern to recover
+    // pathParams, so a route-node guard can gate action scope by
+    // `ctx.location.pathParams`. Non-exact so an action bound to a shallower
+    // pattern still resolves params when POSTed from a descendant page URL.
+    // Bare actions get no location (they run no route-node page tier). A
+    // route-bound action whose URL does not match its pattern fails closed
+    // (defensive: byPath resolution normally guarantees a match).
+    let location: ServerActionCtx['location'];
+    if (typeof routeId === 'string') {
+      const pathParams = matchRouteParams(urlPath, routeId, false);
+      if (pathParams === null) {
+        const msg = `Action '${action}' cannot run from '${urlPath}' (bound to '${routeId}')`;
+        return accept === 'json'
+          ? c.json({ __outcome: 'error', message: msg }, 403)
+          : c.text(msg, 403);
+      }
+      location = {
+        path: urlPath,
+        pathParams,
+        searchParams: Object.fromEntries(url.searchParams),
+      };
+    }
     const ctx: ServerActionCtx = {
       scope: 'action',
       c,
@@ -341,6 +366,7 @@ export function pageActionsHandler(
       module,
       action,
       payload,
+      location,
     };
 
     let resolution: ActionResolution;

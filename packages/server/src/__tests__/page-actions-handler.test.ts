@@ -724,6 +724,97 @@ describe('pageActionsHandler', () => {
       );
     });
   });
+
+  // A guard that reports the action-scope location it received, so a test can
+  // assert exactly what the framework populated (denies 400 with the location
+  // serialized as JSON).
+  const locationReporter = () =>
+    defineServerMiddleware<'action'>(async (ctx) => {
+      throw deny(400, JSON.stringify(ctx.location ?? null));
+    });
+
+  const postAction = (
+    handler: ReturnType<typeof buildHandler>,
+    url: string,
+    action = 'submit'
+  ) =>
+    new Hono().post('*', handler).request(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        module: 'pages/test.server',
+        action,
+        payload: {},
+      }),
+    });
+
+  it('populates a route-authoritative location for a route-bound action', async () => {
+    const handler = buildHandler(
+      {
+        submit: {
+          fn: async () => ({ ok: true }),
+          routeId: '/projects/:projectId',
+        },
+      },
+      { byPattern: async () => [locationReporter()] }
+    );
+    const res = await postAction(handler, '/projects/p1');
+    expect(res.status).toBe(400);
+    const loc = JSON.parse((await res.json()).message);
+    expect(loc.path).toBe('/projects/p1');
+    expect(loc.pathParams).toEqual({ projectId: 'p1' });
+  });
+
+  it('gives a bare action no location', async () => {
+    const handler = buildHandler({
+      submit: { fn: async () => ({ ok: true }), use: [locationReporter()] },
+    });
+    const res = await postAction(handler, '/projects/p1');
+    expect(res.status).toBe(400);
+    expect(JSON.parse((await res.json()).message)).toBeNull();
+  });
+
+  it('denies a route-bound action whose URL does not match its pattern (403)', async () => {
+    const handler = buildHandler(
+      {
+        submit: {
+          fn: async () => ({ ok: true }),
+          routeId: '/projects/:projectId',
+        },
+      },
+      { byPattern: async () => [] }
+    );
+    const res = await postAction(handler, '/totally/unrelated');
+    expect(res.status).toBe(403);
+  });
+
+  it('lets a route-node guard gate a route-bound action by its route params', async () => {
+    const archivedGuard = defineServerMiddleware<'action'>(
+      async (ctx, next) => {
+        if (ctx.location?.pathParams.projectId === 'legacy')
+          throw deny(403, 'archived');
+        await next();
+      }
+    );
+    const handler = buildHandler(
+      {
+        mutate: {
+          fn: async () => ({ ok: true }),
+          routeId: '/projects/:projectId',
+        },
+      },
+      { byPattern: async () => [archivedGuard] }
+    );
+    expect(
+      (await postAction(handler, '/projects/legacy', 'mutate')).status
+    ).toBe(403);
+    expect(
+      (await postAction(handler, '/projects/active', 'mutate')).status
+    ).toBe(200);
+  });
 });
 
 // Helper that wires a single defineAction fn through pageActionsHandler with
