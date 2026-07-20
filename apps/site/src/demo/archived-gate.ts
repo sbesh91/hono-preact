@@ -11,8 +11,9 @@ import { ArchivedProjectNotice } from '../components/demo/ArchivedProjectNotice.
 // full ctx. render() is a page-scope-only outcome (it swaps the page tree), so
 // loader and action scope deny instead: a client-side nav to an archived
 // project surfaces the message through the board View's errorFallback, a full
-// reload gets the swapped notice page, and a mutation is refused. A
-// route-node guard now covers action scope because a route-bound action
+// reload gets the swapped notice page, and a mutation addressed to the
+// archived project's URL is refused. A route-node guard now covers action
+// scope because a route-bound action
 // carries a route-authoritative location (#288); the task-detail actions are
 // already route-bound and the board actions are bound below.
 export function archivedOutcomeFor(
