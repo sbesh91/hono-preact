@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runRequestScope } from '../../cache.js';
-import {
-  recordServerDeny,
-  takeServerDeny,
-} from '../server-deny-registry.js';
+import { recordServerDeny, takeServerDeny } from '../server-deny-registry.js';
 
 describe('server-deny-registry', () => {
   it('records and takes a deny within a request scope', async () => {
