@@ -76,7 +76,7 @@ export async function runLoaderServer<T>(
   // way the RPC/SSE path does.
   const { middleware: allMiddleware, observers } = partitionUse(
     loaderRef.use ?? [],
-    `the \`use\` on loader ${loaderRef.__moduleKey ?? '<unkeyed>'}`
+    `the loader's own \`use\` for ${loaderRef.__moduleKey ?? '<unkeyed>'}`
   );
   const serverMw = allMiddleware.filter(
     (m): m is ServerMiddleware<'loader'> => m.runs === 'server'

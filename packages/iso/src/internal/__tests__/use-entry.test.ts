@@ -133,6 +133,16 @@ describe('assertUseEntry', () => {
     );
   });
 
+  it('diagnoses a middleware with a BigInt `runs` without throwing', () => {
+    // JSON.stringify throws on a BigInt; the diagnosis must not replace itself
+    // with that TypeError.
+    expect(() =>
+      assertUseEntry({ __kind: 'middleware', runs: 1n, fn: noop }, 0)
+    ).toThrow(
+      /a middleware whose `runs` is 1n \(expected 'server' or 'client'\)/
+    );
+  });
+
   it('diagnoses a middleware with a bad `fn`', () => {
     expect(() =>
       assertUseEntry({ __kind: 'middleware', runs: 'server' }, 0)
@@ -148,6 +158,15 @@ describe('assertUseEntry', () => {
   it('diagnoses an unknown __kind', () => {
     expect(() => assertUseEntry({ __kind: 'middlware' }, 0)).toThrow(
       /an object with `__kind` "middlware" \(expected 'middleware' or 'observer'\)/
+    );
+  });
+
+  it('diagnoses a symbol `__kind` by name, not the bare text "undefined"', () => {
+    // JSON.stringify(aSymbol) returns undefined, which would otherwise render
+    // as the literal text "undefined" and hide that a symbol was there.
+    const kind = Symbol('middlware');
+    expect(() => assertUseEntry({ __kind: kind }, 0)).toThrow(
+      /an object with `__kind` Symbol\(middlware\) \(expected 'middleware' or 'observer'\)/
     );
   });
 

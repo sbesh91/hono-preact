@@ -52,6 +52,31 @@ export function isObserver(entry: unknown): entry is AnyObserver {
   );
 }
 
+/**
+ * Quote a value read off an unclassifiable entry for the diagnostic message.
+ * Must be total: it is called with whatever a user module happened to put in
+ * `runs` or `__kind`, which can be any JavaScript value.
+ *
+ * `JSON.stringify` almost gets there, but not quite: it throws on a BigInt
+ * (`TypeError: Do not know how to serialize a BigInt`), and it returns
+ * `undefined` for a symbol, which would render as the bare text `undefined`
+ * and erase the fact that a symbol was there at all. Both are handled before
+ * falling back to `JSON.stringify`, which still covers strings (quoted,
+ * matching the existing rendering), numbers, booleans, `null`, and plain
+ * objects.
+ */
+function quoteValue(value: unknown): string {
+  if (value === undefined) return 'undefined';
+  if (typeof value === 'symbol') return String(value);
+  if (typeof value === 'bigint') return `${String(value)}n`;
+  try {
+    const json = JSON.stringify(value);
+    return json === undefined ? String(value) : json;
+  } catch {
+    return String(value);
+  }
+}
+
 /** Human-readable diagnosis of why an entry is unclassifiable. */
 function describeEntry(entry: unknown): string {
   if (entry === null) return 'null';
@@ -63,7 +88,7 @@ function describeEntry(entry: unknown): string {
   }
   if (entry.__kind === 'middleware') {
     if (entry.runs !== 'server' && entry.runs !== 'client') {
-      return `a middleware whose \`runs\` is ${JSON.stringify(entry.runs)} (expected 'server' or 'client')`;
+      return `a middleware whose \`runs\` is ${quoteValue(entry.runs)} (expected 'server' or 'client')`;
     }
     return `a middleware whose \`fn\` is not a function (${typeof entry.fn})`;
   }
@@ -77,7 +102,7 @@ function describeEntry(entry: unknown): string {
     return `an observer whose \`${bad}\` is not a function (${typeof entry[bad]})`;
   }
   if (entry.__kind === undefined) return 'an object with no `__kind`';
-  return `an object with \`__kind\` ${JSON.stringify(entry.__kind)} (expected 'middleware' or 'observer')`;
+  return `an object with \`__kind\` ${quoteValue(entry.__kind)} (expected 'middleware' or 'observer')`;
 }
 
 /**

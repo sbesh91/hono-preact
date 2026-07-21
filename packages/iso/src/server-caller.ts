@@ -158,7 +158,10 @@ async function callLoader<T>(
   const signal = opts?.signal
     ? AbortSignal.any([c.req.raw.signal, opts.signal])
     : c.req.raw.signal;
-  const serverMw = serverMiddleware(ref.use, "the loader's own `use`");
+  const serverMw = serverMiddleware(
+    ref.use,
+    `the loader's own \`use\` for ${ref.__moduleKey ?? '<unkeyed>'}`
+  );
   const ctx: ServerLoaderCtx = {
     scope: 'loader',
     c,

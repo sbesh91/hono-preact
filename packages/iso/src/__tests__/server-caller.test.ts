@@ -107,7 +107,7 @@ describe('createCaller', () => {
     } as unknown as ServerMiddleware;
     const loader = defineLoader(async () => 1, { use: [malformed] });
     await expect(createCaller(c).call(loader)).rejects.toThrow(
-      /Invalid `use` entry at index 0 of the loader's own `use`: a middleware whose `runs` is undefined \(expected 'server' or 'client'\)/
+      /Invalid `use` entry at index 0 of the loader's own `use` for <unkeyed>: a middleware whose `runs` is undefined \(expected 'server' or 'client'\)/
     );
   });
 
