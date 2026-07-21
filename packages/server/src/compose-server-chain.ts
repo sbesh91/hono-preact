@@ -1,6 +1,5 @@
 import type {
   AppConfig,
-  Middleware,
   ServerMiddleware,
   StreamObserver,
   Scope,
@@ -45,13 +44,12 @@ export interface ComposedServerChain<S extends Scope> {
  * outer->inner order (`[appConfig.use, resolvePageUse(path), unitUse]`).
  *
  * Both handlers composed this identically; centralizing it keeps the chain
- * ordering, the timeout-derivation rule, and the single `ReadonlyArray<unknown>`
- * -> typed-element cast in one place. The cast sits at the structural-read
- * boundary: page-level `use` and a unit's `use` are read off user-defined
- * modules as `ReadonlyArray<unknown>`, so the concatenation infers `unknown[]`;
- * we assert the known element type here, the one point the chain re-enters
- * typed land. The `runs === 'server'` predicate narrows to the caller's scope
- * `S` (the chain only carries that scope's middleware by construction).
+ * ordering and the timeout-derivation rule in one place. Page-level `use` and
+ * a unit's `use` are structural reads off user-defined modules, so they enter
+ * as `ReadonlyArray<unknown>`; `partitionUse` validates every entry and its
+ * predicates are what return the chain to typed land. The `runs === 'server'`
+ * predicate narrows to the caller's scope `S` (the chain only carries that
+ * scope's middleware by construction).
  *
  * NOTE: framework-private; intended consumers are loadersHandler and
  * pageActionsHandler.
@@ -81,14 +79,23 @@ export async function composeServerChain<S extends Scope = Scope>(
 
   // Chain order is outer -> inner: app-level wraps every request, page-level
   // wraps the route's units, and the unit's own `use` wraps just this call.
-  const rootUse = appConfig?.use ?? [];
-  const pageUse = await resolvePageUse(path);
-  const fullUse: ReadonlyArray<Middleware | StreamObserver<unknown, never>> = [
-    ...rootUse,
-    ...pageUse,
-    ...unitUse,
-  ] as ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
-  const { middleware: allMiddleware, observers } = partitionUse(fullUse);
+  // Each layer is partitioned on its own so a rejected entry reports which
+  // `use` array it came from and its index WITHIN that array; concatenating
+  // the three results is identical to partitioning the merged chain, since
+  // partitioning preserves relative order within each bucket.
+  const root = partitionUse(appConfig?.use ?? [], 'the app-level `use`');
+  const page = partitionUse(
+    await resolvePageUse(path),
+    `the page \`use\` for ${path}`
+  );
+  const unit = partitionUse(unitUse, "the unit's own `use`");
+
+  const allMiddleware = [
+    ...root.middleware,
+    ...page.middleware,
+    ...unit.middleware,
+  ];
+  const observers = [...root.observers, ...page.observers, ...unit.observers];
   const serverMw = allMiddleware.filter(
     (m): m is ServerMiddleware<S> => m.runs === 'server'
   );
