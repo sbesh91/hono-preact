@@ -4,9 +4,11 @@
 
 **Goal:** On an SSR loader `deny()`, render the route's `errorFallback` into a full document at the deny's status (and headers), matching client-navigation output, and hydrate it cleanly (no DOM mismatch, no refetch).
 
-**Architecture:** Two separable mechanisms. (1) A boundary/`DataReader` change catches a loader deny in-tree during SSR and renders the nearest `errorFallback` — loader-local (with a hydration bake) or, when there is none, a tagged rethrow to the page-level `RouteBoundary`. (2) A per-request side-channel (`recordServerDeny`/`takeServerDeny`, mirroring `streaming-ssr.ts`) carries the deny status+headers so `renderPage` applies them to the finished document. A `data-loader-deny` hydration marker lets the client seed a coldError phase and skip the refetch.
+**Architecture:** Two separable mechanisms. (1) A boundary/`DataReader` change catches a loader deny in-tree during SSR and renders the nearest `errorFallback`: loader-local (with a hydration bake) or, when there is none, a tagged rethrow to the page-level `RouteBoundary`. (2) A per-request side-channel (`recordServerDeny`/`takeServerDeny`, mirroring `streaming-ssr.ts`) carries the deny status+headers so `renderPage` applies them to the finished document. A `data-loader-deny` hydration marker lets the client seed a coldError phase and skip the refetch.
 
 **Tech Stack:** TypeScript, Preact (+ `preact-render-to-string`'s async prerender), Hono, Vitest. Monorepo: `@hono-preact/iso` (framework runtime), `@hono-preact/server` (SSR).
+
+> **Note (revised during implementation):** page-level catch of a no-local-fallback loader deny during SSR (the `RouteBoundary` server-deny branch, Task 5, gated by `options.errorBoundaries`) turned out to be infeasible: `preact-render-to-string` does not propagate a throw from a suspended subtree to an ancestor error boundary, so that branch and the `options.errorBoundaries` flag were reverted, and a loader deny with no local `errorFallback` falls back to bare text as before. The `loader-deny-mark.ts` tag from Task 2 (`LOADER_DENY`, `markLoaderDeny`, `isLoaderDeny`) existed only to support that reverted branch and was reverted with it; the shipped source has no `loader-deny-mark.ts`. What did ship: the per-request server deny registry (Task 1), the `data-loader-deny` hydration channel (Task 3), the `DataReader` local-fallback bake (part of Task 6), the client seed and re-wrap (Tasks 7 and 8), and the `renderPage` status application (Task 9). The task sections below are kept as the historical record of what was tried; readers should treat Task 2 and the `RouteBoundary`/`options.errorBoundaries` portion of Task 5 as reverted, not shipped.
 
 ## Global Constraints
 
@@ -24,8 +26,8 @@
 
 | File | Responsibility |
 | --- | --- |
-| `packages/iso/src/internal/server-deny-registry.ts` | **new** — per-request deny status/headers side-channel (record/take) |
-| `packages/iso/src/internal/loader-deny-mark.ts` | **new** — `LOADER_DENY` symbol + `markLoaderDeny` / `isLoaderDeny` |
+| `packages/iso/src/internal/server-deny-registry.ts` | **new**: per-request deny status/headers side-channel (record/take) |
+| `packages/iso/src/internal/loader-deny-mark.ts` | **new**: `LOADER_DENY` symbol + `markLoaderDeny` / `isLoaderDeny` |
 | `packages/iso/src/outcomes.ts` | `DenyOutcome` gains optional `[LOADER_DENY]?: true` |
 | `packages/iso/src/internal/envelope.tsx` | `HydrationAnchor` deny kind → emits `data-loader-deny` |
 | `packages/iso/src/internal/preload.ts` | `getPreloadedDeny` / `deletePreloadedDeny` |
@@ -52,8 +54,8 @@ Task order is dependency-first: leaf helpers (1, 2, 3, 4) before the consumers t
 - Consumes: `getRequestStore` from `../cache.js`; `ErrorStatusCode` from `../outcomes.js`.
 - Produces:
   - `type ServerDenyRecord = { status: ErrorStatusCode; headers: Record<string, string> | undefined }`
-  - `function recordServerDeny(record: ServerDenyRecord): void` — first-write-wins per request.
-  - `function takeServerDeny(): ServerDenyRecord | null` — returns and clears.
+  - `function recordServerDeny(record: ServerDenyRecord): void`: first-write-wins per request.
+  - `function takeServerDeny(): ServerDenyRecord | null`: returns and clears.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -108,12 +110,12 @@ describe('server-deny-registry', () => {
 });
 ```
 
-Verify `runRequestScope` is exported from `packages/iso/src/cache.ts` (it is — `render.tsx` and `streaming-ssr.ts` both use it via `getRequestStore`). If `runRequestScope` is not directly exported from `../../cache.js`, import it from wherever `render.tsx` imports it and adjust the path; the registry logic under test is unchanged.
+Verify `runRequestScope` is exported from `packages/iso/src/cache.ts` (it is: `render.tsx` and `streaming-ssr.ts` both use it via `getRequestStore`). If `runRequestScope` is not directly exported from `../../cache.js`, import it from wherever `render.tsx` imports it and adjust the path; the registry logic under test is unchanged.
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/server-deny-registry.test.ts`
-Expected: FAIL — cannot resolve `../server-deny-registry.js`.
+Expected: FAIL: cannot resolve `../server-deny-registry.js`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -198,8 +200,8 @@ git commit -m "feat(iso): per-request server deny side-channel for SSR errorFall
 - Consumes: `isDeny`, `DenyOutcome` from `../outcomes.js`.
 - Produces:
   - `const LOADER_DENY: unique symbol`
-  - `function markLoaderDeny(o: DenyOutcome): DenyOutcome` — sets the tag, returns `o`.
-  - `function isLoaderDeny(x: unknown): x is DenyOutcome` — `isDeny(x)` AND tag present.
+  - `function markLoaderDeny(o: DenyOutcome): DenyOutcome`: sets the tag, returns `o`.
+  - `function isLoaderDeny(x: unknown): x is DenyOutcome`: `isDeny(x)` AND tag present.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -235,12 +237,12 @@ describe('loader-deny-mark', () => {
 });
 ```
 
-Confirm `deny` is exported from `packages/iso/src/outcomes.ts` (it is — the overloaded factory, `outcomes.ts:108-163`).
+Confirm `deny` is exported from `packages/iso/src/outcomes.ts` (it is: the overloaded factory, `outcomes.ts:108-163`).
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/loader-deny-mark.test.ts`
-Expected: FAIL — cannot resolve `../loader-deny-mark.js`.
+Expected: FAIL: cannot resolve `../loader-deny-mark.js`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -369,7 +371,7 @@ Confirm the `LoaderIdContext` import path: `envelope.tsx` imports it from `./con
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/envelope-deny-anchor.test.tsx`
-Expected: FAIL — the deny case currently falls into the `else` and emits `data-loader="null"`; `data-loader-deny` is absent.
+Expected: FAIL: the deny case currently falls into the `else` and emits `data-loader="null"`; `data-loader-deny` is absent.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -412,10 +414,10 @@ Then the return (`:70`) becomes (build the attribute bag so the deny case omits 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/envelope-deny-anchor.test.tsx`
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Regression — existing envelope/loader DOM tests**
+- [ ] **Step 5: Regression: existing envelope/loader DOM tests**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__ packages/iso/src/__tests__`
-Expected: PASS. If any test asserted the exact attribute set of a rendered `<section>`, confirm it used a `data` or `none` anchor (unchanged) — the deny branch is new and no prior test exercises it.
+Expected: PASS. If any test asserted the exact attribute set of a rendered `<section>`, confirm it used a `data` or `none` anchor (unchanged); the deny branch is new and no prior test exercises it.
 
 - [ ] **Step 6: Commit**
 
@@ -435,8 +437,8 @@ git commit -m "feat(iso): HydrationAnchor deny kind emits data-loader-deny (#287
 **Interfaces:**
 - Produces:
   - `type PreloadedDeny = { present: false } | { present: true; message: string }`
-  - `function getPreloadedDeny(id: string): PreloadedDeny` — reads `data-loader-deny`; browser-only (returns absent on the server).
-  - `function deletePreloadedDeny(id: string): void` — clears the attribute.
+  - `function getPreloadedDeny(id: string): PreloadedDeny`: reads `data-loader-deny`; browser-only (returns absent on the server).
+  - `function deletePreloadedDeny(id: string): void`: clears the attribute.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -493,7 +495,7 @@ describe('getPreloadedDeny', () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/preload-deny.test.ts`
-Expected: FAIL — `getPreloadedDeny` not exported.
+Expected: FAIL: `getPreloadedDeny` not exported.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -650,7 +652,7 @@ If `renderToString` does not drive the error-boundary path the same way the asyn
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/route-boundary-deny.test.tsx`
-Expected: FAIL — today the boundary rethrows ALL outcomes, so test 1 throws instead of rendering the fallback, and `takeServerDeny()` is null.
+Expected: FAIL: today the boundary rethrows ALL outcomes, so test 1 throws instead of rendering the fallback, and `takeServerDeny()` is null.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -738,7 +740,7 @@ export const RouteBoundary: FunctionComponent<{
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/route-boundary-deny.test.tsx`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Regression — existing boundary + render tests**
+- [ ] **Step 5: Regression: existing boundary + render tests**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/route-boundary`
 Expected: PASS (any pre-existing route-boundary tests). The client path is unchanged and untagged/redirect outcomes still rethrow.
@@ -821,7 +823,7 @@ Before writing, open `packages/iso/src/__tests__/loader-runner-c.test.tsx` (it a
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/data-reader-deny.test.tsx`
-Expected: FAIL — today the loader-local deny unwinds out of the render (no fallback rendered, `takeServerDeny()` null), so test 1's first assertion fails / the render rejects.
+Expected: FAIL: today the loader-local deny unwinds out of the render (no fallback rendered, `takeServerDeny()` null), so test 1's first assertion fails / the render rejects.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -902,7 +904,7 @@ Note: when the loader HAS a local `errorFallback`, `LoaderHost` also wraps `cont
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/data-reader-deny.test.tsx`
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Regression — loader server tests**
+- [ ] **Step 5: Regression: loader server tests**
 
 Run: `pnpm exec vitest run packages/iso/src/__tests__/loader-runner-c.test.tsx packages/iso/src/internal/__tests__`
 Expected: PASS. The success/streaming paths of `DataReader` are untouched; only the catch arm is new.
@@ -916,7 +918,7 @@ git commit -m "feat(iso): SSR loader-local deny renders errorFallback + bakes hy
 
 ---
 
-### Task 7: Client seed — coldError from the baked deny (no refetch)
+### Task 7: Client seed, coldError from the baked deny (no refetch)
 
 **Files:**
 - Modify: `packages/iso/src/loader-state.ts:65-67` (add `fromBakedDeny?: true` to the `coldError` variant), `packages/iso/src/internal/use-loader-runner.tsx`
@@ -978,7 +980,7 @@ describe('client seed from baked deny', () => {
     render(null, container);
     section!.id && document.body.appendChild(section!); // keep id findable
     // Re-mount a fresh View; getPreloadedDeny reads by id at first render.
-    // (If the id differs on remount, assert at the runner unit level instead —
+    // (If the id differs on remount, assert at the runner unit level instead;
     // see the alternative below.)
   });
 });
@@ -1046,7 +1048,7 @@ Confirm the exact `LoaderRef` fields the runner reads (`loaderRef.__id`, `loader
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/loader-runner-baked-deny.test.tsx`
-Expected: FAIL — the runner ignores `data-loader-deny` today: `view.kind` is `render`/`loading` (or a fetch is issued), not `coldError` with `fromBakedDeny`.
+Expected: FAIL; the runner ignores `data-loader-deny` today: `view.kind` is `render`/`loading` (or a fetch is issued), not `coldError` with `fromBakedDeny`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -1227,7 +1229,7 @@ If `useId` instability makes the id-discovery approach flaky in the harness, fal
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/loader-host-baked-deny-dom.test.tsx`
-Expected: FAIL — today the coldError branch renders the fallback bare (`loader.tsx:214-217`), so `[data-loader-deny]` is absent on the client.
+Expected: FAIL: today the coldError branch renders the fallback bare (`loader.tsx:214-217`), so `[data-loader-deny]` is absent on the client.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -1268,7 +1270,7 @@ In `packages/iso/src/internal/loader.tsx`, the coldError branch (`:210-223`). Wr
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__/loader-host-baked-deny-dom.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Regression — loader DOM/hydration tests**
+- [ ] **Step 5: Regression: loader DOM/hydration tests**
 
 Run: `pnpm exec vitest run packages/iso/src/internal/__tests__ packages/iso/src/__tests__/loader-runner-c.test.tsx`
 Expected: PASS. Client-nav coldError (no `fromBakedDeny`) is unchanged (still bare).
@@ -1339,7 +1341,7 @@ Confirm the `defineLoader`/`.View` API and whether a route-bound loader needs a 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm exec vitest run packages/server/src/__tests__/render-loader-deny.test.tsx`
-Expected: FAIL — before Task 9 wires `takeServerDeny`, the document renders (Task 6 rendered the fallback) but at HTTP **200**, so `res.status` is 200 not 404.
+Expected: FAIL: before Task 9 wires `takeServerDeny`, the document renders (Task 6 rendered the fallback) but at HTTP **200**, so `res.status` is 200 not 404.
 
 Note: Tasks 6 and 9 together make this pass; if you run this test after Task 6 but before Task 9, the body assertions pass and only the `status` assertion fails, which is the precise gap Task 9 closes.
 
@@ -1416,7 +1418,7 @@ The server test imports `takeServerDeny` from the built `@hono-preact/iso/intern
 
 Run: `pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build`
 Then: `pnpm exec vitest run packages/server/src/__tests__`
-Expected: PASS, including `render-honocontext.test.tsx` (middleware deny still bare text 403 — its `<Page>` has no `errorFallback`, so `RouteBoundary` rethrows the untagged deny).
+Expected: PASS, including `render-honocontext.test.tsx` (middleware deny still bare text 403; its `<Page>` has no `errorFallback`, so `RouteBoundary` rethrows the untagged deny).
 
 - [ ] **Step 6: Commit**
 
@@ -1434,7 +1436,7 @@ git commit -m "feat(server): apply SSR loader deny status + headers to the rende
 - Test: same file
 
 **Interfaces:**
-- Consumes: everything above. No new production code — this task locks the behavior matrix from the spec.
+- Consumes: everything above. No new production code; this task locks the behavior matrix from the spec.
 
 - [ ] **Step 1: Write the failing tests (added cases)**
 
@@ -1537,7 +1539,7 @@ Confirm the `deny(status, message, { headers })` overload signature against `pac
 Run: `pnpm exec vitest run packages/server/src/__tests__/render-loader-deny.test.tsx`
 Expected: All PASS if Tasks 1-9 are complete (this task is pure behavior-locking; no new production code). If the page-level case (`page-fb`) fails, verify the loader deny is being tagged by `DataReader` (Task 6) and `RouteBoundary` reads the tag (Task 5). If the redirect case renders a fallback instead of 302, verify `getDerivedStateFromError`/`DataReader` only special-case `isLoaderDeny`/`isDeny` for DENY, never redirect.
 
-- [ ] **Step 3: (No new implementation — fix regressions only)**
+- [ ] **Step 3: (No new implementation, fix regressions only)**
 
 If any case fails, the fix belongs in the task that owns that behavior (5, 6, or 9), not here. Make the minimal fix there, re-run its task test, then re-run this file.
 

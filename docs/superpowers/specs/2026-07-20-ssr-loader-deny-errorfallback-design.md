@@ -46,7 +46,7 @@ deliberately **rethrows** outcomes (`if (isOutcome(error)) throw error`) so a
 loader `deny()` unwinds past every boundary and out of `prerender`. That is how
 `renderPage`'s outer catch learns the real HTTP status. `translateRootOutcome`
 (`packages/server/src/outcome-translation.ts:33-36`) then emits
-`c.text(outcome.message, outcome.status)` — right status, unbranded body.
+`c.text(outcome.message, outcome.status)`: right status, unbranded body.
 
 Simply catching the deny in-tree gives the branded body back but at HTTP 200,
 which is the exact pre-#284 regression the issue calls out. **Any fix must
@@ -114,14 +114,14 @@ export function recordServerDeny(record: ServerDenyRecord): void;
 export function takeServerDeny(): ServerDenyRecord | null;
 ```
 
-Only `status` + `headers` are recorded — those are response concerns. `message`
+Only `status` + `headers` are recorded: those are response concerns. `message`
 is a hydration concern carried separately by the anchor (below). Exported via
 `packages/iso/src/internal.ts` so `@hono-preact/server` can read it.
 
 ### 2. `ErrorBoundary` gains server-deny handling (page-level + general)
 
 `packages/iso/src/internal/route-boundary.tsx`. Today the boundary rethrows all
-outcomes. New behavior — but it must render a fallback ONLY for a deny that
+outcomes. New behavior, but it must render a fallback ONLY for a deny that
 originated from a **loader**, never a middleware-scope deny. On the client a
 middleware deny is applied by `PageMiddlewareHost` (navigation), never rendered
 by an `errorFallback`; letting a page-level `errorFallback` catch a middleware
@@ -132,8 +132,8 @@ tagged (§2a) so the boundary can tell them apart:
 static getDerivedStateFromError(error: unknown) {
   if (isOutcome(error)) {
     // A LOADER deny (tagged) on the server may render this boundary's fallback.
-    // Everything else — the client, redirect/render outcomes, or an untagged
-    // middleware deny — unwinds so the outer handler translates it (bare text).
+    // Everything else (the client, redirect/render outcomes, or an untagged
+    // middleware deny) unwinds so the outer handler translates it (bare text).
     if (!isBrowser() && isLoaderDeny(error)) {
       return { error: toError(error), deny: error };
     }
@@ -170,13 +170,13 @@ identical input.
 
 This change is inert on the client (the `!isBrowser()` guard) and inert for
 non-deny outcomes (still rethrown). Client boundaries never see raw outcomes
-anyway — client-nav decodes a deny envelope to an `Error` before it reaches any
+anyway: client-nav decodes a deny envelope to an `Error` before it reaches any
 boundary.
 
 ### 2a. Loader-deny tag
 
 New `packages/iso/src/internal/loader-deny-mark.ts`. A `Symbol.for(...)` key
-declared as an optional field on `DenyOutcome` (no cast — the repo's type-cast
+declared as an optional field on `DenyOutcome` (no cast, per the repo's type-cast
 guidance: declare the symbol key on the value's type, narrow with `in`):
 
 ```ts
@@ -197,7 +197,7 @@ export function isLoaderDeny(x: unknown): x is DenyOutcome {
 `DenyOutcome` (`outcomes.ts:45`) gains `readonly [LOADER_DENY]?: true`. Only
 `DataReader` (§3), on the no-local-fallback rethrow, sets the tag. Middleware
 denies (surfaced by `HostConsumer`/`PageMiddlewareHost`) are never tagged, so
-they keep unwinding to bare text — preserving the non-goal and keeping
+they keep unwinding to bare text, preserving the non-goal and keeping
 `render-honocontext.test.tsx:80-104` green for the right reason.
 
 ### 3. Loader-local interception + hydration bake
@@ -217,7 +217,7 @@ function DataReader({ reader, accumulate, errorFallback, children }) {
     // wrapped in an Envelope carrying the deny marker so hydration seeds
     // coldError instead of refetching. No local fallback: TAG it as a loader
     // deny and rethrow so an outer (page-level) RouteBoundary can render its
-    // own fallback (§2) — an untagged middleware deny would not.
+    // own fallback (§2); an untagged middleware deny would not.
     if (errorFallback == null) throw markLoaderDeny(e);
     recordServerDeny({ status: e.status, headers: e.headers });
     const err = toError(e);
@@ -293,7 +293,7 @@ body = view.fromBakedDeny ? (
 );
 ```
 
-Pure client-navigation coldError (no baked deny) stays bare — unchanged. The
+Pure client-navigation coldError (no baked deny) stays bare, unchanged. The
 `<Envelope>` reads its id from `LoaderIdContext`, already provided at
 `loader.tsx:235`, so the client re-mounts under the same `useId` and the
 hydrated DOM equals the SSR DOM.
