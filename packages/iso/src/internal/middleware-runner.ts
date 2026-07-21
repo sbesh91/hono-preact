@@ -38,6 +38,20 @@ type DispatchArgs<Ctx, T> = {
  *
  * `dispatchServer` / `dispatchClient` are thin scope-typed facades over this;
  * keeping one engine means the chain semantics are written and tested once.
+ *
+ * The two contract violations below always throw, but a production client
+ * build gets the terse form. Both messages explain a mistake only the app's
+ * author can fix, so shipping the explanation to every visitor spends bytes on
+ * the always-loaded path for prose an end user cannot act on. The server keeps
+ * the full text in every mode.
+ *
+ * Both sites repeat `import.meta.env.SSR || import.meta.env.DEV` on purpose.
+ * Do NOT hoist it to a module-scope constant: Vite loads `vite.config.ts`
+ * under plain Node, where `import.meta.env` is undefined, so a module-scope
+ * read runs at import time and breaks the build for anything importing the
+ * framework from a config file. Inside a function body it is only evaluated in
+ * bundled contexts, and it still folds to a constant so the long branch
+ * tree-shakes out of the client bundle.
  */
 export async function dispatch<Ctx, T>(
   args: DispatchArgs<Ctx, T>
@@ -55,10 +69,12 @@ export async function dispatch<Ctx, T>(
     const next: Next = async () => {
       if (downstream) {
         throw new Error(
-          `Middleware at index ${index} called next() more than once. ` +
-            `Each middleware must call next() exactly once: a second call ` +
-            `would re-run the downstream chain (and the inner function) ` +
-            `with the original ctx, producing duplicate side effects.`
+          import.meta.env.SSR || import.meta.env.DEV
+            ? `Middleware at index ${index} called next() more than once. ` +
+                `Each middleware must call next() exactly once: a second call ` +
+                `would re-run the downstream chain (and the inner function) ` +
+                `with the original ctx, producing duplicate side effects.`
+            : `Middleware at index ${index} called next() more than once.`
         );
       }
       downstream = { value: await runChain(index + 1) };
@@ -68,9 +84,11 @@ export async function dispatch<Ctx, T>(
     if (isOutcome(ret)) throw ret;
     if (!downstream) {
       throw new Error(
-        `Middleware at index ${index} returned without calling next() or short-circuiting via a thrown outcome. ` +
-          `Middleware must either: (a) await/return next() to pass control on, or (b) throw a redirect/deny/render outcome to short-circuit. ` +
-          `Returning silently is ambiguous and would let downstream code run.`
+        import.meta.env.SSR || import.meta.env.DEV
+          ? `Middleware at index ${index} returned without calling next() or short-circuiting via a thrown outcome. ` +
+              `Middleware must either: (a) await/return next() to pass control on, or (b) throw a redirect/deny/render outcome to short-circuit. ` +
+              `Returning silently is ambiguous and would let downstream code run.`
+          : `Middleware at index ${index} returned without calling next().`
       );
     }
     return downstream.value;

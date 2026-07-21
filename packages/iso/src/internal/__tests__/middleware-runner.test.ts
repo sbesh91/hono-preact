@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Context } from 'hono';
 import {
   defineServerMiddleware,
@@ -397,5 +397,50 @@ describe('dispatchServer — signal', () => {
     expect(result.kind).toBe('ok');
     if (result.kind === 'ok') expect(result.value).toBe('value');
     expect(calls).toEqual(['mw:before', 'inner', 'mw:after']);
+  });
+});
+
+// Both contract violations always throw; only the explanation is gated so it
+// tree-shakes out of a production client bundle (see the comment on dispatch).
+// The terse branch is pinned so it cannot rot untested.
+describe('contract-violation message gating', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const callsNextTwice = {
+    fn: async (_ctx: unknown, next: Next) => {
+      await next();
+      await next();
+    },
+  };
+  const neverCallsNext = { fn: async () => undefined };
+  const run = (mw: { fn: (ctx: unknown, next: Next) => Promise<unknown> }) =>
+    dispatch({
+      middleware: [mw as never],
+      ctx: {} as never,
+      inner: async () => 'x',
+    });
+
+  it('explains on the server, in every mode', async () => {
+    vi.stubEnv('SSR', true);
+    vi.stubEnv('DEV', false);
+    await expect(run(callsNextTwice)).rejects.toThrow(
+      /called next\(\) more than once\. Each middleware must call next\(\) exactly once/
+    );
+    await expect(run(neverCallsNext)).rejects.toThrow(
+      /Returning silently is ambiguous/
+    );
+  });
+
+  it('still throws in a client production build, tersely', async () => {
+    vi.stubEnv('SSR', false);
+    vi.stubEnv('DEV', false);
+    await expect(run(callsNextTwice)).rejects.toThrow(
+      /^Middleware at index 0 called next\(\) more than once\.$/
+    );
+    await expect(run(neverCallsNext)).rejects.toThrow(
+      /^Middleware at index 0 returned without calling next\(\)\.$/
+    );
   });
 });

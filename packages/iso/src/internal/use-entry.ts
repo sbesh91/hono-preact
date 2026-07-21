@@ -114,6 +114,19 @@ function describeEntry(entry: unknown): string {
  *
  * `source` names the layer the entry came from (e.g. "the app-level `use`"),
  * so `index` locates it in a specific array rather than in a merged chain.
+ *
+ * The throw is unconditional, but the explanation is not: a production client
+ * build gets the locator alone. The diagnosis is for whoever is building the
+ * app, and shipping it to every visitor costs bytes on the always-loaded path
+ * for prose an end user cannot act on. The server keeps the full text in every
+ * mode, since that is what reaches `onError`.
+ *
+ * Read `import.meta.env` INSIDE the function, never at module scope. Vite
+ * loads `vite.config.ts` under plain Node, where `import.meta.env` is
+ * undefined, so a module-scope read runs at import time and breaks the build
+ * for anything that imports the framework from a config file. Inside a
+ * function body it is only evaluated in bundled contexts, and it still folds
+ * to a constant, so the branch below tree-shakes out of the client bundle.
  */
 export function assertUseEntry(
   entry: unknown,
@@ -123,8 +136,10 @@ export function assertUseEntry(
   if (isMiddleware(entry) || isObserver(entry)) return;
   const where = source ? ` of ${source}` : '';
   throw new Error(
-    `Invalid \`use\` entry at index ${index}${where}: ${describeEntry(entry)}. ` +
-      'A `use` entry the framework cannot classify would be silently dropped ' +
-      'from the middleware chain -- if this is an auth gate, it would not run.'
+    import.meta.env.SSR || import.meta.env.DEV
+      ? `Invalid \`use\` entry at index ${index}${where}: ${describeEntry(entry)}. ` +
+          'A `use` entry the framework cannot classify would be silently dropped ' +
+          'from the middleware chain -- if this is an auth gate, it would not run.'
+      : `Invalid \`use\` entry at index ${index}${where}.`
   );
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { isMiddleware, isObserver, assertUseEntry } from '../use-entry.js';
 import {
   defineServerMiddleware,
@@ -186,5 +186,43 @@ describe('assertUseEntry', () => {
       /: a string \("guard"\)\. A `use`/
     );
     expect(() => assertUseEntry(7, 0)).toThrow(/: a number \(7\)\. A `use`/);
+  });
+});
+
+// The explanation is gated so it tree-shakes out of a production client
+// bundle (see the comment on assertUseEntry). The throw itself is NOT gated:
+// dropping an unclassifiable entry is the fail-open this module exists to
+// close, so it must still fail in every mode. Both branches are pinned here so
+// the terse one cannot rot untested.
+describe('assertUseEntry message gating', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('explains on the server, in every mode', () => {
+    vi.stubEnv('SSR', true);
+    vi.stubEnv('DEV', false);
+    expect(() => assertUseEntry(null, 2, 'the app-level `use`')).toThrow(
+      /Invalid `use` entry at index 2 of the app-level `use`: null\. A `use` entry the framework cannot classify would be silently dropped/
+    );
+  });
+
+  it('explains in a client dev build', () => {
+    vi.stubEnv('SSR', false);
+    vi.stubEnv('DEV', true);
+    expect(() => assertUseEntry(null, 2)).toThrow(/would be silently dropped/);
+  });
+
+  it('still throws in a client production build, with the locator alone', () => {
+    vi.stubEnv('SSR', false);
+    vi.stubEnv('DEV', false);
+    expect(() => assertUseEntry(null, 2, 'the page `use` for /admin')).toThrow(
+      /^Invalid `use` entry at index 2 of the page `use` for \/admin\.$/
+    );
+    // the diagnosis and the explanation are both absent
+    expect(() => assertUseEntry(null, 2)).not.toThrow(/silently dropped/);
+    expect(() => assertUseEntry({ __kind: 'middlware' }, 0)).not.toThrow(
+      /an object with/
+    );
   });
 });
