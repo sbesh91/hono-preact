@@ -11,11 +11,24 @@ describe('server-deny-registry', () => {
     });
   });
 
-  it('is first-write-wins: a second record is ignored', async () => {
+  it('keeps the most severe (numerically highest) status regardless of record order', async () => {
     await runRequestScope(async () => {
-      recordServerDeny({ status: 404, headers: undefined });
       recordServerDeny({ status: 403, headers: undefined });
-      expect(takeServerDeny()).toEqual({ status: 404, headers: undefined });
+      recordServerDeny({ status: 500, headers: undefined });
+      expect(takeServerDeny()).toEqual({ status: 500, headers: undefined });
+    });
+    await runRequestScope(async () => {
+      recordServerDeny({ status: 500, headers: undefined });
+      recordServerDeny({ status: 403, headers: undefined });
+      expect(takeServerDeny()).toEqual({ status: 500, headers: undefined });
+    });
+  });
+
+  it('a lower-severity deny recorded after a higher one is ignored', async () => {
+    await runRequestScope(async () => {
+      recordServerDeny({ status: 500, headers: undefined });
+      recordServerDeny({ status: 404, headers: undefined });
+      expect(takeServerDeny()?.status).toBe(500);
     });
   });
 

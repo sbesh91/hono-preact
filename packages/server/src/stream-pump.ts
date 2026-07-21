@@ -100,6 +100,16 @@ export function streamDocumentResponse(
      * when a streaming page also rendered an SSR loader deny.
      */
     status?: ContentfulStatusCode;
+    /**
+     * Headers from a loader deny rendered during prerender (see
+     * `server-deny-registry.ts`), applied to the final `c.body(...)` call so
+     * they are not clobbered by this pump's own structural headers. `c.body`
+     * builds its Response by calling `responseHeaders.set(...)` once per key
+     * in its header-object argument, so any key present in that object wins
+     * regardless of what `applyOutcomeHeaders` already wrote onto `c` earlier
+     * in `renderPage`. Defaults to `{}` (no override).
+     */
+    denyHeaders?: Record<string, string>;
   }
 ): Response {
   const {
@@ -109,6 +119,7 @@ export function streamDocumentResponse(
     bindRequestScope,
     dev = false,
     status = 200,
+    denyHeaders = {},
   } = opts;
 
   // Split at </body> so we can interleave per-loader chunk script tags between
@@ -260,14 +271,20 @@ export function streamDocumentResponse(
   // constructing the Response directly would drop it. Cookies written after a
   // yield run in the pump above, once headers are already sent, and are lost.
   return c.body(responseStream, status, {
-    'Content-Type': 'text/html; charset=utf-8',
-    'Transfer-Encoding': 'chunked',
     // Prevent buffering / transformation by intermediate proxies. nginx honors
     // `X-Accel-Buffering: no` to flush per chunk; `no-transform` stops
     // middleboxes from rebuffering or gzipping the stream as a single response.
-    // We deliberately do NOT add `no-store`: streamed HTML can still be
-    // legitimately cacheable, and users can override via their own middleware.
-    'X-Accel-Buffering': 'no',
+    // We deliberately do NOT add `no-store` here: streamed HTML can still be
+    // legitimately cacheable, and users can override via their own
+    // middleware. A rendered loader deny's own headers (`denyHeaders`) DO
+    // override this default (e.g. a deny asking for `no-store`), since they
+    // are spread in after it; but they must not be able to override the
+    // structural headers below, which are non-negotiable for a streamed HTML
+    // document, so those are spread in last and always win.
     'Cache-Control': 'no-transform',
+    ...denyHeaders,
+    'Content-Type': 'text/html; charset=utf-8',
+    'Transfer-Encoding': 'chunked',
+    'X-Accel-Buffering': 'no',
   });
 }

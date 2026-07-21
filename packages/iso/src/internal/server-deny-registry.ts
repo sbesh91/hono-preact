@@ -1,5 +1,5 @@
-import { getRequestStore } from '../cache.js';
 import type { ErrorStatusCode } from '../outcomes.js';
+import { readRequestSlot, writeRequestSlot } from './request-scoped-slot.js';
 
 /** The response-level facts a rendered SSR loader deny must apply to the document. */
 export type ServerDenyRecord = {
@@ -11,15 +11,19 @@ const REGISTRY_KEY = Symbol.for('@hono-preact/server-deny-registry');
 
 /**
  * Record the deny that a rendered SSR loader `errorFallback` stands in for, so
- * `renderPage` can set the document's status + headers after prerender. FIRST
- * write wins: a page renders exactly one document, so the first deny reached in
- * prerender depth-order owns the response; later denies are ignored.
+ * `renderPage` can set the document's status + headers after prerender. A page
+ * can render more than one denying loader (siblings under the same page), and
+ * under `renderToStringAsync` the order their suspended `DataReader`s resolve
+ * in is not deterministic. So MOST SEVERE STATUS WINS: the numerically highest
+ * status is kept, regardless of which deny was recorded first. This makes the
+ * document's status deterministic across identical requests, independent of
+ * suspension-resume order.
  */
 export function recordServerDeny(record: ServerDenyRecord): void {
-  const store = getRequestStore();
-  if (!store) return; // outside any request scope (e.g. client)
-  if (store.get(REGISTRY_KEY) !== undefined) return; // first-write-wins
-  store.set(REGISTRY_KEY, record);
+  const current = readRequestSlot<ServerDenyRecord>(REGISTRY_KEY);
+  if (current === undefined || record.status > current.status) {
+    writeRequestSlot(REGISTRY_KEY, record);
+  }
 }
 
 /**
@@ -28,9 +32,7 @@ export function recordServerDeny(record: ServerDenyRecord): void {
  * scope. Returns null when no loader deny was rendered.
  */
 export function takeServerDeny(): ServerDenyRecord | null {
-  const store = getRequestStore();
-  if (!store) return null;
-  const record = store.get(REGISTRY_KEY) as ServerDenyRecord | undefined;
-  store.set(REGISTRY_KEY, undefined);
+  const record = readRequestSlot<ServerDenyRecord>(REGISTRY_KEY);
+  writeRequestSlot<ServerDenyRecord | undefined>(REGISTRY_KEY, undefined);
   return record ?? null;
 }

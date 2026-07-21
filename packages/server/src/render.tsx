@@ -294,5 +294,6 @@ export async function renderPage(
     bindRequestScope,
     dev: options?.dev ?? false,
     status: serverDeny ? serverDeny.status : undefined,
+    denyHeaders: serverDeny ? serverDeny.headers : undefined,
   });
 }

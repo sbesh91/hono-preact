@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { defineLoader, deny, redirect, Page } from '@hono-preact/iso';
+import { Loader } from '@hono-preact/iso/internal';
+import type { RouteHook } from 'preact-iso';
 import { renderPage } from '../render.js';
 
 const board = defineLoader(async () => {
@@ -127,5 +129,45 @@ describe('SSR loader deny boundary matrix', () => {
     const res = await app.request('http://localhost/x');
     expect(res.status).toBe(403);
     expect(res.headers.get('x-deny')).toBe('yes');
+  });
+
+  it('a deny header survives on a STREAMING page (not clobbered by the pump default)', async () => {
+    // Regression for the streaming path: `c.body(...)`'s header-object arg
+    // does a `set()` per key, so the pump's hardcoded 'no-transform' used to
+    // win over a deny's 'no-store' even though `applyOutcomeHeaders` had
+    // already written it onto `c`. A page with a sibling streaming loader
+    // forces `renderPage` down the `streamDocumentResponse` branch.
+    const loc = { path: '/x', pathParams: {}, searchParams: {} } as RouteHook;
+    const denying = defineLoader(async () => {
+      throw deny(403, 'no', { headers: { 'Cache-Control': 'no-store' } });
+    });
+    const DenyingView = denying.View(() => <div>never</div>, {
+      errorFallback: (e: Error) => <div class="fb">{e.message}</div>,
+    });
+    const streaming = defineLoader<{ n: number }>(async function* () {
+      yield { n: 1 };
+    });
+    const Layout = () => (
+      <html>
+        <body>
+          <DenyingView />
+          <Loader loader={streaming} location={loc}>
+            <p>streaming</p>
+          </Loader>
+        </body>
+      </html>
+    );
+    const app = new Hono();
+    app.get('*', (c) => renderPage(c, <Layout />));
+    const res = await app.request('http://localhost/x');
+    expect(res.status).toBe(403);
+    // Deny wins over the pump's own default.
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    // Structural headers are preserved.
+    expect(res.headers.get('Content-Type')).toContain('text/html');
+    expect(res.headers.get('Transfer-Encoding')).toBe('chunked');
+    // Confirm this really took the streaming branch.
+    const body = await res.text();
+    expect(body).toContain('__HP_STREAM__');
   });
 });
