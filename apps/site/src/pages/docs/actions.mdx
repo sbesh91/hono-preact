@@ -326,7 +326,7 @@ export const serverActions = {
 };
 ```
 
-The same policy applies to route-bound chain resolution: when a route-bound action cannot resolve its page-use chain, the 500 message carries the resolver's detail only in dev.
+The same policy applies to middleware-chain composition: when an action cannot compose its chain -- because the page-use resolver failed, or because a `use` entry (app-level, page, or the action's own) is not a middleware or a stream observer -- the action never runs and the 500 message carries the underlying detail only in dev.
 
 ## Calling programmatically: `useAction(stub)`
 

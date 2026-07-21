@@ -6,6 +6,7 @@ import {
   guardReadableParamSlots,
   isHazardousColonSegment,
 } from '@hono-preact/iso/internal/runtime';
+import { isMiddleware } from '@hono-preact/iso/internal';
 
 /**
  * A route-bound server unit (loader, action, socket, or room) stamps its
@@ -321,13 +322,12 @@ function assertConformingBoundRouteId(
 // never read `ctx.location.pathParams`. Reads `use` entries structurally,
 // the same sanctioned read as `channelNameOf`/`defUseOf` above: a tier is
 // read off a user-defined module (or `appConfig`) as `ReadonlyArray<unknown>`.
+// Classification goes through the same `isMiddleware` predicate the request
+// path uses, so a malformed entry is classified (and so counted) identically
+// at boot and at request time, and the predicate's narrowing keeps the `runs`
+// read cast-free.
 function isServerMiddleware(entry: unknown): boolean {
-  return (
-    typeof entry === 'object' &&
-    entry !== null &&
-    (entry as { __kind?: unknown }).__kind === 'middleware' &&
-    (entry as { runs?: unknown }).runs === 'server'
-  );
+  return isMiddleware(entry) && entry.runs === 'server';
 }
 
 // The count of SERVER middleware in a `use` tier: the tier-liveness unit
