@@ -52,6 +52,29 @@ const EMPTY_LOCATION: RouteHook = Object.freeze({
  * `preact/compat` are needed on the server: render-to-string's async catch scopes
  * the retry to this child on its own.
  */
+/**
+ * Renders an `errorFallback` (static children or a `(error, reset) =>
+ * children` render fn) for a loader deny and wraps the result in the SAME
+ * `data-loader-deny` `<Envelope>` anchor on both the server and the client.
+ * The server's `DataReader` catch and the client's `LoaderHost` `fromBakedDeny`
+ * branch call this ONE function so they cannot silently drift out of lockstep
+ * (a divergence here is a hydration mismatch, not a cosmetic difference).
+ */
+export function renderDenyFallback(
+  errorFallback:
+    | ComponentChildren
+    | ((err: Error, reset: () => void) => ComponentChildren),
+  error: Error,
+  reset: () => void,
+  message: string
+): ComponentChildren {
+  const rendered =
+    typeof errorFallback === 'function'
+      ? errorFallback(error, reset)
+      : errorFallback;
+  return <Envelope anchor={{ kind: 'deny', message }}>{rendered}</Envelope>;
+}
+
 function DataReader<T>({
   reader,
   accumulate,
@@ -82,17 +105,13 @@ function DataReader<T>({
     // the fallback wrapped in an Envelope carrying the deny marker, so the
     // client seeds a coldError on hydration instead of refetching.
     recordServerDeny({ status: e.status, headers: e.headers });
-    const err = new Error(e.message);
-    const rendered =
-      typeof errorFallback === 'function'
-        ? // On the server there is no client runner to reset; the real reload is
-          // wired on hydration. A noop keeps the (error, reset) signature.
-          errorFallback(err, NOOP_RESET)
-        : errorFallback;
-    return (
-      <Envelope anchor={{ kind: 'deny', message: e.message }}>
-        {rendered}
-      </Envelope>
+    // On the server there is no client runner to reset; the real reload is
+    // wired on hydration. A noop keeps the (error, reset) signature.
+    return renderDenyFallback(
+      errorFallback,
+      new Error(e.message),
+      NOOP_RESET,
+      e.message
     );
   }
   // Project to the same public union the client carries on context, keyed on the
@@ -252,22 +271,23 @@ export function LoaderHost<T>({
     if (errorFallback != null) {
       // Local error UI. `reset` re-enters the loader (clears the error and
       // refetches), mirroring the old ErrorBoundary `reset` semantics.
-      const rendered =
-        typeof errorFallback === 'function'
+      //
+      // Hydration parity: a baked-deny coldError (seeded from the SSR marker)
+      // re-wraps the fallback in the SAME `data-loader-deny` Envelope the
+      // server emitted, via the shared `renderDenyFallback`, so the client DOM
+      // matches the server DOM under the shared `useId` and no mismatch /
+      // refetch occurs. A pure client-nav coldError (a real failed fetch, no
+      // baked marker) stays bare.
+      body = view.fromBakedDeny
+        ? renderDenyFallback(
+            errorFallback,
+            view.error,
+            reload,
+            view.error.message
+          )
+        : typeof errorFallback === 'function'
           ? errorFallback(view.error, reload)
           : errorFallback;
-      // Hydration parity: a baked-deny coldError (seeded from the SSR marker,
-      // Task 7) re-wraps the fallback in the SAME `data-loader-deny` Envelope
-      // the server emitted (Task 6), so the client DOM matches the server DOM
-      // under the shared `useId` and no mismatch / refetch occurs. A pure
-      // client-nav coldError (a real failed fetch, no baked marker) stays bare.
-      body = view.fromBakedDeny ? (
-        <Envelope anchor={{ kind: 'deny', message: view.error.message }}>
-          {rendered}
-        </Envelope>
-      ) : (
-        rendered
-      );
     } else {
       // No local handler: re-throw so an OUTER boundary (a page-level
       // `errorFallback` / `RouteBoundary`) catches it, exactly as the thrown

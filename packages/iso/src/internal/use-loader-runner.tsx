@@ -322,7 +322,15 @@ export function useLoaderRunner<T>(
   if (readerRef.current === null || locationChanged || loaderChanged) {
     prevLocKey.current = locKey;
     prevLoaderId.current = loaderRef.__id;
-    if (locationChanged || loaderChanged) setPhase({ tag: 'loading' });
+    if (locationChanged || loaderChanged) {
+      setPhase({ tag: 'loading' });
+      // A client navigation supersedes the SSR-baked deny exactly like a
+      // reload does: preact-iso does not remount on a location/param change,
+      // so without this the stale seed would keep overriding `finalView`
+      // below forever, hiding a freshly resolved success behind the old SSR
+      // deny fallback.
+      bakedDenyRef.current = null;
+    }
     // Default: no synchronous value. The non-throwing factories below set it
     // when a value is available immediately (preload/cache); a cold fetch leaves
     // it absent so the view stays `loading` until the phase settles.
@@ -340,10 +348,37 @@ export function useLoaderRunner<T>(
       }
     };
 
+    // The SSR preload/deny handoff is a ONE-TIME hydration adoption: only this
+    // loader instance's FIRST render can legitimately adopt server-baked state
+    // (`data-loader` or `data-loader-deny`). On a later client navigation
+    // (`locationChanged`, so `readerRef.current` is already set) the same
+    // `<section>` is still mounted carrying whatever the client `<Envelope>`
+    // re-wrote on the previous render. Re-reading it would adopt stale server
+    // state and skip the fetch entirely. Gate the read on first-render.
+    const isFirstRender = readerRef.current === null;
+
+    // Baked-deny seed takes precedence over any value preload/cache/fetch AND
+    // over BOTH consumption forms (single-value and streaming/accumulate): a
+    // denied loader wrote NO `data-loader`, only `data-loader-deny`, regardless
+    // of whether the loader is consumed as a single value or accumulated. This
+    // check is hoisted above the `accumulate` split so a finite streaming
+    // loader that denied during SSR also seeds a coldError instead of silently
+    // resubscribing over SSE and re-hitting the denied loader.
+    const bakedDeny =
+      isFirstRender && isBrowser()
+        ? getPreloadedDeny(id)
+        : ({ present: false } as const);
+
     // Each reader mode is one factory returning the stable `{ read }` carrier;
     // the dispatch below picks one by mode. The factories own their side effects
     // (syncRef adoption, subscriptions, in-flight tracking) and share `settle`.
-    if (accumulate) {
+    if (bakedDeny.present) {
+      denyConsumedRef.current = true;
+      bakedDenyRef.current = new Error(bakedDeny.message);
+      // Stub reader: the client never reads it; reload() rebuilds a real one
+      // for either consumption form.
+      readerRef.current = { read: () => undefined as unknown as T };
+    } else if (accumulate) {
       // A live loader never runs on the server (its infinite generator would
       // hang renderToStringAsync); LoaderHost renders the fallback for
       // live+server, so this stub reader is not consumed there.
@@ -486,43 +521,15 @@ export function useLoaderRunner<T>(
         );
       };
 
-      // The SSR preload is a ONE-TIME hydration handoff: only this loader
-      // instance's FIRST render can legitimately adopt the server-baked
-      // `data-loader` attribute. On a later client navigation (`locationChanged`,
-      // so `readerRef.current` is already set) the same `<section>` is still
-      // mounted carrying the attribute the client `<Envelope>` re-wrote on the
-      // previous render (`"null"` for the state path). Re-reading it would adopt
-      // that stale value as a present preload and skip the fetch entirely (the
-      // navigation never shows `loading` and lands on stale/`null` data). Gate
-      // the read on first-render, exactly like the cache branch.
-      const isFirstRender = readerRef.current === null;
-
-      // Baked-deny seed takes precedence over any value preload/cache/fetch: a
-      // denied loader wrote NO `data-loader`, only `data-loader-deny`.
-      const bakedDeny =
-        isFirstRender && isBrowser()
-          ? getPreloadedDeny(id)
-          : ({ present: false } as const);
-      if (bakedDeny.present) {
-        denyConsumedRef.current = true;
-        bakedDenyRef.current = new Error(bakedDeny.message);
-        // Stub reader: the client never reads it; reload() rebuilds a real one.
-        readerRef.current = { read: () => undefined as unknown as T };
+      const preloaded: SyncValue<T> = isFirstRender
+        ? getPreloadedData<T>(id)
+        : { present: false };
+      if (preloaded.present) {
+        readerRef.current = buildPreloadReader(preloaded);
+      } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
+        readerRef.current = buildCacheReader();
       } else {
-        const preloaded: SyncValue<T> = isFirstRender
-          ? getPreloadedData<T>(id)
-          : { present: false };
-        if (preloaded.present) {
-          readerRef.current = buildPreloadReader(preloaded);
-        } else if (
-          isBrowser() &&
-          isFirstRender &&
-          loaderRef.cache.has(locKey)
-        ) {
-          readerRef.current = buildCacheReader();
-        } else {
-          readerRef.current = buildColdFetchReader();
-        }
+        readerRef.current = buildColdFetchReader();
       }
     }
   }
