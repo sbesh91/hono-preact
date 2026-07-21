@@ -6,7 +6,6 @@ import { registerServerStreamingLoader } from './streaming-ssr.js';
 import type {
   ServerMiddleware,
   ServerLoaderCtx,
-  Middleware,
 } from '../define-middleware.js';
 import { dispatchServer } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
@@ -76,7 +75,8 @@ export async function runLoaderServer<T>(
   // pump below so chunks emitted during SSR flush observer hooks the same
   // way the RPC/SSE path does.
   const { middleware: allMiddleware, observers } = partitionUse(
-    (loaderRef.use ?? []) as ReadonlyArray<Middleware>
+    loaderRef.use ?? [],
+    `the \`use\` on loader ${loaderRef.__moduleKey ?? '<unkeyed>'}`
   );
   const serverMw = allMiddleware.filter(
     (m): m is ServerMiddleware<'loader'> => m.runs === 'server'

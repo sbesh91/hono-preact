@@ -24,4 +24,47 @@ describe('partitionUse', () => {
     expect(middleware).toEqual([mw1, mw2]);
     expect(observers).toEqual([obs1, obs2]);
   });
+
+  it('throws on an entry it cannot classify instead of bucketing it as an observer', () => {
+    // The fail-open this validation closes: a malformed middleware used to
+    // land in the observer bucket, and observers cannot deny.
+    expect(() => partitionUse([{ __kind: 'middlware' }])).toThrow(
+      /Invalid `use` entry at index 0: an object with `__kind` "middlware"/
+    );
+  });
+
+  it('throws on a middleware whose `runs` would fail the server filter', () => {
+    expect(() =>
+      partitionUse([{ __kind: 'middleware', runs: 'sever', fn: () => {} }])
+    ).toThrow(/a middleware whose `runs` is "sever"/);
+  });
+
+  it('throws on a middleware with no `fn`', () => {
+    expect(() =>
+      partitionUse([{ __kind: 'middleware', runs: 'server' }])
+    ).toThrow(/a middleware whose `fn` is not a function \(undefined\)/);
+  });
+
+  it('throws on null, undefined, and a bare function', () => {
+    expect(() => partitionUse([null])).toThrow(/: null\./);
+    expect(() => partitionUse([undefined])).toThrow(/: undefined\./);
+    expect(() => partitionUse([() => {}])).toThrow(/: a function\./);
+  });
+
+  it('reports the position of a bad entry that is not first, and the source label', () => {
+    const mw = defineServerMiddleware(async (_c, next) => {
+      await next();
+    });
+    const obs = defineStreamObserver({});
+    expect(() =>
+      partitionUse([mw, obs, null], 'the app-level `use`')
+    ).toThrow(/Invalid `use` entry at index 2 of the app-level `use`: null\./);
+  });
+
+  it('rejects a bad entry even when valid middleware follows it', () => {
+    const mw = defineServerMiddleware(async (_c, next) => {
+      await next();
+    });
+    expect(() => partitionUse([null, mw])).toThrow(/index 0/);
+  });
 });

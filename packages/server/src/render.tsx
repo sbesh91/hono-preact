@@ -5,7 +5,6 @@ import { prerender, locationStub } from 'preact-iso/prerender';
 import {
   isOutcome,
   type AppConfig,
-  type Middleware,
   type Outcome,
   type ServerMiddleware,
   type ServerPageCtx,
@@ -137,7 +136,8 @@ export async function renderPage(
 
         const rootUse = options?.appConfig?.use ?? [];
         const serverMw = partitionUse(
-          rootUse as ReadonlyArray<Middleware>
+          rootUse,
+          'the app-level `use`'
         ).middleware.filter(
           (m): m is ServerMiddleware<'page'> => m.runs === 'server'
         );
