@@ -97,7 +97,7 @@ describe('createCaller', () => {
     );
   });
 
-  it("throws on an unclassifiable entry in a loader `use` rather than dropping it", async () => {
+  it('throws on an unclassifiable entry in a loader `use` rather than dropping it', async () => {
     const c = await ctx();
     // A guard that lost its `runs`. The `use` option cannot express one, which
     // is the point of the test, so go through `unknown` to build it.

@@ -41,9 +41,9 @@ describe('isMiddleware', () => {
   });
 
   it('rejects a bad `runs`, so a typo cannot survive into the runs filter', () => {
-    expect(isMiddleware({ __kind: 'middleware', runs: 'sever', fn: noop })).toBe(
-      false
-    );
+    expect(
+      isMiddleware({ __kind: 'middleware', runs: 'sever', fn: noop })
+    ).toBe(false);
     expect(isMiddleware({ __kind: 'middleware', fn: noop })).toBe(false);
   });
 
@@ -140,9 +140,9 @@ describe('assertUseEntry', () => {
   });
 
   it('diagnoses an observer with a bad hook', () => {
-    expect(() =>
-      assertUseEntry({ __kind: 'observer', onChunk: 3 }, 0)
-    ).toThrow(/an observer whose `onChunk` is not a function \(number\)/);
+    expect(() => assertUseEntry({ __kind: 'observer', onChunk: 3 }, 0)).toThrow(
+      /an observer whose `onChunk` is not a function \(number\)/
+    );
   });
 
   it('diagnoses an unknown __kind', () => {

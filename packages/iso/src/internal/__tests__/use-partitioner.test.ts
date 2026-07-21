@@ -56,9 +56,9 @@ describe('partitionUse', () => {
       await next();
     });
     const obs = defineStreamObserver({});
-    expect(() =>
-      partitionUse([mw, obs, null], 'the app-level `use`')
-    ).toThrow(/Invalid `use` entry at index 2 of the app-level `use`: null\./);
+    expect(() => partitionUse([mw, obs, null], 'the app-level `use`')).toThrow(
+      /Invalid `use` entry at index 2 of the app-level `use`: null\./
+    );
   });
 
   it('rejects a bad entry even when valid middleware follows it', () => {

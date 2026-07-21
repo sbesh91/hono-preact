@@ -1,9 +1,5 @@
 import type { Middleware } from '../define-middleware.js';
-import {
-  assertUseEntry,
-  isMiddleware,
-  type AnyObserver,
-} from './use-entry.js';
+import { assertUseEntry, isMiddleware, type AnyObserver } from './use-entry.js';
 
 /**
  * Split a `use` array into middleware and stream observers.
