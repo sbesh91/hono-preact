@@ -55,7 +55,11 @@ import {
 } from '../../define-middleware.js';
 import { defineStreamObserver } from '../../define-stream-observer.js';
 
-const noop = async (_c: never, next: () => Promise<unknown>) => {
+// `_c: unknown` rather than a concrete ctx: parameter contravariance makes
+// this assignable to BOTH `ServerMiddleware['fn']` and `ClientMiddleware['fn']`,
+// so one helper feeds every factory below. (`never` does not work: a parameter
+// of type `never` accepts no argument at all.)
+const noop = async (_c: unknown, next: () => Promise<unknown>) => {
   await next();
 };
 
