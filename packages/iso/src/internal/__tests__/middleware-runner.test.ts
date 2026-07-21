@@ -433,6 +433,19 @@ describe('contract-violation message gating', () => {
     );
   });
 
+  it('explains in a client dev build', async () => {
+    // Pins DEV specifically: without this arm, a DEV -> PROD typo in the gate
+    // still passes the SSR and production cases below.
+    vi.stubEnv('SSR', false);
+    vi.stubEnv('DEV', true);
+    await expect(run(callsNextTwice)).rejects.toThrow(
+      /Each middleware must call next\(\) exactly once/
+    );
+    await expect(run(neverCallsNext)).rejects.toThrow(
+      /Returning silently is ambiguous/
+    );
+  });
+
   it('still throws in a client production build, tersely', async () => {
     vi.stubEnv('SSR', false);
     vi.stubEnv('DEV', false);
@@ -440,7 +453,7 @@ describe('contract-violation message gating', () => {
       /^Middleware at index 0 called next\(\) more than once\.$/
     );
     await expect(run(neverCallsNext)).rejects.toThrow(
-      /^Middleware at index 0 returned without calling next\(\)\.$/
+      /^Middleware at index 0 returned without calling next\(\) or short-circuiting via a thrown outcome\.$/
     );
   });
 });

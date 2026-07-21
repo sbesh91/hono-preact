@@ -194,6 +194,16 @@ describe('assertUseEntry', () => {
 // dropping an unclassifiable entry is the fail-open this module exists to
 // close, so it must still fail in every mode. Both branches are pinned here so
 // the terse one cannot rot untested.
+/** The thrown message, or a marker if the call did not throw at all. */
+function messageOf(fn: () => void): string {
+  try {
+    fn();
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+  return '<did not throw>';
+}
+
 describe('assertUseEntry message gating', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -219,10 +229,11 @@ describe('assertUseEntry message gating', () => {
     expect(() => assertUseEntry(null, 2, 'the page `use` for /admin')).toThrow(
       /^Invalid `use` entry at index 2 of the page `use` for \/admin\.$/
     );
-    // the diagnosis and the explanation are both absent
-    expect(() => assertUseEntry(null, 2)).not.toThrow(/silently dropped/);
-    expect(() => assertUseEntry({ __kind: 'middlware' }, 0)).not.toThrow(
-      /an object with/
+    // Assert on the caught message rather than `.not.toThrow(/re/)`, which
+    // also passes when nothing throws at all. The throw is the fail-closed
+    // guarantee, so a test for the message must first prove there IS one.
+    expect(messageOf(() => assertUseEntry({ __kind: 'middlware' }, 0))).toBe(
+      'Invalid `use` entry at index 0.'
     );
   });
 });

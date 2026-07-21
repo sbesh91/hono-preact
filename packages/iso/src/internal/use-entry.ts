@@ -122,11 +122,22 @@ function describeEntry(entry: unknown): string {
  * mode, since that is what reaches `onError`.
  *
  * Read `import.meta.env` INSIDE the function, never at module scope. Vite
- * loads `vite.config.ts` under plain Node, where `import.meta.env` is
- * undefined, so a module-scope read runs at import time and breaks the build
- * for anything that imports the framework from a config file. Inside a
- * function body it is only evaluated in bundled contexts, and it still folds
- * to a constant, so the branch below tree-shakes out of the client bundle.
+ * loads `vite.config.ts` by running it under plain Node, where
+ * `import.meta.env` is undefined, so a module-scope read evaluates at import
+ * time and breaks the build for anything that imports the framework from a
+ * config file. The same reason rules out a helper taking the message as an
+ * argument: the argument is always evaluated, so the long string stays
+ * referenced and stops tree-shaking.
+ *
+ * The `typeof` guard covers the unbundled case. Importing the built dist
+ * directly under Node leaves `import.meta.env` undefined, and without it this
+ * line throws `TypeError: Cannot read properties of undefined` in place of the
+ * real error, on a path whose whole job is to fail loudly. Unbundled means a
+ * debugging context, so it takes the explained branch. Vite still folds the
+ * whole test, so the long branch tree-shakes out of the client bundle at zero
+ * byte cost versus omitting the guard.
+ *
+ * See `middleware-runner.ts`, which gates its contract violations the same way.
  */
 export function assertUseEntry(
   entry: unknown,
@@ -136,7 +147,9 @@ export function assertUseEntry(
   if (isMiddleware(entry) || isObserver(entry)) return;
   const where = source ? ` of ${source}` : '';
   throw new Error(
-    import.meta.env.SSR || import.meta.env.DEV
+    typeof import.meta.env === 'undefined' ||
+      import.meta.env.SSR ||
+      import.meta.env.DEV
       ? `Invalid \`use\` entry at index ${index}${where}: ${describeEntry(entry)}. ` +
           'A `use` entry the framework cannot classify would be silently dropped ' +
           'from the middleware chain -- if this is an auth gate, it would not run.'
