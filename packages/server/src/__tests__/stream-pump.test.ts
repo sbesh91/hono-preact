@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { ServerLoaderStream } from '@hono-preact/iso/internal';
 import { streamDocumentResponse } from '../stream-pump.js';
 
@@ -49,6 +50,8 @@ async function runPump(opts: {
   requestSignal: AbortSignal;
   bindRequestScope?: <R>(fn: () => R | Promise<R>) => R | Promise<R>;
   dev?: boolean;
+  status?: ContentfulStatusCode;
+  denyHeaders?: Record<string, string>;
 }): Promise<Response> {
   const app = new Hono();
   app.get('/', (c: Context) =>
@@ -58,6 +61,8 @@ async function runPump(opts: {
       requestSignal: opts.requestSignal,
       bindRequestScope: opts.bindRequestScope ?? ((fn) => fn()),
       dev: opts.dev,
+      status: opts.status,
+      denyHeaders: opts.denyHeaders,
     })
   );
   return app.request('http://localhost/');
@@ -309,5 +314,55 @@ describe('streamDocumentResponse', () => {
     // The pump body (which resumes the generators) ran through the binder, so a
     // captured per-request scope is restored for generator continuations.
     expect(entered).toBe(1);
+  });
+
+  it('overrides the default Cache-Control with denyHeaders, but keeps structural headers', async () => {
+    const ac = new AbortController();
+    const a = makeLoader('a', ['x']);
+    const res = await runPump({
+      fullHtml: HTML_WITH_BODY,
+      streamingLoaders: [a.stream],
+      requestSignal: ac.signal,
+      status: 403,
+      denyHeaders: { 'Cache-Control': 'no-store', 'x-deny': 'yes' },
+    });
+
+    expect(res.status).toBe(403);
+    // Deny wins over the pump's own 'no-transform' default.
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(res.headers.get('x-deny')).toBe('yes');
+    // Structural headers are unaffected by denyHeaders.
+    expect(res.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
+    expect(res.headers.get('Transfer-Encoding')).toBe('chunked');
+    expect(res.headers.get('X-Accel-Buffering')).toBe('no');
+
+    await readAll(res);
+  });
+
+  it('a denyHeaders attempt to override a structural header is ignored', async () => {
+    const ac = new AbortController();
+    const a = makeLoader('a', ['x']);
+    const res = await runPump({
+      fullHtml: HTML_WITH_BODY,
+      streamingLoaders: [a.stream],
+      requestSignal: ac.signal,
+      denyHeaders: { 'Content-Type': 'application/json' },
+    });
+
+    expect(res.headers.get('Content-Type')).toBe('text/html; charset=utf-8');
+    await readAll(res);
+  });
+
+  it('defaults to the pump Cache-Control when denyHeaders is not supplied', async () => {
+    const ac = new AbortController();
+    const a = makeLoader('a', ['x']);
+    const res = await runPump({
+      fullHtml: HTML_WITH_BODY,
+      streamingLoaders: [a.stream],
+      requestSignal: ac.signal,
+    });
+
+    expect(res.headers.get('Cache-Control')).toBe('no-transform');
+    await readAll(res);
   });
 });

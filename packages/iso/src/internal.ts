@@ -35,6 +35,8 @@ export {
 } from './internal/route-locations.js';
 
 export { getPreloadedData, deletePreloadedData } from './internal/preload.js';
+export { getPreloadedDeny, deletePreloadedDeny } from './internal/preload.js';
+export type { PreloadedDeny } from './internal/preload.js';
 export {
   runRequestScope,
   getRequestStore,
@@ -69,6 +71,12 @@ export {
   takeServerStreamingLoaders,
 } from './internal/streaming-ssr.js';
 export type { ServerLoaderStream } from './internal/streaming-ssr.js';
+
+export {
+  recordServerDeny,
+  takeServerDeny,
+} from './internal/server-deny-registry.js';
+export type { ServerDenyRecord } from './internal/server-deny-registry.js';
 
 export {
   beginSubmit,

@@ -1,4 +1,4 @@
-import { getRequestStore } from '../cache.js';
+import { readRequestSlot, writeRequestSlot } from './request-scoped-slot.js';
 
 export type ServerLoaderStream = {
   loaderId: string;
@@ -16,14 +16,9 @@ export function registerServerStreamingLoader(
   loaderId: string,
   gen: AsyncGenerator<unknown, unknown, unknown>
 ): void {
-  const store = getRequestStore();
-  if (!store) return; // outside any request scope (e.g., client)
-  let list = store.get(REGISTRY_KEY) as ServerLoaderStream[] | undefined;
-  if (!list) {
-    list = [];
-    store.set(REGISTRY_KEY, list);
-  }
+  const list = readRequestSlot<ServerLoaderStream[]>(REGISTRY_KEY) ?? [];
   list.push({ loaderId, gen });
+  writeRequestSlot(REGISTRY_KEY, list);
 }
 
 /**
@@ -33,10 +28,7 @@ export function registerServerStreamingLoader(
  * `runRequestScope`.
  */
 export function takeServerStreamingLoaders(): ServerLoaderStream[] {
-  const store = getRequestStore();
-  if (!store) return [];
-  const list =
-    (store.get(REGISTRY_KEY) as ServerLoaderStream[] | undefined) ?? [];
-  store.set(REGISTRY_KEY, []);
+  const list = readRequestSlot<ServerLoaderStream[]>(REGISTRY_KEY) ?? [];
+  writeRequestSlot<ServerLoaderStream[]>(REGISTRY_KEY, []);
   return list;
 }

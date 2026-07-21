@@ -2,7 +2,12 @@ import type { RouteHook } from 'preact-iso';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { LoaderRef } from '../define-loader.js';
 import { isBrowser } from '../is-browser.js';
-import { getPreloadedData, deletePreloadedData } from './preload.js';
+import {
+  getPreloadedData,
+  deletePreloadedData,
+  getPreloadedDeny,
+  deletePreloadedDeny,
+} from './preload.js';
 import wrapPromise from './wrap-promise.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
 import { runLoader } from './loader-runner.js';
@@ -124,6 +129,19 @@ export function useLoaderRunner<T>(
     }
   });
 
+  // SSR-baked deny seed: set on the first client render when a `data-loader-deny`
+  // marker is present. While set, the view projects a coldError from it and NO
+  // fetch runs. A reload() clears it so a real fetch takes over.
+  const bakedDenyRef = useRef<Error | null>(null);
+  const denyConsumedRef = useRef(false);
+  const denyClearedRef = useRef(false);
+  useEffect(() => {
+    if (denyConsumedRef.current && !denyClearedRef.current) {
+      denyClearedRef.current = true;
+      deletePreloadedDeny(id);
+    }
+  });
+
   // True while a fetch is in flight: a cold load (no value yet) or an explicit
   // reload. Tracked via a ref so reload() can read it without recapturing on
   // every state change, and so the wrapPromise branch below can flip it
@@ -187,6 +205,9 @@ export function useLoaderRunner<T>(
   );
 
   const runReload = useCallback(() => {
+    // A reload supersedes the SSR-baked deny: drop the seed so the view projects
+    // from the real phase (loading -> success/coldError) as the refetch runs.
+    bakedDenyRef.current = null;
     inFlightRef.current = true;
     // Enter `revalidating` retaining the prior value (stale-while-revalidate);
     // with NO settled value fall back to a cold `loading`. Presence is
@@ -301,7 +322,15 @@ export function useLoaderRunner<T>(
   if (readerRef.current === null || locationChanged || loaderChanged) {
     prevLocKey.current = locKey;
     prevLoaderId.current = loaderRef.__id;
-    if (locationChanged || loaderChanged) setPhase({ tag: 'loading' });
+    if (locationChanged || loaderChanged) {
+      setPhase({ tag: 'loading' });
+      // A client navigation supersedes the SSR-baked deny exactly like a
+      // reload does: preact-iso does not remount on a location/param change,
+      // so without this the stale seed would keep overriding `finalView`
+      // below forever, hiding a freshly resolved success behind the old SSR
+      // deny fallback.
+      bakedDenyRef.current = null;
+    }
     // Default: no synchronous value. The non-throwing factories below set it
     // when a value is available immediately (preload/cache); a cold fetch leaves
     // it absent so the view stays `loading` until the phase settles.
@@ -319,10 +348,37 @@ export function useLoaderRunner<T>(
       }
     };
 
+    // The SSR preload/deny handoff is a ONE-TIME hydration adoption: only this
+    // loader instance's FIRST render can legitimately adopt server-baked state
+    // (`data-loader` or `data-loader-deny`). On a later client navigation
+    // (`locationChanged`, so `readerRef.current` is already set) the same
+    // `<section>` is still mounted carrying whatever the client `<Envelope>`
+    // re-wrote on the previous render. Re-reading it would adopt stale server
+    // state and skip the fetch entirely. Gate the read on first-render.
+    const isFirstRender = readerRef.current === null;
+
+    // Baked-deny seed takes precedence over any value preload/cache/fetch AND
+    // over BOTH consumption forms (single-value and streaming/accumulate): a
+    // denied loader wrote NO `data-loader`, only `data-loader-deny`, regardless
+    // of whether the loader is consumed as a single value or accumulated. This
+    // check is hoisted above the `accumulate` split so a finite streaming
+    // loader that denied during SSR also seeds a coldError instead of silently
+    // resubscribing over SSE and re-hitting the denied loader.
+    const bakedDeny =
+      isFirstRender && isBrowser()
+        ? getPreloadedDeny(id)
+        : ({ present: false } as const);
+
     // Each reader mode is one factory returning the stable `{ read }` carrier;
     // the dispatch below picks one by mode. The factories own their side effects
     // (syncRef adoption, subscriptions, in-flight tracking) and share `settle`.
-    if (accumulate) {
+    if (bakedDeny.present) {
+      denyConsumedRef.current = true;
+      bakedDenyRef.current = new Error(bakedDeny.message);
+      // Stub reader: the client never reads it; reload() rebuilds a real one
+      // for either consumption form.
+      readerRef.current = { read: () => undefined as unknown as T };
+    } else if (accumulate) {
       // A live loader never runs on the server (its infinite generator would
       // hang renderToStringAsync); LoaderHost renders the fallback for
       // live+server, so this stub reader is not consumed there.
@@ -465,16 +521,6 @@ export function useLoaderRunner<T>(
         );
       };
 
-      // The SSR preload is a ONE-TIME hydration handoff: only this loader
-      // instance's FIRST render can legitimately adopt the server-baked
-      // `data-loader` attribute. On a later client navigation (`locationChanged`,
-      // so `readerRef.current` is already set) the same `<section>` is still
-      // mounted carrying the attribute the client `<Envelope>` re-wrote on the
-      // previous render (`"null"` for the state path). Re-reading it would adopt
-      // that stale value as a present preload and skip the fetch entirely (the
-      // navigation never shows `loading` and lands on stale/`null` data). Gate
-      // the read on first-render, exactly like the cache branch.
-      const isFirstRender = readerRef.current === null;
       const preloaded: SyncValue<T> = isFirstRender
         ? getPreloadedData<T>(id)
         : { present: false };
@@ -510,8 +556,18 @@ export function useLoaderRunner<T>(
       }
     : toLoaderView(phase, syncRef.current);
 
+  // While the baked-deny seed is active, project it over whatever `view` would
+  // otherwise show (the phase is still `loading`, since no fetch ran): a
+  // coldError carrying `fromBakedDeny: true` so `loader.tsx` routes to
+  // `errorFallback` exactly like a real cold error, and Task 8 can re-wrap it
+  // in a matching Envelope.
+  const finalView: RunnerView<T> =
+    bakedDenyRef.current !== null
+      ? { kind: 'coldError', error: bakedDenyRef.current, fromBakedDeny: true }
+      : view;
+
   return {
-    view,
+    view: finalView,
     reload,
     reloading,
     // Non-null here: every branch above assigns `readerRef.current` before

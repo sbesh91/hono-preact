@@ -64,7 +64,7 @@ export type SyncValue<T> = { present: true; value: T } | { present: false };
  */
 export type LoaderView<T> =
   | { kind: 'render'; state: LoaderState<T> }
-  | { kind: 'coldError'; error: Error };
+  | { kind: 'coldError'; error: Error; fromBakedDeny?: true };
 
 /** Phases that carry a settled value. Structural; no `value !== undefined`. */
 type ValuedPhase<T> =

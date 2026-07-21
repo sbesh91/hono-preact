@@ -12,6 +12,8 @@ import { env } from '../../is-browser.js';
 vi.mock('../preload.js', () => ({
   getPreloadedData: vi.fn(() => ({ present: false })),
   deletePreloadedData: vi.fn(),
+  getPreloadedDeny: vi.fn(() => ({ present: false })),
+  deletePreloadedDeny: vi.fn(),
 }));
 
 // State-machine tests for useLoaderRunner. They drive the runner DIRECTLY (no

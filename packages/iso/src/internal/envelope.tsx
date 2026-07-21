@@ -7,7 +7,8 @@ import { LoaderIdContext } from './contexts.js';
 /** What the `data-loader` hydration attribute carries. Discriminated + extensible. */
 export type HydrationAnchor =
   | { kind: 'none' }
-  | { kind: 'data'; value: unknown };
+  | { kind: 'data'; value: unknown }
+  | { kind: 'deny'; message: string };
 
 type EnvelopeProps = {
   // Intrinsic elements only. A custom-component wrapper cannot forward the ref
@@ -28,6 +29,13 @@ export const Envelope: FunctionComponent<EnvelopeProps> = ({
   const id = useContext(LoaderIdContext);
   if (!id) throw new Error('<Envelope> must be inside a <Loader>');
 
+  // A deny anchor rides a SEPARATE attribute: the client reads it BEFORE
+  // `data-loader`, seeds a coldError, and skips the fetch. A denied loader
+  // writes NO `data-loader` (so `getPreloadedData` reports absent for it).
+  const denyAttr =
+    anchor.kind === 'deny'
+      ? JSON.stringify({ message: anchor.message })
+      : undefined;
   // Coerce undefined -> null so JSON.stringify(undefined) never reaches the wire.
   const dataLoader =
     anchor.kind === 'data' ? JSON.stringify(anchor.value ?? null) : 'null';
@@ -67,5 +75,9 @@ export const Envelope: FunctionComponent<EnvelopeProps> = ({
   // `h()` rather than JSX: a `ref` on a `<Tag>` whose type is the full
   // `keyof JSX.IntrinsicElements` union makes that union "too complex to
   // represent". `h(string, props)` types props loosely and sidesteps it.
-  return h(as, { id, 'data-loader': dataLoader, ref: setLive }, children);
+  const attrs: Record<string, unknown> =
+    anchor.kind === 'deny'
+      ? { id, 'data-loader-deny': denyAttr, ref: setLive }
+      : { id, 'data-loader': dataLoader, ref: setLive };
+  return h(as, attrs, children);
 };
