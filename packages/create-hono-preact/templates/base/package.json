@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "hono": "^4.12.14",
-    "hono-preact": "^0.11.0",
+    "hono-preact": "^0.12.0",
     "hoofd": "^1.7.3",
     "preact": "^10.29.1",
     "preact-iso": "github:preactjs/preact-iso#22460942e6e0ff9b9d4a8a9cf16222ad59797777"
