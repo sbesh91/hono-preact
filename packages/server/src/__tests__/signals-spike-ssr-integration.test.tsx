@@ -15,7 +15,7 @@ import { signal } from '@preact/signals';
 import { hydrate } from 'preact';
 import { Hono } from 'hono';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { act, waitFor } from '@testing-library/preact';
+import { act } from '@testing-library/preact';
 import type { RouteHook } from 'preact-iso';
 import { defineLoader } from '@hono-preact/iso';
 import { Loader } from '@hono-preact/iso/internal';
@@ -88,7 +88,8 @@ describe('GAP A: baked data-loader preload + signals through renderPage', () => 
     function Page() {
       renders();
       const s = loader.useData();
-      const msg = 'data' in s && s.data ? s.data.msg : 'pending';
+      // Match on `status`, the primary documented idiom (loading-states.mdx).
+      const msg = s.status === 'loading' ? 'pending' : s.data.msg;
       return (
         <p data-testid="page">
           {msg}

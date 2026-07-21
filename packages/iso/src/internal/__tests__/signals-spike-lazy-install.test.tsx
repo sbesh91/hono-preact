@@ -52,9 +52,13 @@ describe('deferred install of @preact/signals', () => {
     expect(postRenders).toHaveBeenCalledTimes(1);
   });
 
-  it('a component rendered BEFORE the install does not retroactively bind', async () => {
-    // Establishes the boundary condition: the tree that rendered pre-install
-    // keeps whatever binding it had. This is what a real app must not trip on.
+  // NOTE: this is deliberately the ordinary already-installed case, not a
+  // pre-install boundary test. By the time it runs, the dynamic import in the
+  // test above has already installed the hooks for the whole module. It exists
+  // as the baseline the deferred-install test is compared against; the actual
+  // before/after boundary is covered by that first test, which renders before
+  // importing.
+  it('baseline: signals already installed behaves the ordinary way', async () => {
     const { signal } = await import('@preact/signals');
     const v = signal(1);
 

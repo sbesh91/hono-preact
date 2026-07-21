@@ -20,11 +20,17 @@ function entryFor(modules, distBase) {
 
 async function bundleSize(contents) {
   const r = await build({
-    stdin: { contents, resolveDir: ROOT, loader: 'ts' },
+    stdin: { contents, resolveDir: ROOT, loader: 'js' },
     bundle: true, minify: true, format: 'esm', platform: 'browser',
     target: 'esnext', external: EXTERNAL, write: false, legalComments: 'none',
+    // Load-bearing, and the reason this file must not drift from
+    // measure-framework-size.mjs: Vite's production `define` drops DEV-gated
+    // framework code before measurement. Omitting it over-reports (it sized
+    // core at 4928 B instead of 4911 B).
+    define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true' },
+    logLevel: 'silent',
   });
-  return gzipSync(r.outputFiles[0].contents).length;
+  return gzipSync(Buffer.from(r.outputFiles[0].contents)).length;
 }
 
 const core = entryFor(CORE_MODULES, ISO_DIST);

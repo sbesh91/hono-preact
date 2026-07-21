@@ -48,6 +48,9 @@ function dripSseResponse(chunks: string[]): Response {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  // restoreAllMocks does NOT undo vi.stubGlobal('fetch', ...); unstub
+  // explicitly or T4's stub leaks into every test after it.
+  vi.unstubAllGlobals();
 });
 
 describe('T0: options hook chain', () => {
@@ -225,9 +228,10 @@ describe('T4: framework streaming loader path with signals loaded', () => {
 
     function Page() {
       const s = ref.useData();
-      if (!('data' in s) || s.data === undefined) {
-        return <p data-testid="count">pending</p>;
-      }
+      // Match on `status`, the primary documented idiom (loading-states.mdx).
+      // Only the `loading` arm lacks `data`, so this narrows cleanly and
+      // avoids a `data === undefined` presence test.
+      if (s.status === 'loading') return <p data-testid="count">pending</p>;
       return <p data-testid="count">{s.data.count}</p>;
     }
 

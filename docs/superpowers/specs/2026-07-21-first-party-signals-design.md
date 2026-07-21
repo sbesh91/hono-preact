@@ -41,7 +41,7 @@ framework's own sources emit signals.
 
 - Sub-component update granularity for framework-owned reactive sources.
 - **Zero bytes** for apps that do not opt in. This is the binding constraint; the
-  framework's positioning rests on a 4,928 B gz core.
+  framework's positioning rests on a 4,911 B gz core.
 - Additive API. `loader.View`, `useRoom`, `useSocket` keep their current shapes
   and current types.
 - No change to SSR output or to the hydration contract.
@@ -91,11 +91,16 @@ closure.
 bundle, peers external, minified, gzip; `scripts/spike-measure-signals.mjs`):
 
 ```
-framework core (baseline)      4928 B gz
-core + @preact/signals         8252 B gz   -> +3324 B gz (+67% on core)
+framework core (baseline)      4911 B gz
+core + @preact/signals         8227 B gz   -> +3316 B gz (+68% on core)
 @preact/signals alone          3512 B gz
 @preact/signals-core alone     2005 B gz
 ```
+
+The core figure agrees exactly with `node scripts/measure-framework-size.mjs`
+(`sectionA.core.total`), which is the check that the spike probe has not drifted
+from the authoritative one. It must keep agreeing: the probe only matches because
+it carries the same production `define`, without which it over-reports.
 
 The last row is a trap worth stating explicitly: `signals-core` is the cheap
 half but contains no Preact adapter, so it delivers **none** of the granularity.
@@ -117,7 +122,7 @@ the §2 constraint.
 **(B) A pluggable reactive cell.** The runner writes through a tiny interface
 whose default implementation is the current `useState` path. The opt-in module
 registers a signal-backed implementation at boot. Cost when unused is one
-indirection and a few hundred bytes; cost when used is the full 3,324 B.
+indirection and a few hundred bytes; cost when used is the full 3,316 B.
 
 **(C) Build-time selection.** `defineApp({ signals: true })` makes the Vite
 plugin alias the cell module to the signal-backed implementation. Zero runtime
@@ -232,7 +237,8 @@ interaction with the framework, not framework behavior, and they carry the only
 reason `@preact/signals` / `@preact/signals-core` appear in the root
 `devDependencies`. Delete all six files, `scripts/spike-measure-signals.mjs`, and
 both devDependencies when the implementation lands (or sooner, if this proposal
-is rejected). Nothing in `packages/` imports them.
+is rejected). No shipping code imports them: the only importers under
+`packages/` are the four spike test files themselves, all under `__tests__/`.
 
 Reproduce from this branch:
 
