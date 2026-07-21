@@ -38,6 +38,32 @@ type DispatchArgs<Ctx, T> = {
  *
  * `dispatchServer` / `dispatchClient` are thin scope-typed facades over this;
  * keeping one engine means the chain semantics are written and tested once.
+ *
+ * The two contract violations below always throw, but a production client
+ * build gets the terse form. Both messages explain a mistake only the app's
+ * author can fix, so shipping the explanation to every visitor spends bytes on
+ * the always-loaded path for prose an end user cannot act on. The server keeps
+ * the full text in every mode.
+ *
+ * Both sites repeat the same env test on purpose. Two rules govern its shape,
+ * and both were learned by breaking something:
+ *
+ * 1. Do NOT hoist it to a module-scope constant. Vite loads `vite.config.ts`
+ *    by running it under plain Node, where `import.meta.env` is undefined, so
+ *    a module-scope read evaluates at import time and breaks the build for
+ *    anything importing the framework from a config file. Inside a function
+ *    body it is evaluated only when that function runs.
+ * 2. Do NOT wrap it in a helper that takes the message as an argument. The
+ *    argument is always evaluated, so the long string stays referenced and
+ *    stops tree-shaking, which is the entire point.
+ *
+ * The `typeof` guard is what makes an unbundled runtime safe: importing the
+ * built dist directly under Node (a hand-wired server, a plain test harness)
+ * leaves `import.meta.env` undefined, and without the guard these lines throw
+ * `TypeError: Cannot read properties of undefined` in place of the real error.
+ * Unbundled means a debugging context, so it takes the explained branch. Vite
+ * still folds the whole test to a constant, so the long branch tree-shakes out
+ * of the client bundle; measured at zero byte cost versus omitting the guard.
  */
 export async function dispatch<Ctx, T>(
   args: DispatchArgs<Ctx, T>
@@ -55,10 +81,14 @@ export async function dispatch<Ctx, T>(
     const next: Next = async () => {
       if (downstream) {
         throw new Error(
-          `Middleware at index ${index} called next() more than once. ` +
-            `Each middleware must call next() exactly once: a second call ` +
-            `would re-run the downstream chain (and the inner function) ` +
-            `with the original ctx, producing duplicate side effects.`
+          typeof import.meta.env === 'undefined' ||
+            import.meta.env.SSR ||
+            import.meta.env.DEV
+            ? `Middleware at index ${index} called next() more than once. ` +
+                `Each middleware must call next() exactly once: a second call ` +
+                `would re-run the downstream chain (and the inner function) ` +
+                `with the original ctx, producing duplicate side effects.`
+            : `Middleware at index ${index} called next() more than once.`
         );
       }
       downstream = { value: await runChain(index + 1) };
@@ -68,9 +98,13 @@ export async function dispatch<Ctx, T>(
     if (isOutcome(ret)) throw ret;
     if (!downstream) {
       throw new Error(
-        `Middleware at index ${index} returned without calling next() or short-circuiting via a thrown outcome. ` +
-          `Middleware must either: (a) await/return next() to pass control on, or (b) throw a redirect/deny/render outcome to short-circuit. ` +
-          `Returning silently is ambiguous and would let downstream code run.`
+        typeof import.meta.env === 'undefined' ||
+          import.meta.env.SSR ||
+          import.meta.env.DEV
+          ? `Middleware at index ${index} returned without calling next() or short-circuiting via a thrown outcome. ` +
+              `Middleware must either: (a) await/return next() to pass control on, or (b) throw a redirect/deny/render outcome to short-circuit. ` +
+              `Returning silently is ambiguous and would let downstream code run.`
+          : `Middleware at index ${index} returned without calling next() or short-circuiting via a thrown outcome.`
       );
     }
     return downstream.value;

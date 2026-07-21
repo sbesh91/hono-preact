@@ -114,6 +114,30 @@ function describeEntry(entry: unknown): string {
  *
  * `source` names the layer the entry came from (e.g. "the app-level `use`"),
  * so `index` locates it in a specific array rather than in a merged chain.
+ *
+ * The throw is unconditional, but the explanation is not: a production client
+ * build gets the locator alone. The diagnosis is for whoever is building the
+ * app, and shipping it to every visitor costs bytes on the always-loaded path
+ * for prose an end user cannot act on. The server keeps the full text in every
+ * mode, since that is what reaches `onError`.
+ *
+ * Read `import.meta.env` INSIDE the function, never at module scope. Vite
+ * loads `vite.config.ts` by running it under plain Node, where
+ * `import.meta.env` is undefined, so a module-scope read evaluates at import
+ * time and breaks the build for anything that imports the framework from a
+ * config file. The same reason rules out a helper taking the message as an
+ * argument: the argument is always evaluated, so the long string stays
+ * referenced and stops tree-shaking.
+ *
+ * The `typeof` guard covers the unbundled case. Importing the built dist
+ * directly under Node leaves `import.meta.env` undefined, and without it this
+ * line throws `TypeError: Cannot read properties of undefined` in place of the
+ * real error, on a path whose whole job is to fail loudly. Unbundled means a
+ * debugging context, so it takes the explained branch. Vite still folds the
+ * whole test, so the long branch tree-shakes out of the client bundle at zero
+ * byte cost versus omitting the guard.
+ *
+ * See `middleware-runner.ts`, which gates its contract violations the same way.
  */
 export function assertUseEntry(
   entry: unknown,
@@ -123,8 +147,12 @@ export function assertUseEntry(
   if (isMiddleware(entry) || isObserver(entry)) return;
   const where = source ? ` of ${source}` : '';
   throw new Error(
-    `Invalid \`use\` entry at index ${index}${where}: ${describeEntry(entry)}. ` +
-      'A `use` entry the framework cannot classify would be silently dropped ' +
-      'from the middleware chain -- if this is an auth gate, it would not run.'
+    typeof import.meta.env === 'undefined' ||
+      import.meta.env.SSR ||
+      import.meta.env.DEV
+      ? `Invalid \`use\` entry at index ${index}${where}: ${describeEntry(entry)}. ` +
+          'A `use` entry the framework cannot classify would be silently dropped ' +
+          'from the middleware chain -- if this is an auth gate, it would not run.'
+      : `Invalid \`use\` entry at index ${index}${where}.`
   );
 }
