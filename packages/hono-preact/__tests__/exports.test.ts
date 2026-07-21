@@ -129,6 +129,8 @@ describe('hono-preact/internal export', () => {
     expect(typeof m.dispatchServer).toBe('function');
     expect(typeof m.dispatchClient).toBe('function');
     expect(typeof m.partitionUse).toBe('function');
+    expect(typeof m.isMiddleware).toBe('function');
+    expect(typeof m.isObserver).toBe('function');
     expect(typeof m.HonoRequestContext).toBe('function');
     expect(typeof m.subscribeToLoaderStream).toBe('function');
     expect(typeof m.registerServerStreamingLoader).toBe('function');

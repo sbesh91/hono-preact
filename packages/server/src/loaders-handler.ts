@@ -313,33 +313,34 @@ export function loadersHandler(
         });
       }
     }
-    const composed = await composeServerChainOrFailClosed<'loader'>(
-      {
-        requestSignal: c.req.raw.signal,
-        unitTimeoutMs: entry.timeoutMs,
-        defaultTimeoutMs,
-        appConfig,
-        resolvePageUse: routeBound ? resolvePageUse : EMPTY_PAGE_USE,
-        path: routeBound ? entry.routeId! : '',
-        unitUse: entry.use,
-      },
-      routeBound
-    );
+    const composed = await composeServerChainOrFailClosed<'loader'>({
+      requestSignal: c.req.raw.signal,
+      unitTimeoutMs: entry.timeoutMs,
+      defaultTimeoutMs,
+      appConfig,
+      resolvePageUse: routeBound ? resolvePageUse : EMPTY_PAGE_USE,
+      path: routeBound ? entry.routeId! : '',
+      unitUse: entry.use,
+    });
     if (!composed.ok) {
-      // resolvePageUse threw for the declared route id; fail closed so the
-      // loader never runs through a guard-less chain. The raw resolver message
-      // may carry internal detail, so surface it only in dev (matching the
-      // loaderFailure path below); onError always receives the full error for
-      // the observability side channel. (The page-actions-handler twin applies
-      // the same dev gate; both mask in production.)
+      // The chain could not be composed: either resolvePageUse threw for the
+      // declared route id, or one of the three `use` layers (app-level, page,
+      // the loader's own) holds an entry the framework cannot classify. Fail
+      // closed so the loader never runs through a guard-less chain. The raw
+      // error message may carry internal detail, so surface it only in dev
+      // (matching the loaderFailure path below); onError always receives the
+      // full error for the observability side channel. (The
+      // page-actions-handler twin applies the same dev gate; both mask in
+      // production.)
       onError?.(composed.error, { module, loader: loaderName });
       const detail = dev
         ? `: ${composed.error instanceof Error ? composed.error.message : String(composed.error)}`
         : '';
+      const unit = routeBound
+        ? `Route-bound loader '${entry.routeId}'`
+        : `Loader '${module}.${loaderName}'`;
       return c.json(
-        {
-          error: `Route-bound loader '${entry.routeId}' could not resolve its page-use chain${detail}`,
-        },
+        { error: `${unit} could not compose its middleware chain${detail}` },
         500
       );
     }
