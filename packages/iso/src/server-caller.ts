@@ -93,15 +93,18 @@ type ServerActionView = {
 // leg and no streaming pump, so a valid client middleware or observer is
 // correctly skipped. What must NOT be skipped is an entry the framework
 // cannot classify -- silently discarding one here is the same fail-open
-// partitionUse closes, so validate before filtering.
+// partitionUse closes, so validate before filtering. Shared by both the
+// loader and action legs; `source` names whichever one called it so the
+// error points at the right `use` array.
 function serverMiddleware(
-  use: ReadonlyArray<unknown> | undefined
+  use: ReadonlyArray<unknown> | undefined,
+  source: string
 ): ReadonlyArray<ServerMiddleware> {
   const entries = use ?? [];
   const out: ServerMiddleware[] = [];
   for (let index = 0; index < entries.length; index++) {
     const entry = entries[index];
-    assertUseEntry(entry, index, "the action's own `use`");
+    assertUseEntry(entry, index, source);
     if (isMiddleware(entry) && entry.runs === 'server') out.push(entry);
   }
   return out;
@@ -155,7 +158,7 @@ async function callLoader<T>(
   const signal = opts?.signal
     ? AbortSignal.any([c.req.raw.signal, opts.signal])
     : c.req.raw.signal;
-  const serverMw = serverMiddleware(ref.use);
+  const serverMw = serverMiddleware(ref.use, "the loader's own `use`");
   const ctx: ServerLoaderCtx = {
     scope: 'loader',
     c,
@@ -204,7 +207,7 @@ async function callAction<TResult>(
   ref: ServerActionView,
   payload: unknown
 ): Promise<CallResult<TResult>> {
-  const serverMw = serverMiddleware(ref.use);
+  const serverMw = serverMiddleware(ref.use, "the action's own `use`");
   const ctx: ServerActionCtx = {
     scope: 'action',
     c,

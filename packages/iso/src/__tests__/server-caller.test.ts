@@ -97,6 +97,20 @@ describe('createCaller', () => {
     );
   });
 
+  it("throws on an unclassifiable entry in a loader `use` rather than dropping it", async () => {
+    const c = await ctx();
+    // A guard that lost its `runs`. The `use` option cannot express one, which
+    // is the point of the test, so go through `unknown` to build it.
+    const malformed = {
+      __kind: 'middleware',
+      fn: async () => deny('FORBIDDEN'),
+    } as unknown as ServerMiddleware;
+    const loader = defineLoader(async () => 1, { use: [malformed] });
+    await expect(createCaller(c).call(loader)).rejects.toThrow(
+      /Invalid `use` entry at index 0 of the loader's own `use`: a middleware whose `runs` is undefined \(expected 'server' or 'client'\)/
+    );
+  });
+
   it('runs an action handler when middleware passes', async () => {
     const c = await ctx();
     const act = defineAction(async (_c, p: { x: number }) => ({
