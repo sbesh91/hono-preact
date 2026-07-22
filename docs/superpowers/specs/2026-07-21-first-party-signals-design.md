@@ -1,7 +1,9 @@
 # First-party signals: opt-in fine-grained reactivity
 
 Date: 2026-07-21
-Status: Proposal, pending review. Compatibility spike complete (see §4).
+Status: Proposal, pending review. Compatibility spike complete (§4); design
+spike (B) implemented end to end and its recommendation reversed as a result
+(§5a).
 Branch: `worktree-signals-spike`
 Framework version at time of writing: v0.12.0
 Milestone: **not v0.13** (that cut is Hardening & Ergonomics). Candidate for v0.14.
@@ -41,7 +43,8 @@ framework's own sources emit signals.
 
 - Sub-component update granularity for framework-owned reactive sources.
 - **Zero bytes** for apps that do not opt in. This is the binding constraint; the
-  framework's positioning rests on a 4,911 B gz core.
+  framework's positioning rests on a 4,911 B gz core. **Approach (B) fails this
+  by 530 B; see §5a.**
 - Additive API. `loader.View`, `useRoom`, `useSocket` keep their current shapes
   and current types.
 - No change to SSR output or to the hydration contract.
@@ -129,15 +132,81 @@ plugin alias the cell module to the signal-backed implementation. Zero runtime
 indirection and zero bytes when off, at the price of build coupling and a second
 code path that CI must exercise in both configurations.
 
-**Recommendation: (B).** It keeps one runtime code path, needs no build
-involvement, and the indirection is a property read on a hot-but-not-tight path.
-(C) is a later optimization if the indirection ever measures. (B) also degrades
-honestly: if the opt-in module is never imported, the registry is never
-populated and behavior is bit-identical to today.
+**Recommendation: (C), reversed from (B) after building (B).** See §5a. (B) works
+and is implemented on this branch, but it does not satisfy the §2 constraint: it
+costs **+530 B gz on the loaders feature for every app, including apps that never
+opt in**. If the zero-cost constraint is genuinely binding, (C) is the only
+option that meets it. If ~530 B is acceptable, (B) is materially simpler and can
+ship as-is.
 
 The registration ordering requirement is real but mild, and the spike covers it:
 late install works, so `boot-client` can register the signal-backed cell before
 the first route mounts without needing it in the entry closure.
+
+## 5a. What building (B) actually taught us
+
+(B) was implemented end to end against the real loader runner
+(`packages/iso/src/internal/reactive-cell.ts`, a mirror in
+`use-loader-runner.tsx`, a context published by `loader.tsx`, and
+`packages/iso/src/signals-spike.ts` as the opt-in module). Three findings, none
+of which were visible from the design alone.
+
+**1. The host must keep re-rendering. This is the important one.** The first
+implementation did the "obvious" optimization: with the phase in a signal, skip
+the host re-render unless the variant *tag* changed, so a `success -> success`
+value update costs nothing. That silently **froze every `useData()` and `.View()`
+consumer in the same tree at the first value**. They read `LoaderDataContext`,
+which only changes when the host re-renders. The additive-API promise in §2 was
+broken by the very optimization that looked like the point of the design.
+
+The correction is that the optimization was never needed. **Granularity comes
+from the consumer not subscribing, not from suppressing host renders.** A
+signal-bound child does not re-render when the host does, because `children`
+keeps its vnode identity across host renders and Preact bails on an identical
+vnode reference. So `useState` stays the source of truth, the host re-renders
+exactly as it always did, and the cell is a pure **mirror** that feeds derived
+signals. Everything keeps working and the win is unaffected.
+
+Consequence for the implementation PR: the cell is additive, not a replacement.
+It must never become the sole source of truth for the phase.
+
+**2. The cost is not "a few hundred bytes", it is 530.** Measured on the loaders
+feature (the probe that actually contains this code), signals absent:
+
+| | loaders total | marginal |
+| --- | --- | --- |
+| `main` | 8,677 B gz | 6,975 B gz |
+| (B), cell mirror + context only | 9,143 B gz | 7,433 B gz |
+| (B), full (incl. derived view signal) | 9,207 B gz | 7,501 B gz |
+
+So the derive block is cheap (64 B); the always-paid plumbing (cell module, the
+mirror write, the new context, the provider) is **466 B**. Core is unchanged at
+4,914 B (+3 B). This is what flips the recommendation: §2 says zero, and (B) is
+not zero.
+
+Measured as a feature row before it was moved to the exclusion list, the opt-in
+module costs **3,112 B gz marginal**: what an app pays on top of `loaders` when
+it actually imports it. So an opting-in app pays roughly 530 + 3,112 B, and a
+non-opting app pays the 530.
+
+Two build-gate facts the implementation PR will hit.
+`scripts/__tests__/size-manifest-completeness.test.mjs` fails on any new
+top-level client dist module that is not bucketed or explicitly excluded, so the
+`signals` row is mandatory, not optional. And
+`scripts/__tests__/measure-framework-size.test.mjs` builds each bucket against a
+COPY of the dist in a temp directory, where a bare specifier like
+`@preact/signals` cannot resolve; a real feature row therefore needs the probe to
+resolve dependencies from the repo root (or `@preact/signals` added to
+`EXTERNAL`, which would wrongly stop measuring its cost). The spike module is on
+the exclusion list for exactly this reason.
+
+**3. Test-shape trap worth recording.** A component passed as `children` to
+`<Loader>` never re-renders when the host re-renders, whatever the state
+implementation, because its vnode identity is stable. A "no re-render" assertion
+on such a component therefore passes vacuously. The E2E tests only became
+load-bearing once mutation-checked: making the derived signal non-reactive must
+break the DOM assertions, and changing the consumer from `{sig}` to `{sig.value}`
+must break the render-count assertion. Both were verified to fail.
 
 ## 6. Proposed surface
 
@@ -195,6 +264,10 @@ not glossed.
 
 ## 8. Risks and open questions
 
+0. **The cell must stay a mirror, never the source of truth.** Making the signal
+   authoritative and skipping host re-renders freezes `useData()` / `.View()`
+   consumers. Discovered by building it (§5a.1). Any implementation PR needs a
+   regression test with a legacy consumer and a signal consumer in the same tree.
 1. **Two ways to read the same data.** `.View`/`useData` and `useDataSignal`
    coexist forever. That is a real API-surface cost. Mitigation: docs present
    `.View` as the default and signals as the opt-in for dense live UI, never as
@@ -202,7 +275,10 @@ not glossed.
 2. **The `.value` footgun** (§6). No mitigation beyond documentation.
 3. **Optimistic overlay interaction is unexplored.** `useOptimistic` layers a
    pending queue over a base value. How that composes with a signal-backed base
-   is not designed here and not spiked. **Open.**
+   is not designed here and not spiked. **Still open**, but §5a.1 narrows it: the
+   overlay reads through the same `LoaderDataContext` path that must keep
+   working, so the mirror model is likely sufficient and the risk is lower than
+   when this doc was first written.
 4. **Devtools.** Preact devtools shows signal updates differently from state
    updates; a signal-driven DOM patch has no component in the profiler. Worth a
    note in docs.
@@ -256,6 +332,14 @@ node scripts/spike-measure-signals.mjs
 | `iso/.../signals-spike-lazy-install.test.tsx`            | deferred install after boot, the §5 enabler                           |
 | `server/.../signals-spike-ssr-integration.test.tsx`      | real `renderPage` + baked `data-loader`, no client refetch            |
 | `server/.../signals-spike-stream-integration.test.tsx`   | real streaming document, inline scripts, `installStreamRegistry`, hydrate |
+| `iso/.../signals-spike-e2e.test.tsx`                     | **the design spike**: real loader, real runner, real host; granularity, the `useData()` coexistence regression, and a no-impl control |
+
+The design-spike implementation is NOT test-only. It touches shipping files and
+must be reverted with the rest if this is rejected:
+`packages/iso/src/internal/reactive-cell.ts` (new),
+`packages/iso/src/signals-spike.ts` (new), plus the mirror in
+`use-loader-runner.tsx`, the context in `contexts.ts`, and the provider in
+`loader.tsx`.
 
 Two findings incidental to signals, recorded because they will resurface:
 
@@ -267,7 +351,11 @@ Two findings incidental to signals, recorded because they will resurface:
 
 ## 11. Recommendation
 
-Proceed, as an opt-in marginal module using approach (B), targeted at v0.14.
+Proceed as an opt-in module targeted at v0.14, but pick the approach against a
+now-measured number rather than an estimate: **(C)** if the zero-cost constraint
+in §2 is real, **(B)** if 530 B on the loaders feature is an acceptable price for
+a much simpler implementation. (B) exists and works on this branch; that is the
+fallback, not the plan of record.
 
 The case rests on one argument: the reactive sources are framework-owned, so
 this granularity is unreachable from userland no matter what an app author does.
@@ -275,5 +363,6 @@ Everything else about the feature is a cost. The payoff is concentrated in
 realtime, rooms, and live-loader-heavy applications; it is worth approximately
 nothing for content sites, which is precisely why it must not be in core.
 
-Before implementation, resolve open question §8.3 (optimistic overlay), since it
-is the one place the design could still need to change shape.
+Before implementation, settle the (B)-vs-(C) question above, since it decides
+whether the Vite plugin is involved at all. §8.3 (optimistic overlay) is still
+open but is now lower risk (§5a.1).

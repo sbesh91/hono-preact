@@ -15,6 +15,15 @@ export const LoaderDataContext = createContext<
   LoaderState<unknown> | StreamState<unknown> | null
 >(null);
 
+/**
+ * SPIKE (§5B): the runner's derived view signal, published so `useDataSignal()`
+ * can bind it. Null unless the opt-in signals module registered a reactive
+ * implementation. Structurally typed so core never names a Signal.
+ */
+export const LoaderViewSignalContext = createContext<{
+  readonly value: unknown;
+} | null>(null);
+
 export const ActiveLoaderIdContext = createContext<symbol | null>(null);
 
 export const LoaderErrorContext = createContext<Error | null>(null);

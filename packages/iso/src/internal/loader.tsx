@@ -10,6 +10,7 @@ import {
   LoaderDataContext,
   LoaderErrorContext,
   LoaderIdContext,
+  LoaderViewSignalContext,
 } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
@@ -198,7 +199,7 @@ export function LoaderHost<T>({
   // before the value lands. So the server path additionally suspends on the
   // runner's stable `reader` via a SEPARATE `DataReader` child (Mechanism B),
   // letting `renderToStringAsync` await the loader and bake the resolved value.
-  const { view, reloading, reload, reader } = useLoaderRunner<T>(
+  const { view, viewSignal, reloading, reload, reader } = useLoaderRunner<T>(
     loaderRef,
     location,
     id,
@@ -306,13 +307,15 @@ export function LoaderHost<T>({
 
   return (
     <LoaderIdContext.Provider value={id}>
-      <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
-        <ReloadContext.Provider value={{ reload, reloading }}>
-          <LoaderErrorContext.Provider value={error}>
-            {body}
-          </LoaderErrorContext.Provider>
-        </ReloadContext.Provider>
-      </ActiveLoaderIdContext.Provider>
+      <LoaderViewSignalContext.Provider value={viewSignal}>
+        <ActiveLoaderIdContext.Provider value={loaderRef.__id}>
+          <ReloadContext.Provider value={{ reload, reloading }}>
+            <LoaderErrorContext.Provider value={error}>
+              {body}
+            </LoaderErrorContext.Provider>
+          </ReloadContext.Provider>
+        </ActiveLoaderIdContext.Provider>
+      </LoaderViewSignalContext.Provider>
     </LoaderIdContext.Provider>
   );
 }
