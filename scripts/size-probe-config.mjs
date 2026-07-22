@@ -115,6 +115,14 @@ export const EXCLUDED_MODULES = [
   // stub); rides internal/pubsub's server-side backend, the same one
   // server-route.js and internal/subscribe-topic.js use.
   'event-stream.js',
+  // SPIKE (throwaway, delete with the rest of the signals spike). Excluded
+  // rather than bucketed because it imports the bare specifier
+  // `@preact/signals`, which cannot resolve from the temp dist directory that
+  // measure-framework-size.test.mjs builds against. A shipping implementation
+  // would be a real package dependency and would get a proper feature row (see
+  // section 9 of the signals design doc); its cost is measured meanwhile by
+  // scripts/spike-measure-signals.mjs.
+  'signals-spike.js',
   // Re-export barrels: no bytes of their own; measuring one measures everything.
   'index.js',
   'internal.js',

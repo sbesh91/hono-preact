@@ -28,6 +28,8 @@
   },
   "devDependencies": {
     "@lhci/cli": "^0.15.1",
+    "@preact/signals": "^2.9.4",
+    "@preact/signals-core": "^1.14.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/preact": "^3.2.4",
     "@vitest/coverage-v8": "^4.1.4",

@@ -9,6 +9,11 @@ import {
   deletePreloadedDeny,
 } from './preload.js';
 import wrapPromise from './wrap-promise.js';
+import {
+  getCellFactory,
+  getDeriveFactory,
+  type Cell,
+} from './reactive-cell.js';
 import { subscribeToLoaderStream } from './stream-registry.js';
 import { runLoader } from './loader-runner.js';
 import { serializeLocationForCache } from './cache-key.js';
@@ -71,6 +76,13 @@ export type LoaderRunnerState<T> = {
    * survives render-to-string's child-subtree replay.
    */
   reader: { read: () => T };
+  /**
+   * SPIKE (§5B): derived view signal, non-null only in signal mode on a
+   * single-value loader. `loader.tsx` publishes it on a context so
+   * `useDataSignal()` can bind it without any component reading `.value`
+   * during render.
+   */
+  viewSignal: { readonly value: RunnerView<T> } | null;
 };
 
 export function useLoaderRunner<T>(
@@ -82,7 +94,44 @@ export function useLoaderRunner<T>(
   // Single-value lifecycle as one ADT (replaces the `overrideData` sentinel +
   // separate `reloading`/`loadError` states). The public `view` is built
   // STRUCTURALLY from this phase below (value-presence = the variant tag).
-  const [phase, setPhase] = useState<LoaderPhase<T>>({ tag: 'loading' });
+  //
+  // SPIKE (§5B): the phase is ALSO mirrored into a pluggable cell. With no
+  // factory registered `signalCell` is null and this is exactly the previous
+  // `useState` behaviour, byte for byte. In signal mode the mirror feeds a
+  // derived view signal that consumers can bind without subscribing.
+  const [phaseState, setPhaseState] = useState<LoaderPhase<T>>({
+    tag: 'loading',
+  });
+  const signalCellRef = useRef<Cell<LoaderPhase<T>> | null | undefined>(
+    undefined
+  );
+  if (signalCellRef.current === undefined) {
+    const factory = getCellFactory();
+    signalCellRef.current = factory
+      ? factory<LoaderPhase<T>>({ tag: 'loading' })
+      : null;
+  }
+  const signalCell = signalCellRef.current;
+
+  // `useState` remains the SOURCE OF TRUTH and the host re-renders exactly as
+  // it always did. The cell is a MIRROR that feeds derived signals.
+  //
+  // An earlier version of this spike tried to suppress host re-renders on
+  // value-only updates (re-render only when the variant tag changed). That was
+  // wrong twice over: it silently froze every `useData()` / `.View()` consumer
+  // in the same tree at the first value, breaking the additive-API promise; and
+  // it was not needed for the win anyway. Granularity comes from the CONSUMER
+  // not subscribing. A host re-render does not re-render the signal-bound
+  // child, because `children` keeps its vnode identity across host renders and
+  // Preact bails on an identical vnode reference.
+  const phase = phaseState;
+  const setPhase = (
+    next: LoaderPhase<T> | ((prev: LoaderPhase<T>) => LoaderPhase<T>)
+  ): void => {
+    setPhaseState(next);
+    if (signalCell) signalCell.set(next);
+  };
+
   const [status, setStatus] = useState<StreamStatus>('connecting');
   // Accumulated value for the streaming path; reset on each (re)subscribe.
   const accRef = useRef<unknown>(accumulate ? accumulate.initial : undefined);
@@ -566,8 +615,35 @@ export function useLoaderRunner<T>(
       ? { kind: 'coldError', error: bakedDenyRef.current, fromBakedDeny: true }
       : view;
 
+  // SPIKE (§5B): in signal mode, expose a DERIVED view signal built once per
+  // mount. Reading `signalCell.source.value` inside the derive is what makes it
+  // recompute on every phase write, while the runner's own render-time read
+  // above stays a `peek()`. Consumers that bind this signal into JSX get the
+  // update as a text-node patch with no component re-render.
+  //
+  // Scope: single-value (non-accumulate) loaders only. The accumulate view also
+  // depends on `status`, which is still plain `useState`, so a streaming `.View`
+  // would need `status` moved into a cell too before it could be derived here.
+  const viewSignalRef = useRef<{ readonly value: RunnerView<T> } | null>(null);
+  if (signalCell && !accumulate && viewSignalRef.current === null) {
+    const derive = getDeriveFactory();
+    const source = signalCell.source;
+    if (derive && source) {
+      viewSignalRef.current = derive<RunnerView<T>>(() =>
+        bakedDenyRef.current !== null
+          ? {
+              kind: 'coldError',
+              error: bakedDenyRef.current,
+              fromBakedDeny: true,
+            }
+          : toLoaderView(source.value, syncRef.current)
+      );
+    }
+  }
+
   return {
     view: finalView,
+    viewSignal: viewSignalRef.current,
     reload,
     reloading,
     // Non-null here: every branch above assigns `readerRef.current` before
