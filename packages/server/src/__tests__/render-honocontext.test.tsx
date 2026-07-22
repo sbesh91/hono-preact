@@ -12,6 +12,19 @@ const loc = {
   pathParams: {},
 } as unknown as RouteHook;
 
+// A real Hono Context, minted by driving one throwaway request, for tests
+// that call `renderPage` directly rather than through `app.request`.
+async function ctx() {
+  const app = new Hono();
+  let captured!: import('hono').Context;
+  app.get('*', (c) => {
+    captured = c;
+    return c.text('ok');
+  });
+  await app.request('http://localhost/admin');
+  return captured;
+}
+
 describe('renderPage installs HonoRequestContext.Provider', () => {
   it('a server middleware inside the rendered tree receives the request c', async () => {
     let observedHeader: string | undefined = undefined;
@@ -101,5 +114,37 @@ describe('renderPage installs HonoRequestContext.Provider', () => {
     expect(res.status).toBe(403);
     const body = await res.text();
     expect(body).toBe('Forbidden');
+  });
+
+  // A malformed page-level `use` entry (a bad import lands as `undefined`, a
+  // typo'd brand as an unbranded object) must fail the SSR render outright
+  // rather than being silently bucketed as a stream observer (which does not
+  // gate) or swallowed by the suspense machinery. `startChain` in
+  // page-middleware-host.tsx throws synchronously, during render, before it
+  // ever returns the promise `prerender` suspends on; this pins that the
+  // synchronous throw propagates out of `prerender` (and out of `renderPage`)
+  // rather than being absorbed as an empty/partial page.
+  it('a malformed page-level `use` entry surfaces the classification error rather than being swallowed', async () => {
+    const c = await ctx();
+
+    // The `use` prop type cannot express an invalid entry, which is the point
+    // of the test; go through `unknown` to build one.
+    const bad = null as unknown as ReturnType<typeof defineServerMiddleware>;
+
+    const Layout = () => (
+      <html>
+        <body>
+          <Page>
+            <PageMiddlewareHost use={[bad]} location={loc}>
+              <div>secret</div>
+            </PageMiddlewareHost>
+          </Page>
+        </body>
+      </html>
+    );
+
+    await expect(renderPage(c, <Layout />)).rejects.toThrow(
+      'Invalid `use` entry at index 0 of the page `use` for /admin: null.'
+    );
   });
 });

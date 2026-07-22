@@ -309,26 +309,30 @@ export function pageActionsHandler(
       typeof routeId === 'string'
         ? { resolve: resolvePageUseByPattern, key: routeId, routeBound: true }
         : { resolve: EMPTY_PAGE_USE, key: '', routeBound: false };
-    const composed = await composeServerChainOrFailClosed<'action'>(
-      {
-        requestSignal: c.req.raw.signal,
-        unitTimeoutMs: timeoutMs,
-        defaultTimeoutMs,
-        appConfig,
-        resolvePageUse: pageTier.resolve,
-        path: pageTier.key,
-        unitUse: actionUse,
-      },
-      pageTier.routeBound
-    );
+    const composed = await composeServerChainOrFailClosed<'action'>({
+      requestSignal: c.req.raw.signal,
+      unitTimeoutMs: timeoutMs,
+      defaultTimeoutMs,
+      appConfig,
+      resolvePageUse: pageTier.resolve,
+      path: pageTier.key,
+      unitUse: actionUse,
+    });
     if (!composed.ok) {
+      // The chain could not be composed: either resolvePageUseByPattern threw
+      // for the declared route id, or one of the three `use` layers (app-level,
+      // page, the action's own) holds an entry the framework cannot classify.
+      // Fail closed so the action never runs through a guard-less chain.
       onError?.(composed.error, { module, action, routeId });
-      // The raw resolver message may carry internal detail; surface it only
+      // The raw error message may carry internal detail; surface it only
       // in dev, matching the loaders-handler twin. Both mask in production.
       const detail = dev
         ? `: ${composed.error instanceof Error ? composed.error.message : String(composed.error)}`
         : '';
-      const message = `Route-bound action '${routeId}' could not resolve its page-use chain${detail}`;
+      const unit = pageTier.routeBound
+        ? `Route-bound action '${routeId}'`
+        : `Action '${module}.${action}'`;
+      const message = `${unit} could not compose its middleware chain${detail}`;
       return accept === 'json'
         ? c.json({ __outcome: 'error', message }, 500)
         : c.text(message, 500);

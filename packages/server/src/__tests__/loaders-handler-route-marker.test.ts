@@ -175,7 +175,9 @@ describe('loadersHandler: route-marker chain composition', () => {
     expect(loaderFn).not.toHaveBeenCalled();
     // In dev the raw resolver message is surfaced to aid debugging.
     const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('could not resolve its page-use chain');
+    expect(body.error).toContain(
+      "Route-bound loader '/protected' could not compose its middleware chain"
+    );
     expect(body.error).toContain('Route not registered: /protected');
   });
 
@@ -206,7 +208,9 @@ describe('loadersHandler: route-marker chain composition', () => {
     expect(loaderFn).not.toHaveBeenCalled();
     // The fixed message is present; the raw internal detail is NOT leaked.
     const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('could not resolve its page-use chain');
+    expect(body.error).toContain(
+      "Route-bound loader '/protected' could not compose its middleware chain"
+    );
     expect(body.error).not.toContain('postgres://');
     expect(body.error).not.toContain('internal:');
   });

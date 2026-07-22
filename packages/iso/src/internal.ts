@@ -109,6 +109,10 @@ export {
   type DispatchResult,
 } from './internal/middleware-runner.js';
 export { partitionUse } from './internal/use-partitioner.js';
+// The classification predicates behind `partitionUse`, for callers that need
+// to classify a `use` entry without partitioning a whole array (e.g. the
+// server package's boot-time route-binding guard).
+export { isMiddleware, isObserver } from './internal/use-entry.js';
 export {
   fanStart,
   fanChunk,

@@ -262,6 +262,8 @@ use: [requireSessionServer, requireSessionClient, rateLimit, trace];
 
 Ordering matters for middleware: outer-to-inner is `appConfig.use` first, then node `use` (ancestors outer-first), then per-unit `use`, in the order each array lists them. Observers have no relative ordering: they all fire on every chunk in registration order, and one observer's slowness doesn't gate the others.
 
+Every entry has to be one of those two. The framework checks each one as it builds the chain, and an entry it cannot classify (a wrong import, a hand-rolled object missing `runs` or `fn`) throws with the array and index that hold it. It is deliberately loud: the alternative is a malformed guard quietly sitting in the observer bucket, where nothing it does can deny.
+
 ## Worked examples
 
 ### Auth gate with server + client legs

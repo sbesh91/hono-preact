@@ -3,6 +3,7 @@ import {
   defineServerMiddleware,
   defineClientMiddleware,
   defineStreamObserver,
+  type AppConfig,
 } from '@hono-preact/iso';
 import { composeServerChain } from '../compose-server-chain.js';
 
@@ -78,5 +79,71 @@ describe('composeServerChain', () => {
     expect(disabled.resolvedTimeoutMs).toBe(false);
     expect(disabled.timeoutSignal).toBeUndefined();
     expect(disabled.signal).toBe(reqSignal); // no timeout -> request signal passes through as-is
+  });
+
+  it('names the app layer and a layer-relative index for a bad app-level entry', async () => {
+    const ok = defineServerMiddleware<'action'>(async (_c, n) => {
+      await n();
+    });
+    // AppConfig['use'] cannot express an invalid entry, which is the point of
+    // the test; go through `unknown` to build one.
+    const appConfig = { use: [ok, null] } as unknown as AppConfig;
+    await expect(
+      composeServerChain<'action'>({ ...baseArgs, appConfig })
+    ).rejects.toThrow(
+      /Invalid `use` entry at index 1 of the app-level `use`: null\./
+    );
+  });
+
+  it('names the page layer and its own path for a bad page-level entry', async () => {
+    await expect(
+      composeServerChain<'action'>({
+        ...baseArgs,
+        path: '/admin/:id',
+        resolvePageUse: async () => [{ __kind: 'middlware' }],
+      })
+    ).rejects.toThrow(
+      /Invalid `use` entry at index 0 of the page `use` for \/admin\/:id: an object with `__kind` "middlware"/
+    );
+  });
+
+  it("names the unit layer, indexed within the unit's own use", async () => {
+    const ok = defineServerMiddleware<'action'>(async (_c, n) => {
+      await n();
+    });
+    await expect(
+      composeServerChain<'action'>({
+        ...baseArgs,
+        appConfig: { use: [ok] },
+        resolvePageUse: async () => [ok],
+        // Index 0 within the unit layer, which would be index 2 of the
+        // merged chain: the layer-relative index is the point.
+        unitUse: [{ __kind: 'middleware', runs: 'server' }],
+      })
+    ).rejects.toThrow(
+      /Invalid `use` entry at index 0 of the unit's own `use`: a middleware whose `fn` is not a function \(undefined\)/
+    );
+  });
+
+  it('keeps [app, page, unit] order when every layer is partitioned separately', async () => {
+    const appMw = defineServerMiddleware<'action'>(async (_c, n) => {
+      await n();
+    });
+    const appObs = defineStreamObserver({ onStart: () => {} });
+    const pageMw = defineServerMiddleware<'action'>(async (_c, n) => {
+      await n();
+    });
+    const unitObs = defineStreamObserver({ onEnd: () => {} });
+    const unitMw = defineServerMiddleware<'action'>(async (_c, n) => {
+      await n();
+    });
+    const { serverMw, observers } = await composeServerChain<'action'>({
+      ...baseArgs,
+      appConfig: { use: [appMw, appObs] },
+      resolvePageUse: async () => [pageMw],
+      unitUse: [unitObs, unitMw],
+    });
+    expect(serverMw).toEqual([appMw, pageMw, unitMw]);
+    expect(observers).toEqual([appObs, unitObs]);
   });
 });

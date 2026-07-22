@@ -337,4 +337,40 @@ describe('PageMiddlewareHost', () => {
     expect(screen.queryByText('protected-content')).toBeNull();
     expect(isDeny(caught)).toBe(true);
   });
+
+  // Classification is total: a page `use` entry the framework cannot classify
+  // (a bad import lands as `undefined`, a typo'd brand as an unbranded object)
+  // must throw rather than be bucketed as a stream observer, which would
+  // silently drop an auth gate. The message names the layer the way
+  // composeServerChain names the same tier, so the report is "the page `use`
+  // for /x" rather than a bare index into an anonymous array.
+  it('throws a layer-labelled error for an unclassifiable page `use` entry', async () => {
+    let caught: unknown = null;
+    class OuterCatch extends Component<{ children: ComponentChildren }> {
+      static getDerivedStateFromError(error: unknown) {
+        caught = error;
+        return {};
+      }
+      render() {
+        return caught !== null ? <div>outer-caught</div> : this.props.children;
+      }
+    }
+
+    setNavDirectionForTesting('push');
+
+    // The `use` prop type cannot express an invalid entry, which is the point
+    // of the test; go through `unknown` to build one.
+    const bad = null as unknown as ReturnType<typeof defineClientMiddleware>;
+    renderHostInRouter(bad, 'protected-content', (router) =>
+      h(OuterCatch, null, router)
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByText('outer-caught')).not.toBeNull()
+    );
+    expect(screen.queryByText('protected-content')).toBeNull();
+    expect((caught as Error).message).toContain(
+      'Invalid `use` entry at index 0 of the page `use` for /x: null.'
+    );
+  });
 });

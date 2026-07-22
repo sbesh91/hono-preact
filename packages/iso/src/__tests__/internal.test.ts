@@ -25,5 +25,7 @@ describe('@hono-preact/iso/internal', () => {
     expect(typeof internal.dispatchServer).toBe('function');
     expect(typeof internal.dispatchClient).toBe('function');
     expect(typeof internal.partitionUse).toBe('function');
+    expect(typeof internal.isMiddleware).toBe('function');
+    expect(typeof internal.isObserver).toBe('function');
   });
 });

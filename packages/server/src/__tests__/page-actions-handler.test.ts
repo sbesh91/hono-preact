@@ -8,6 +8,7 @@ import {
   defineAction,
   isTimeout,
   defineServerMiddleware,
+  type AppConfig,
 } from '@hono-preact/iso';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { VALIDATION_ISSUES_KEY } from '@hono-preact/iso/internal/runtime';
@@ -47,6 +48,7 @@ function buildHandler(
   pageUse?: { byPattern?: PageUseResolver },
   extra?: {
     dev?: boolean;
+    appConfig?: AppConfig;
     onError?: (
       err: unknown,
       ctx: { module: string; action: string; routeId?: string }
@@ -713,7 +715,7 @@ describe('pageActionsHandler', () => {
       expect(prodRes.status).toBe(500);
       const prodBody = await prodRes.json();
       expect(prodBody.message).toBe(
-        "Route-bound action '/foo/:id' could not resolve its page-use chain"
+        "Route-bound action '/foo/:id' could not compose its middleware chain"
       );
       const devRes = await postSubmit(
         buildHandler(routeBound, { byPattern }, { dev: true })
@@ -722,6 +724,45 @@ describe('pageActionsHandler', () => {
       expect(devBody.message).toContain(
         'resolver boom: internal path /srv/gates.ts'
       );
+    });
+
+    it('fails closed inside the handler when a bare action has an unclassifiable app-level `use`', async () => {
+      // A bare action gets no page tier, but the app-level and unit-level
+      // layers still apply to it. An entry the framework cannot classify makes
+      // composition throw for those layers too, and the throw must become the
+      // handler's own 500 envelope (plus onError) rather than escaping to
+      // Hono's default error handler.
+      const onError = vi.fn();
+      const gate = defineServerMiddleware<'action'>(async (_c, next) => {
+        await next();
+      });
+      const actionFn = vi.fn().mockResolvedValue({ ok: true });
+      // AppConfig['use'] cannot express an invalid entry, which is the point of
+      // the test (a bad import lands as `undefined` at runtime); go through
+      // `unknown` to build one.
+      const appConfig = { use: [gate, undefined] } as unknown as AppConfig;
+      const res = await postSubmit(
+        buildHandler({ submit: actionFn }, undefined, {
+          dev: true,
+          appConfig,
+          onError,
+        })
+      );
+
+      expect(res.status).toBe(500);
+      expect(actionFn).not.toHaveBeenCalled();
+      const body = await res.json();
+      // Named as the bare action it is, not as a page-use resolver failure.
+      expect(body.message).toContain(
+        "Action 'pages/test.server.submit' could not compose its middleware chain"
+      );
+      expect(body.message).toContain('Invalid `use` entry at index 1');
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+        module: 'pages/test.server',
+        action: 'submit',
+        routeId: undefined,
+      });
     });
   });
 

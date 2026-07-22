@@ -7,22 +7,14 @@ import { isRedirect, isRender, type Outcome } from '../outcomes.js';
 import type {
   ServerMiddleware,
   ClientMiddleware,
-  Middleware,
 } from '../define-middleware.js';
-import type { StreamObserver } from '../define-stream-observer.js';
 import { dispatchServer, dispatchClient } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
+import type { UseEntry } from './use-entry.js';
 import wrapPromise from './wrap-promise.js';
 import { useForceUpdate } from './use-force-update.js';
 import { hasClientNavigated } from './history-shim.js';
 import { HonoRequestContext } from './contexts.js';
-
-// Widest accepted observer shape: TResult defaults to `void` in
-// defineStreamObserver, so `StreamObserver<unknown, unknown>` would reject
-// the natural `StreamObserver<unknown, void>` produced by zero-arg
-// defineStreamObserver calls. Accept any TResult here.
-type AnyObserver = StreamObserver<unknown, never>;
-type UseEntry = Middleware | AnyObserver;
 
 type HostResult = { outcome: Outcome | undefined };
 
@@ -43,7 +35,13 @@ function startChain(
   location: RouteHook,
   honoCtx: Context | undefined
 ): Promise<HostResult> {
-  const { middleware } = partitionUse(use);
+  // Label the layer the way composeServerChain labels the same tier, so a
+  // malformed entry reports "the page `use` for /admin/:id" rather than a
+  // bare index into an anonymous array.
+  const { middleware } = partitionUse(
+    use,
+    `the page \`use\` for ${location.path}`
+  );
 
   if (isBrowser()) {
     const client = middleware.filter(

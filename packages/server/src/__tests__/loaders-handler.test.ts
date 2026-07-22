@@ -6,6 +6,7 @@ import {
   serverRoute,
   defineRoutes,
   defineServerMiddleware,
+  type AppConfig,
 } from '@hono-preact/iso';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { loadersHandler } from '../loaders-handler.js';
@@ -175,6 +176,58 @@ describe('loadersHandler', () => {
     });
     expect(onError).toHaveBeenCalledOnce();
     expect(onError).toHaveBeenCalledWith(realErr, {
+      module: 'pages/movies',
+      loader: 'default',
+    });
+  });
+
+  it('fails closed inside the handler when a bare loader has an unclassifiable app-level `use`', async () => {
+    // A route-independent (bare) loader gets no page tier, but the app-level
+    // and unit-level layers still apply to it. An entry the framework cannot
+    // classify makes composition throw for those layers too, and the throw must
+    // be translated into the handler's own 500 envelope (plus onError) rather
+    // than escaping to Hono's default error handler.
+    const onError = vi.fn();
+    const gate = defineServerMiddleware<'loader'>(async (_c, next) => {
+      await next();
+    });
+    const loaderFn = vi.fn().mockResolvedValue({ secret: 'data' });
+    // AppConfig['use'] cannot express an invalid entry, which is the point of
+    // the test (a bad import lands as `undefined` at runtime); go through
+    // `unknown` to build one.
+    const appConfig = {
+      use: [gate, undefined],
+    } as unknown as AppConfig;
+    const app = new Hono();
+    app.post(
+      '/__loaders',
+      loadersHandler(
+        {
+          './pages/movies.server.ts': {
+            __moduleKey: 'pages/movies',
+            serverLoaders: { default: loaderFn },
+          },
+        },
+        { dev: true, onError, appConfig, resolvePageUse: async () => [] }
+      )
+    );
+
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
+
+    expect(res.status).toBe(500);
+    expect(loaderFn).not.toHaveBeenCalled();
+    const body = (await res.json()) as { error: string };
+    // Named as the bare loader it is, not as a page-use resolver failure.
+    expect(body.error).toContain(
+      "Loader 'pages/movies.default' could not compose its middleware chain"
+    );
+    expect(body.error).toContain('Invalid `use` entry at index 1');
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
       module: 'pages/movies',
       loader: 'default',
     });

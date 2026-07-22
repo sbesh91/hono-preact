@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { createCaller } from '../server-caller.js';
 import { defineLoader } from '../define-loader.js';
 import { defineAction } from '../action.js';
-import { defineServerMiddleware } from '../define-middleware.js';
+import {
+  defineServerMiddleware,
+  type ServerMiddleware,
+} from '../define-middleware.js';
 import { serverRoute } from '../server-route.js';
 import { deny } from '../outcomes.js';
 
@@ -75,6 +78,37 @@ describe('createCaller', () => {
     expect(r.ok).toBe(false);
     if (!r.ok && r.outcome.__outcome === 'deny')
       expect(r.outcome.code).toBe('FORBIDDEN');
+  });
+
+  it('throws on an unclassifiable entry in an action `use` rather than dropping it', async () => {
+    const c = await ctx();
+    // A guard that lost its `runs`. The `use` option cannot express one, which
+    // is the point of the test, so go through `unknown` to build it.
+    const malformed = {
+      __kind: 'middleware',
+      fn: async () => deny('FORBIDDEN'),
+    } as unknown as ServerMiddleware;
+    const act = defineAction(
+      async (_c, p: { x: number }) => ({ doubled: p.x * 2 }),
+      { use: [malformed] }
+    );
+    await expect(createCaller(c).call(act, { x: 21 })).rejects.toThrow(
+      /Invalid `use` entry at index 0 of the action's own `use`: a middleware whose `runs` is undefined \(expected 'server' or 'client'\)/
+    );
+  });
+
+  it('throws on an unclassifiable entry in a loader `use` rather than dropping it', async () => {
+    const c = await ctx();
+    // A guard that lost its `runs`. The `use` option cannot express one, which
+    // is the point of the test, so go through `unknown` to build it.
+    const malformed = {
+      __kind: 'middleware',
+      fn: async () => deny('FORBIDDEN'),
+    } as unknown as ServerMiddleware;
+    const loader = defineLoader(async () => 1, { use: [malformed] });
+    await expect(createCaller(c).call(loader)).rejects.toThrow(
+      /Invalid `use` entry at index 0 of the loader's own `use` for <unkeyed>: a middleware whose `runs` is undefined \(expected 'server' or 'client'\)/
+    );
   });
 
   it('runs an action handler when middleware passes', async () => {

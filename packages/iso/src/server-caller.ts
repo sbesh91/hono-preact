@@ -8,6 +8,7 @@ import {
   coerceActionInput,
 } from './internal/loader-schema.js';
 import { dispatchServer } from './internal/middleware-runner.js';
+import { assertUseEntry, isMiddleware } from './internal/use-entry.js';
 import { runRequestScope, getRequestStore } from './cache.js';
 import type {
   ServerLoaderCtx,
@@ -82,20 +83,29 @@ type ServerActionView = {
     ctx: { c: Context; signal: AbortSignal; call: ServerCaller['call'] },
     payload: unknown
   ): unknown;
-  use?: ReadonlyArray<{ __kind: string; runs?: string }>;
+  use?: ReadonlyArray<unknown>;
   input?: StandardSchemaV1;
   __module?: string;
   __action?: string;
 };
 
+// The in-process `call()` path runs server middleware only: it has no client
+// leg and no streaming pump, so a valid client middleware or observer is
+// correctly skipped. What must NOT be skipped is an entry the framework
+// cannot classify -- silently discarding one here is the same fail-open
+// partitionUse closes, so validate before filtering. Shared by both the
+// loader and action legs; `source` names whichever one called it so the
+// error points at the right `use` array.
 function serverMiddleware(
-  use: ReadonlyArray<{ __kind: string; runs?: string }> | undefined
+  use: ReadonlyArray<unknown> | undefined,
+  source: string
 ): ReadonlyArray<ServerMiddleware> {
+  const entries = use ?? [];
   const out: ServerMiddleware[] = [];
-  for (const entry of use ?? []) {
-    if (entry.__kind === 'middleware' && entry.runs === 'server') {
-      out.push(entry as ServerMiddleware);
-    }
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
+    assertUseEntry(entry, index, source);
+    if (isMiddleware(entry) && entry.runs === 'server') out.push(entry);
   }
   return out;
 }
@@ -148,7 +158,10 @@ async function callLoader<T>(
   const signal = opts?.signal
     ? AbortSignal.any([c.req.raw.signal, opts.signal])
     : c.req.raw.signal;
-  const serverMw = serverMiddleware(ref.use);
+  const serverMw = serverMiddleware(
+    ref.use,
+    `the loader's own \`use\` for ${ref.__moduleKey ?? '<unkeyed>'}`
+  );
   const ctx: ServerLoaderCtx = {
     scope: 'loader',
     c,
@@ -197,7 +210,7 @@ async function callAction<TResult>(
   ref: ServerActionView,
   payload: unknown
 ): Promise<CallResult<TResult>> {
-  const serverMw = serverMiddleware(ref.use);
+  const serverMw = serverMiddleware(ref.use, "the action's own `use`");
   const ctx: ServerActionCtx = {
     scope: 'action',
     c,
