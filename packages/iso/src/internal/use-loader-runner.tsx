@@ -2,14 +2,13 @@ import type { RouteHook } from 'preact-iso';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { LoaderRef } from '../define-loader.js';
 import { isBrowser } from '../is-browser.js';
+import { deletePreloadedData, deletePreloadedDeny } from './preload.js';
 import {
-  getPreloadedData,
-  deletePreloadedData,
-  getPreloadedDeny,
-  deletePreloadedDeny,
-} from './preload.js';
-import wrapPromise from './wrap-promise.js';
-import { subscribeToLoaderStream } from './stream-registry.js';
+  createLoaderSession,
+  nextAbortSignal,
+  type LoaderSession,
+} from './loader-session.js';
+import { buildLoaderReader } from './loader-readers.js';
 import { runLoader } from './loader-runner.js';
 import { serializeLocationForCache } from './cache-key.js';
 import type {
@@ -17,7 +16,6 @@ import type {
   LoaderView,
   StreamState,
   StreamStatus,
-  SyncValue,
 } from '../loader-state.js';
 import {
   hasPhaseValue,
@@ -84,34 +82,26 @@ export function useLoaderRunner<T>(
   // STRUCTURALLY from this phase below (value-presence = the variant tag).
   const [phase, setPhase] = useState<LoaderPhase<T>>({ tag: 'loading' });
   const [status, setStatus] = useState<StreamStatus>('connecting');
-  // Accumulated value for the streaming path; reset on each (re)subscribe.
-  const accRef = useRef<unknown>(accumulate ? accumulate.initial : undefined);
-
-  // The synchronously-available value (SSR-preload hit, browser-cache hit) as a
-  // present/absent carrier, so a preload/cache value of `null` / `undefined` is
-  // distinguished from absence STRUCTURALLY (not via `!== undefined`). Reset to
-  // absent whenever a fetching reader is built or the location / loader identity
-  // changes, so a cold load reports no synchronous value.
-  const syncRef = useRef<SyncValue<T>>({ present: false });
+  // All non-rendering bookkeeping for this loader instance lives in one named
+  // value rather than ten sibling refs. See `loader-session.ts` for why.
+  const sessionRef = useRef<LoaderSession<T> | null>(null);
+  if (sessionRef.current === null) {
+    const created = createLoaderSession<T>();
+    if (accumulate) created.acc = accumulate.initial;
+    sessionRef.current = created;
+  }
+  const session = sessionRef.current;
 
   const locationRef = useRef(location);
   locationRef.current = location;
 
-  const abortRef = useRef<AbortController | null>(null);
-
-  function newAbortSignal(): AbortSignal {
-    // Abort the previous controller (cancels any in-flight loader),
-    // then allocate a fresh one whose signal is passed to the new fn call.
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-    return abortRef.current.signal;
-  }
+  const newAbortSignal = () => nextAbortSignal(session);
 
   useEffect(
     () => () => {
-      if (abortRef.current) abortRef.current.abort();
+      if (session.abort) session.abort.abort();
     },
-    []
+    [session]
   );
 
   // Cleanup of the SSR preload attribute is deferred to after commit so
@@ -120,11 +110,9 @@ export function useLoaderRunner<T>(
   // half-cleared element). The render path sets `preloadConsumedRef` when
   // it reads the payload; this effect clears the attribute exactly once,
   // on the first commit that consumed it.
-  const preloadConsumedRef = useRef(false);
-  const preloadClearedRef = useRef(false);
   useEffect(() => {
-    if (preloadConsumedRef.current && !preloadClearedRef.current) {
-      preloadClearedRef.current = true;
+    if (session.preloadConsumed && !session.preloadCleared) {
+      session.preloadCleared = true;
       deletePreloadedData(id);
     }
   });
@@ -132,23 +120,12 @@ export function useLoaderRunner<T>(
   // SSR-baked deny seed: set on the first client render when a `data-loader-deny`
   // marker is present. While set, the view projects a coldError from it and NO
   // fetch runs. A reload() clears it so a real fetch takes over.
-  const bakedDenyRef = useRef<Error | null>(null);
-  const denyConsumedRef = useRef(false);
-  const denyClearedRef = useRef(false);
   useEffect(() => {
-    if (denyConsumedRef.current && !denyClearedRef.current) {
-      denyClearedRef.current = true;
+    if (session.denyConsumed && !session.denyCleared) {
+      session.denyCleared = true;
       deletePreloadedDeny(id);
     }
   });
-
-  // True while a fetch is in flight: a cold load (no value yet) or an explicit
-  // reload. Tracked via a ref so reload() can read it without recapturing on
-  // every state change, and so the wrapPromise branch below can flip it
-  // during render without scheduling an extra setState.
-  const inFlightRef = useRef(false);
-  const queuedReloadRef = useRef(false);
-  const runReloadRef = useRef<() => void>(() => {});
 
   // Normalize an unknown thrown value and push it into the error phase. Value
   // presence is STRUCTURAL: if the current phase already carries a settled value,
@@ -159,7 +136,7 @@ export function useLoaderRunner<T>(
   const setError = (err: unknown) => {
     const error = toError(err);
     setPhase((p) => {
-      const current = resolveCurrentValue(p, syncRef.current);
+      const current = resolveCurrentValue(p, session.sync);
       return current.present
         ? { tag: 'staleError', error, value: current.value }
         : { tag: 'error', error };
@@ -172,11 +149,11 @@ export function useLoaderRunner<T>(
   const applyChunk = useCallback(
     (chunk: unknown) => {
       if (!accumulate) return;
-      accRef.current = accumulate.reduce(accRef.current, chunk);
+      session.acc = accumulate.reduce(session.acc, chunk);
       // A fresh `success` object per chunk; streaming already re-renders. The
       // accumulator is `unknown` by design (erased-ref boundary), so reading it
       // as `T` here is the ONE sanctioned cast (not a phase-variant coercion).
-      setPhase({ tag: 'success', value: accRef.current as T });
+      setPhase({ tag: 'success', value: session.acc as T });
       setStatus('open');
     },
     [accumulate]
@@ -190,7 +167,7 @@ export function useLoaderRunner<T>(
   // relies on the 'connecting' default, while reload sets it explicitly first.
   const subscribeAccumulate = useCallback(
     (signal: AbortSignal): Promise<T> => {
-      accRef.current = accumulate!.initial;
+      session.acc = accumulate!.initial;
       return runLoader<T>(loaderRef, locationRef.current, id, signal, {
         onChunk: (value) => applyChunk(value),
         onError: (err) => {
@@ -207,8 +184,8 @@ export function useLoaderRunner<T>(
   const runReload = useCallback(() => {
     // A reload supersedes the SSR-baked deny: drop the seed so the view projects
     // from the real phase (loading -> success/coldError) as the refetch runs.
-    bakedDenyRef.current = null;
-    inFlightRef.current = true;
+    session.bakedDeny = null;
+    session.inFlight = true;
     // Enter `revalidating` retaining the prior value (stale-while-revalidate);
     // with NO settled value fall back to a cold `loading`. Presence is
     // STRUCTURAL: the phase carries a value, OR a preload/cache value was adopted
@@ -216,7 +193,7 @@ export function useLoaderRunner<T>(
     // while its value lives on `syncRef`). NOT `prior !== undefined`, so a reload
     // over a settled-`undefined` value still revalidates (review #2/#3).
     setPhase((p) => {
-      const current = resolveCurrentValue(p, syncRef.current);
+      const current = resolveCurrentValue(p, session.sync);
       return current.present
         ? { tag: 'revalidating', value: current.value }
         : { tag: 'loading' };
@@ -233,17 +210,17 @@ export function useLoaderRunner<T>(
         .then((firstChunk) => {
           // applyChunk moves the phase to `success` (clears reloading).
           applyChunk(firstChunk);
-          inFlightRef.current = false;
-          if (queuedReloadRef.current) {
-            queuedReloadRef.current = false;
-            runReloadRef.current();
+          session.inFlight = false;
+          if (session.queuedReload) {
+            session.queuedReload = false;
+            session.runReload();
           }
         })
         .catch((err: unknown) => {
           setError(err);
           setStatus('error');
-          inFlightRef.current = false;
-          queuedReloadRef.current = false;
+          session.inFlight = false;
+          session.queuedReload = false;
         });
       return;
     }
@@ -280,26 +257,26 @@ export function useLoaderRunner<T>(
         // A fresh `success` per settle (clears reloading); `result` may be
         // `undefined`, which is a real state change here (review #10).
         setPhase({ tag: 'success', value: result });
-        inFlightRef.current = false;
-        if (queuedReloadRef.current) {
-          queuedReloadRef.current = false;
-          runReloadRef.current();
+        session.inFlight = false;
+        if (session.queuedReload) {
+          session.queuedReload = false;
+          session.runReload();
         }
       })
       .catch((err: unknown) => {
         setError(err);
-        inFlightRef.current = false;
-        queuedReloadRef.current = false;
+        session.inFlight = false;
+        session.queuedReload = false;
       });
   }, [loaderRef, accumulate, applyChunk, subscribeAccumulate]);
-  runReloadRef.current = runReload;
+  session.runReload = runReload;
 
   const reload = useCallback(() => {
-    if (inFlightRef.current) {
-      queuedReloadRef.current = true;
+    if (session.inFlight) {
+      session.queuedReload = true;
       return;
     }
-    runReloadRef.current();
+    session.runReload();
   }, []);
 
   // Stable reader: only rebuilt when location or loader identity changes.
@@ -311,17 +288,20 @@ export function useLoaderRunner<T>(
   // The location key includes path AND searchParams so /movies?genre=action →
   // /movies?genre=drama refetches even though preact-iso doesn't remount on
   // querystring changes.
-  const readerRef = useRef<{ read: () => T } | null>(null);
   const locKey = serializeLocationForCache(location, loaderRef.params);
-  const prevLocKey = useRef(locKey);
-  const prevLoaderId = useRef(loaderRef.__id);
+  // Seed once, to the first render's values, so neither reads as "changed" on
+  // the first render (this reproduces the previous `useRef(locKey)` init).
+  if (session.loaderId === null) {
+    session.locKey = locKey;
+    session.loaderId = loaderRef.__id;
+  }
 
-  const locationChanged = prevLocKey.current !== locKey;
-  const loaderChanged = prevLoaderId.current !== loaderRef.__id;
+  const locationChanged = session.locKey !== locKey;
+  const loaderChanged = session.loaderId !== loaderRef.__id;
 
-  if (readerRef.current === null || locationChanged || loaderChanged) {
-    prevLocKey.current = locKey;
-    prevLoaderId.current = loaderRef.__id;
+  if (session.reader === null || locationChanged || loaderChanged) {
+    session.locKey = locKey;
+    session.loaderId = loaderRef.__id;
     if (locationChanged || loaderChanged) {
       setPhase({ tag: 'loading' });
       // A client navigation supersedes the SSR-baked deny exactly like a
@@ -329,209 +309,28 @@ export function useLoaderRunner<T>(
       // so without this the stale seed would keep overriding `finalView`
       // below forever, hiding a freshly resolved success behind the old SSR
       // deny fallback.
-      bakedDenyRef.current = null;
+      session.bakedDeny = null;
     }
     // Default: no synchronous value. The non-throwing factories below set it
     // when a value is available immediately (preload/cache); a cold fetch leaves
     // it absent so the view stays `loading` until the phase settles.
-    syncRef.current = { present: false };
+    session.sync = { present: false };
 
-    // Shared post-suspend drain for the cold/streaming readers: clear the
-    // in-flight flag and run a reload() that was queued while suspended. One
-    // definition replaces the per-mode `settle`/`settleAcc` copies the
-    // reader-construction branches used to keep in lockstep by hand.
-    const settle = () => {
-      inFlightRef.current = false;
-      if (queuedReloadRef.current) {
-        queuedReloadRef.current = false;
-        runReloadRef.current();
-      }
-    };
-
-    // The SSR preload/deny handoff is a ONE-TIME hydration adoption: only this
-    // loader instance's FIRST render can legitimately adopt server-baked state
-    // (`data-loader` or `data-loader-deny`). On a later client navigation
-    // (`locationChanged`, so `readerRef.current` is already set) the same
-    // `<section>` is still mounted carrying whatever the client `<Envelope>`
-    // re-wrote on the previous render. Re-reading it would adopt stale server
-    // state and skip the fetch entirely. Gate the read on first-render.
-    const isFirstRender = readerRef.current === null;
-
-    // Baked-deny seed takes precedence over any value preload/cache/fetch AND
-    // over BOTH consumption forms (single-value and streaming/accumulate): a
-    // denied loader wrote NO `data-loader`, only `data-loader-deny`, regardless
-    // of whether the loader is consumed as a single value or accumulated. This
-    // check is hoisted above the `accumulate` split so a finite streaming
-    // loader that denied during SSR also seeds a coldError instead of silently
-    // resubscribing over SSE and re-hitting the denied loader.
-    const bakedDeny =
-      isFirstRender && isBrowser()
-        ? getPreloadedDeny(id)
-        : ({ present: false } as const);
-
-    // Each reader mode is one factory returning the stable `{ read }` carrier;
-    // the dispatch below picks one by mode. The factories own their side effects
-    // (syncRef adoption, subscriptions, in-flight tracking) and share `settle`.
-    if (bakedDeny.present) {
-      denyConsumedRef.current = true;
-      bakedDenyRef.current = new Error(bakedDeny.message);
-      // Stub reader: the client never reads it; reload() rebuilds a real one
-      // for either consumption form.
-      readerRef.current = { read: () => undefined as unknown as T };
-    } else if (accumulate) {
-      // A live loader never runs on the server (its infinite generator would
-      // hang renderToStringAsync); LoaderHost renders the fallback for
-      // live+server, so this stub reader is not consumed there.
-      const buildLiveServerReader = (): { read: () => T } => {
-        accRef.current = accumulate.initial;
-        return { read: () => undefined as unknown as T };
-      };
-
-      // Streaming consumption: fold every chunk into accumulated state via the
-      // shared `subscribeAccumulate`/`applyChunk` helpers (also used by reload).
-      const buildStreamingReader = (): { read: () => T } => {
-        inFlightRef.current = true;
-        return wrapPromise(
-          subscribeAccumulate(newAbortSignal())
-            .then((firstChunk) => {
-              applyChunk(firstChunk);
-              settle();
-              return accRef.current as T;
-            })
-            .catch((err: unknown) => {
-              // State-based surfacing: the old Suspense reader propagated this
-              // rejection by throwing on read(); now nothing reads the reader,
-              // so push the error into state. With no chunk yet the phase has no
-              // value AND a live loader never preloads (so `syncRef` is absent
-              // too), so the streaming view surfaces the `error` arm IN-VIEW
-              // (streaming cold errors are never routed to the boundary).
-              setError(err);
-              setStatus('error');
-              settle();
-              throw err;
-            })
-        );
-      };
-
-      readerRef.current =
-        loaderRef.live && !isBrowser()
-          ? buildLiveServerReader()
-          : buildStreamingReader();
-    } else {
-      // SSR preload hit: adopt the server-baked `data-loader` payload as the
-      // synchronous value and, in the browser, attach the live update channel.
-      const buildPreloadReader = (
-        preloaded: Extract<SyncValue<T>, { present: true }>
-      ): { read: () => T } => {
-        // Record that we consumed the SSR preload payload so the useEffect
-        // above can clear the DOM attribute AFTER commit instead of mutating
-        // the DOM during render. A PRESENT preload value of `null` / `undefined`
-        // is adopted exactly like any other (no `!== null` refetch).
-        preloadConsumedRef.current = true;
-        loaderRef.cache.set(preloaded.value, locKey);
-        // Synchronously available (non-throwing): carry it structurally.
-        syncRef.current = preloaded;
-        if (isBrowser()) {
-          const unsub = subscribeToLoaderStream(id, {
-            push: (value) => {
-              // `value` is an erased stream payload (`unknown`); reading it as
-              // `T` is the pre-existing stream boundary, not a phase coercion.
-              setPhase({ tag: 'success', value: value as T });
-              loaderRef.cache.set(value as T, locKey);
-            },
-            end: () => {
-              /* nothing to do */
-            },
-            // Stale-while-error: a preload-hydrated loader keeps its phase at
-            // `loading` while the value lives on `syncRef`, so a live-channel
-            // error BEFORE any push has no phase value. `setError` consults
-            // `syncRef.present` and builds a `staleError` that retains the
-            // preloaded value V, so it surfaces in-view as the error arm rather
-            // than unwinding the page as a cold error (R1R2 review).
-            error: (err) => setError(err),
-          });
-          // Unsubscribe on unmount: attach to the abortRef signal.
-          if (abortRef.current) {
-            abortRef.current.signal.addEventListener('abort', unsub);
-          } else {
-            abortRef.current = new AbortController();
-            abortRef.current.signal.addEventListener('abort', unsub);
-          }
-        }
-        return { read: () => preloaded.value };
-      };
-
-      // Browser cache hit: serve the cached value synchronously, no fetch.
-      const buildCacheReader = (): { read: () => T } => {
-        const cached = loaderRef.cache.get(locKey)!;
-        // Synchronously available (non-throwing): carry it structurally.
-        syncRef.current = { present: true, value: cached };
-        return { read: () => cached };
-      };
-
-      // Cold fetch (no preload, no cache): run the loader, suspend on it, and
-      // drive the resolved value into state so the view settles without reading
-      // the throwing reader.
-      const buildColdFetchReader = (): { read: () => T } => {
-        inFlightRef.current = true;
-        const fetchPromise: Promise<T> = runLoader<T>(
-          loaderRef,
-          location,
-          id,
-          newAbortSignal(),
-          {
-            onChunk: (value) => {
-              setPhase({ tag: 'success', value });
-              if (isBrowser()) loaderRef.cache.set(value, locKey);
-            },
-            onError: (err) => setError(err),
-            onEnd: () => {
-              /* nothing to do */
-            },
-          }
-        );
-
-        return wrapPromise(
-          fetchPromise
-            .then((r) => {
-              if (isBrowser()) loaderRef.cache.set(r, locKey);
-              // Drive the resolved value into state so `data` is available
-              // without calling the throwing reader. For a non-streaming loader
-              // `runLoader` never fires `onChunk`, so this is the only place the
-              // single-value cold load surfaces its result as state. A fresh
-              // `success` object means a resolve-to-`undefined` still re-renders
-              // and clears loading (review #10).
-              setPhase({ tag: 'success', value: r });
-              settle();
-              return r;
-            })
-            .catch((err: unknown) => {
-              // State-based surfacing: the old Suspense reader propagated this
-              // rejection by throwing on read(); now nothing reads the reader,
-              // so push the error into state. This branch is the cold-fetch path
-              // (no preload, no cache), so `syncRef` is absent and the phase has
-              // no value (the fetch never resolved): `setError` builds a cold
-              // `error` phase, which `toLoaderView` reports as `coldError` and
-              // LoaderHost renders `errorFallback` / rethrows to an outer
-              // boundary.
-              setError(err);
-              settle();
-              throw err;
-            })
-        );
-      };
-
-      const preloaded: SyncValue<T> = isFirstRender
-        ? getPreloadedData<T>(id)
-        : { present: false };
-      if (preloaded.present) {
-        readerRef.current = buildPreloadReader(preloaded);
-      } else if (isBrowser() && isFirstRender && loaderRef.cache.has(locKey)) {
-        readerRef.current = buildCacheReader();
-      } else {
-        readerRef.current = buildColdFetchReader();
-      }
-    }
+    session.reader = buildLoaderReader<T>({
+      session,
+      ops: {
+        setPhase,
+        setStatus,
+        setError,
+        applyChunk,
+        subscribeAccumulate,
+      },
+      loaderRef,
+      location,
+      locKey,
+      id,
+      accumulate,
+    });
   }
 
   // Build the public view STRUCTURALLY from the phase, WITHOUT calling the
@@ -550,11 +349,11 @@ export function useLoaderRunner<T>(
           status,
           hasPhaseValue(phase)
             ? { present: true, value: phase.value }
-            : syncRef.current,
+            : session.sync,
           phaseError(phase)
         ),
       }
-    : toLoaderView(phase, syncRef.current);
+    : toLoaderView(phase, session.sync);
 
   // While the baked-deny seed is active, project it over whatever `view` would
   // otherwise show (the phase is still `loading`, since no fetch ran): a
@@ -562,16 +361,16 @@ export function useLoaderRunner<T>(
   // `errorFallback` exactly like a real cold error, and Task 8 can re-wrap it
   // in a matching Envelope.
   const finalView: RunnerView<T> =
-    bakedDenyRef.current !== null
-      ? { kind: 'coldError', error: bakedDenyRef.current, fromBakedDeny: true }
+    session.bakedDeny !== null
+      ? { kind: 'coldError', error: session.bakedDeny, fromBakedDeny: true }
       : view;
 
   return {
     view: finalView,
     reload,
     reloading,
-    // Non-null here: every branch above assigns `readerRef.current` before
+    // Non-null here: every branch above assigns `session.reader` before
     // this point (preload/cache stub, live-on-server stub, or wrapPromise).
-    reader: readerRef.current,
+    reader: session.reader,
   };
 }
