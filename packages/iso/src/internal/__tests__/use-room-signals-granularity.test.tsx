@@ -121,6 +121,64 @@ describe('useRoom granularity through the hook (signal mode)', () => {
     expect(boardRenders.mock.calls.length).toBe(boardAfterSnapshot);
   });
 
+  it('a self presence echo re-renders a `self` consumer but not a sibling reading another member', async () => {
+    installPresenceSignals();
+    vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
+
+    const selfRenders = vi.fn();
+    const siblingRenders = vi.fn();
+
+    function SelfView({ room }: { room: RoomHook }) {
+      selfRenders();
+      return <p data-testid="self">{String(room.self?.state?.x)}</p>;
+    }
+    function Sibling({ room }: { room: RoomHook }) {
+      siblingRenders();
+      return (
+        <p data-testid="sib">{String(room.member('b').value?.state?.x)}</p>
+      );
+    }
+    function Board() {
+      const r = useRoom(room, { presence: { x: 0 } });
+      return (
+        <>
+          <SelfView room={r} />
+          <Sibling room={r} />
+        </>
+      );
+    }
+
+    render(<Board />);
+    await act(async () => {
+      FakeWS.last!.open();
+      FakeWS.last!.message({
+        t: 'snapshot',
+        self: 'a',
+        members: [
+          { id: 'a', state: { x: 1 } },
+          { id: 'b', state: { x: 2 } },
+        ],
+      });
+    });
+    expect(screen.getByTestId('self').textContent).toBe('1');
+    const sibBefore = siblingRenders.mock.calls.length;
+
+    // The server echoes this client's own presence update back as an upsert to
+    // self's id.
+    await act(async () => {
+      FakeWS.last!.message({
+        t: 'presence',
+        op: 'update',
+        from: 'a',
+        state: { x: 7 },
+      });
+    });
+
+    expect(screen.getByTestId('self').textContent).toBe('7');
+    // Self updated; the sibling (reading only member('b')) did not re-render.
+    expect(siblingRenders.mock.calls.length).toBe(sibBefore);
+  });
+
   it('a coarse `members` consumer still updates on any presence change', async () => {
     installPresenceSignals();
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);

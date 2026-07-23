@@ -315,6 +315,12 @@ export function useRoom<R extends AnyRoomRefShape>(
     get self() {
       const sid = selfIdRef.current;
       if (sid === undefined) return undefined;
+      // In signal mode this subscribes the consumer to self's OWN signal, so a
+      // self presence echo re-renders a `self` reader without re-rendering
+      // useRoom. Relies on the server seeding self into the roster before the
+      // snapshot (room-engine joinPresence precedes roster), so `member(sid)`
+      // resolves to a real signal; a protocol violation (self id absent from
+      // the roster) would not recover on a later join here, unlike default mode.
       return signalMode
         ? store.member(sid).value
         : members.find((m) => m.id === sid);
