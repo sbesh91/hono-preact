@@ -62,6 +62,9 @@ export const FEATURE_MODULES = {
   // excludes the server-side surface (define-room/socket/channel, upgrade-websocket,
   // streaming-ssr) which never ships to the browser, so this stays a client number.
   realtime: ['use-room.js', 'use-socket.js', 'pubsub.js'],
+  // The opt-in presence-signals entry. @preact/signals itself is external
+  // (a peer the app installs); this measures the framework's own glue.
+  signals: ['signals.js'],
   transitions: [
     'view-transition-lifecycle.js',
     'view-transition-name.js',
@@ -133,6 +136,8 @@ export const EXTERNAL = [
   'preact-iso/*',
   'hono',
   'hono/*',
+  '@preact/signals',
+  '@preact/signals/*',
 ];
 
 // Per-component cost from packages/ui/dist. `ui-core` is the shared substrate a
