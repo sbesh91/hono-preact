@@ -102,7 +102,7 @@ export function buildLoaderReader<T>(args: BuildReaderArgs<T>): {
 
   // Each reader mode is one factory returning the stable `{ read }` carrier;
   // the dispatch below picks one by mode. The factories own their side effects
-  // (syncRef adoption, subscriptions, in-flight tracking) and share `settle`.
+  // (session.sync adoption, subscriptions, in-flight tracking) and share `settle`.
   if (bakedDeny.present) {
     session.denyConsumed = true;
     session.bakedDeny = new Error(bakedDeny.message);
@@ -133,7 +133,7 @@ export function buildLoaderReader<T>(args: BuildReaderArgs<T>): {
             // State-based surfacing: the old Suspense reader propagated this
             // rejection by throwing on read(); now nothing reads the reader,
             // so push the error into state. With no chunk yet the phase has no
-            // value AND a live loader never preloads (so `syncRef` is absent
+            // value AND a live loader never preloads (so `session.sync` is absent
             // too), so the streaming view surfaces the `error` arm IN-VIEW
             // (streaming cold errors are never routed to the boundary).
             setError(err);
@@ -173,14 +173,14 @@ export function buildLoaderReader<T>(args: BuildReaderArgs<T>): {
             /* nothing to do */
           },
           // Stale-while-error: a preload-hydrated loader keeps its phase at
-          // `loading` while the value lives on `syncRef`, so a live-channel
+          // `loading` while the value lives on `session.sync`, so a live-channel
           // error BEFORE any push has no phase value. `setError` consults
-          // `syncRef.present` and builds a `staleError` that retains the
+          // `session.sync.present` and builds a `staleError` that retains the
           // preloaded value V, so it surfaces in-view as the error arm rather
           // than unwinding the page as a cold error (R1R2 review).
           error: (err) => setError(err),
         });
-        // Unsubscribe on unmount: attach to the abortRef signal.
+        // Unsubscribe on unmount: attach to the session.abort signal.
         if (session.abort) {
           session.abort.signal.addEventListener('abort', unsub);
         } else {
@@ -239,7 +239,7 @@ export function buildLoaderReader<T>(args: BuildReaderArgs<T>): {
             // State-based surfacing: the old Suspense reader propagated this
             // rejection by throwing on read(); now nothing reads the reader,
             // so push the error into state. This branch is the cold-fetch path
-            // (no preload, no cache), so `syncRef` is absent and the phase has
+            // (no preload, no cache), so `session.sync` is absent and the phase has
             // no value (the fetch never resolved): `setError` builds a cold
             // `error` phase, which `toLoaderView` reports as `coldError` and
             // LoaderHost renders `errorFallback` / rethrows to an outer

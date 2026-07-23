@@ -18,20 +18,23 @@ const LOC = {
   searchParams: {},
 } as unknown as RouteHook;
 
-/** A recording write surface. `setPhase` resolves updater functions so phase
- * transitions can be asserted as concrete values. */
-function recordingOps<T>(): LoaderPhaseOps<T> & {
+type RecordingOps<T> = LoaderPhaseOps<T> & {
   phase: LoaderPhase<T>;
   readonly log: string[];
-} {
-  const rec = {
-    phase: { tag: 'loading' } as LoaderPhase<T>,
-    log: [] as string[],
-    setPhase(next: LoaderPhase<T> | ((p: LoaderPhase<T>) => LoaderPhase<T>)) {
+};
+
+/** A recording write surface. `setPhase` resolves updater functions so phase
+ * transitions can be asserted as concrete values. Typed at the return position
+ * (like `spyOps` in loader-readers.test.ts) so no cast is needed. */
+function recordingOps<T>(): RecordingOps<T> {
+  const rec: RecordingOps<T> = {
+    phase: { tag: 'loading' },
+    log: [],
+    setPhase(next) {
       rec.phase = typeof next === 'function' ? next(rec.phase) : next;
       rec.log.push(`phase:${rec.phase.tag}`);
     },
-    setStatus(s: string) {
+    setStatus(s) {
       rec.log.push(`status:${s}`);
     },
     setError() {
@@ -45,10 +48,7 @@ function recordingOps<T>(): LoaderPhaseOps<T> & {
       return new Promise<T>(() => {});
     },
   };
-  return rec as LoaderPhaseOps<T> & {
-    phase: LoaderPhase<T>;
-    readonly log: string[];
-  };
+  return rec;
 }
 
 afterEach(() => {
@@ -202,7 +202,7 @@ describe('runReload: streaming reload', () => {
       loaderRef: ref,
       currentLocation: () => LOC,
       id: 'r5',
-      accumulate: { initial: 0, reduce: (_a, c) => c as number },
+      accumulate: { initial: 0, reduce: (_a, c) => c },
     });
 
     expect(ops.log).toContain('status:connecting');

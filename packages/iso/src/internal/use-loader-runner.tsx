@@ -101,7 +101,7 @@ export function useLoaderRunner<T>(
   // Cleanup of the SSR preload attribute is deferred to after commit so
   // we never mutate the DOM during the render pass (Preact reconciliation
   // doesn't formally support that, and re-renders could observe a phantom
-  // half-cleared element). The render path sets `preloadConsumedRef` when
+  // half-cleared element). The render path sets `session.preloadConsumed` when
   // it reads the payload; this effect clears the attribute exactly once,
   // on the first commit that consumed it.
   useEffect(() => {
@@ -123,9 +123,9 @@ export function useLoaderRunner<T>(
 
   // Normalize an unknown thrown value and push it into the error phase. Value
   // presence is STRUCTURAL: if the current phase already carries a settled value,
-  // or a preload/cache value was adopted on `syncRef`, the error is a
+  // or a preload/cache value was adopted on `session.sync`, the error is a
   // `staleError` (keeps that value visible, stale-while-error); otherwise it is a
-  // cold `error` (no value, routes to the boundary). No `?? syncDataRef.current`
+  // cold `error` (no value, routes to the boundary). No `?? session.sync.value`
   // value-presence test.
   const setError = (err: unknown) => {
     const error = toError(err);
@@ -254,7 +254,7 @@ export function useLoaderRunner<T>(
   // Build the public view STRUCTURALLY from the phase, WITHOUT calling the
   // throwing bridge reader and WITHOUT any `data === undefined` test. The
   // single-value union (and the cold-error signal) is `toLoaderView(phase,
-  // syncRef)`; value-presence is the variant tag / the `present` flag. The
+  // session.sync)`; value-presence is the variant tag / the `present` flag. The
   // streaming union is `toStreamState(status, value, error)`, keyed on `status`
   // alone, with the accumulated value sourced from the phase (present iff the
   // phase carries one). `loader.tsx` only ROUTES this; it never re-projects.
