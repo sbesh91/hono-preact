@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { Serialize } from './internal/serialize.js';
 import {
   SOCKETS_RPC_PATH,
@@ -16,6 +16,12 @@ import type {
   SocketCloseInfo,
   ReconnectOptions,
 } from './internal/ws-lifecycle.js';
+import { createDefaultRoster } from './internal/default-roster.js';
+import {
+  getPresenceReactiveImpl,
+  type ReadonlyReactive,
+  type RosterStore,
+} from './internal/reactive.js';
 
 // Re-export the shared lifecycle types so consumers can name them off useRoom.
 export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
@@ -111,6 +117,15 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
   /** The presence roster, reactive. State may be undefined for rooms with no
    * presence() seed (void-state rooms). */
   members: ReadonlyArray<PresenceMember<State<R> | undefined>>;
+  /** Membership ids as a reactive value; changes on join/leave only. Read
+   * `.value`. With the `hono-preact/signals` entry imported this is a granular
+   * signal; otherwise it reads coarsely through `members`. */
+  memberIds: ReadonlyReactive<readonly string[]>;
+  /** One member's entry as a reactive value. With the signals entry imported,
+   * `.value` changes only when THAT member's presence changes. Read `.value`. */
+  member: (
+    id: string
+  ) => ReadonlyReactive<PresenceMember<State<R> | undefined> | undefined>;
   /** This client's own roster entry, derived from the snapshot `self` id. */
   self?: PresenceMember<State<R> | undefined>;
   status: SocketStatus;
@@ -149,6 +164,25 @@ export function useRoom<R extends AnyRoomRefShape>(
   >([]);
   // The self id from the latest snapshot; `self` is derived from `members`.
   const [selfId, setSelfId] = useState<string | undefined>(undefined);
+
+  // Track the latest members array so the signals-free default store can read
+  // through to it.
+  const membersRef = useRef(members);
+  membersRef.current = members;
+
+  // The granular roster store: the signal-backed impl when the signals entry is
+  // imported, otherwise the signals-free default over the members array. Created
+  // once per hook instance.
+  const storeRef = useRef<RosterStore<State<R> | undefined> | null>(null);
+  if (storeRef.current === null) {
+    const impl = getPresenceReactiveImpl();
+    storeRef.current = impl
+      ? impl.createRoster<State<R> | undefined>()
+      : createDefaultRoster<State<R> | undefined>(() => membersRef.current);
+  }
+  const store = storeRef.current;
+
+  useEffect(() => () => store.dispose(), [store]);
 
   const moduleKey = ref[FORM_MODULE_FIELD];
   const roomName = ref[FORM_ROOM_FIELD];
@@ -194,17 +228,20 @@ export function useRoom<R extends AnyRoomRefShape>(
       if (env.t === 'snapshot') {
         setSelfId(env.self);
         setMembers(env.members);
+        store.snapshot(env.members);
         return;
       }
       if (env.t === 'presence') {
         if (env.op === 'leave') {
           setMembers((prev) => prev.filter((m) => m.id !== env.from));
+          store.leave(env.from);
         } else {
           // join | update: upsert by id. State may be undefined for a room
           // with no presence() seed (a void-state room); the snapshot path
           // and the presence registry both treat undefined as a valid member
           // state, so we must not skip the upsert when env.state is absent.
           setMembers((prev) => upsertMember(prev, env.from, env.state));
+          store.upsert(env.from, env.state);
         }
         return;
       }
@@ -245,6 +282,8 @@ export function useRoom<R extends AnyRoomRefShape>(
     send,
     setPresence,
     members,
+    memberIds: store.memberIds,
+    member: store.member,
     self,
     status: lifecycle.status,
     close: lifecycle.close,
