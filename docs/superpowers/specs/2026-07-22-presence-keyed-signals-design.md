@@ -115,10 +115,46 @@ pinned `preact-iso` in both import orders.
 
 ## 6. Wiring in `useRoom`
 
-`useRoom` keeps `useState<array>` as the source of truth for the existing
-`members` field (mirror law: signals are an added channel, never the sole
-source, until every consumer is converted). On each incoming frame it updates
-both the array and the roster store:
+### 6a. Retiring the parent re-render in signal mode (added after review)
+
+The first cut of this design kept `setMembers` firing on every presence frame in
+both modes (strict mirror law). The whole-branch review showed that defeats the
+headline win: `setMembers` re-renders the whole `useRoom` subtree every frame, so
+the per-member signal is redundant unless each row is `memo`-isolated (and `memo`
+lives in `preact/compat`, which the framework avoids). The win was latent, not
+delivered, and the proof test bypassed `useRoom`.
+
+Resolution, chosen deliberately: **in signal mode, `useRoom` does NOT call
+`setMembers` on presence frames.** The store's signals are the reactive source.
+Because a consumer that maps `memberIds` (which changes only on join/leave) and
+whose rows read `member(id)` subscribes to nothing that a presence *update*
+changes, a pointer move re-renders exactly the one moved row via its own signal,
+and neither the consumer nor `useRoom` re-renders. No `memo` needed. Joins and
+leaves do re-render the mapping consumer (memberIds changed), which is the correct
+rare-case cost.
+
+`members` and `self` stay on the result as plain values (additive), but in signal
+mode they are **lazy getters** that read the store's signals when the *consumer*
+accesses them, so a component using the coarse `members` array subscribes to the
+whole roster and updates on any change, while a component using only `member(id)`
+does not. Default mode is unchanged: `useState` + `setMembers`, coarse.
+
+Concretely:
+
+- `RosterStore` gains `readonly members: ReadonlyReactive<ReadonlyArray<PresenceMember<S>>>`
+  (signal `computed` in signal mode; getter-through-to-the-array in default mode).
+- `useRoom` records `signalMode` at store creation. On each frame it calls
+  `store.snapshot/upsert/leave`, and calls `setMembers` **only when
+  `!signalMode`**. `setSelfId` still fires on snapshot in both modes (rare).
+- The result exposes `get members()` and `get self()`: in signal mode they read
+  `store.members.value` / `store.member(selfId).value` (subscribing the accessing
+  consumer); in default mode they return the `useState` value / the array `find`.
+
+### 6b. Base wiring (both modes)
+
+`useRoom` keeps `useState<array>` for the `members` field in default mode (mirror
+law there: signals are an added channel). On each incoming frame it updates the
+store, and in default mode also the array:
 
 ```ts
 const store = useRef<RosterStore<S>>();

@@ -23,6 +23,10 @@ export type RosterStore<S> = {
   leave(id: string): void;
   /** Membership ids; changes on join/leave only. */
   readonly memberIds: ReadonlyReactive<readonly string[]>;
+  /** The whole roster as one reactive array. Reading it in signal mode
+   * subscribes to every member, so a coarse `members` consumer updates on any
+   * change; `useRoom` exposes it as the `members` result field in signal mode. */
+  readonly members: ReadonlyReactive<ReadonlyArray<PresenceMember<S>>>;
   /** One member's entry; in signal mode, changes only when THAT member changes. */
   member(id: string): ReadonlyReactive<PresenceMember<S> | undefined>;
   /** Release retained reactive state. Called from `useRoom`'s effect cleanup. */

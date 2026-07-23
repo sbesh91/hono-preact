@@ -51,4 +51,33 @@ describe('signal-backed roster', () => {
     store.upsert('a', 2); // existing member update
     expect(store.memberIds.value).toBe(idsBefore);
   });
+
+  it('members reflects the roster and tracks an update', () => {
+    installPresenceSignals();
+    const store = getPresenceReactiveImpl()!.createRoster<number>();
+    store.snapshot([
+      { id: 'a', state: 1 },
+      { id: 'b', state: 2 },
+    ]);
+    expect(store.members.value).toEqual([
+      { id: 'a', state: 1 },
+      { id: 'b', state: 2 },
+    ]);
+    store.upsert('a', 9);
+    expect(store.members.value).toEqual([
+      { id: 'a', state: 9 },
+      { id: 'b', state: 2 },
+    ]);
+  });
+
+  it('snapshot dedupes a duplicate id in ids while byId keeps one signal', () => {
+    installPresenceSignals();
+    const store = getPresenceReactiveImpl()!.createRoster<number>();
+    store.snapshot([
+      { id: 'a', state: 1 },
+      { id: 'a', state: 2 },
+    ]);
+    expect(store.memberIds.value).toEqual(['a']);
+    expect(store.member('a').value).toEqual({ id: 'a', state: 2 });
+  });
 });

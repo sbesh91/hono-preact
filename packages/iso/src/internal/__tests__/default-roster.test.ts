@@ -34,6 +34,17 @@ describe('default roster (signals-free)', () => {
     expect(store.member('a').value).toEqual({ id: 'a', state: 2 });
   });
 
+  it('exposes the whole roster via members, read through the getter', () => {
+    let arr: ReadonlyArray<PresenceMember<number>> = [{ id: 'a', state: 1 }];
+    const store = createDefaultRoster(() => arr);
+    expect(store.members.value).toEqual([{ id: 'a', state: 1 }]);
+    arr = [
+      { id: 'a', state: 1 },
+      { id: 'b', state: 2 },
+    ];
+    expect(store.members.value).toEqual(arr);
+  });
+
   it('dispose does not throw', () => {
     const store = createDefaultRoster<number>(() => []);
     expect(() => store.dispose()).not.toThrow();

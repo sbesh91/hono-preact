@@ -21,6 +21,12 @@ export function createDefaultRoster<S>(
     },
   };
 
+  const members: ReadonlyReactive<ReadonlyArray<PresenceMember<S>>> = {
+    get value() {
+      return getMembers();
+    },
+  };
+
   const member = (
     id: string
   ): ReadonlyReactive<PresenceMember<S> | undefined> => ({
@@ -34,6 +40,7 @@ export function createDefaultRoster<S>(
     upsert() {},
     leave() {},
     memberIds,
+    members,
     member,
     dispose() {},
   };

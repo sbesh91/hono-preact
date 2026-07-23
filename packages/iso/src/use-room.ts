@@ -122,7 +122,12 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
    * signal; otherwise it reads coarsely through `members`. */
   memberIds: ReadonlyReactive<readonly string[]>;
   /** One member's entry as a reactive value. With the signals entry imported,
-   * `.value` changes only when THAT member's presence changes. Read `.value`. */
+   * `.value` changes only when THAT member's presence changes, so a row bound to
+   * `member(id)` re-renders alone. Read `.value` in render, and only for ids
+   * currently in `memberIds`: a binding created for an absent id does not observe
+   * that id later joining (re-read `member(id)` fresh each render, as the keyed
+   * `memberIds.value.map(...)` pattern does). Without the signals entry it reads
+   * coarsely through `members`. */
   member: (
     id: string
   ) => ReadonlyReactive<PresenceMember<State<R> | undefined> | undefined>;
@@ -172,15 +177,24 @@ export function useRoom<R extends AnyRoomRefShape>(
 
   // The granular roster store: the signal-backed impl when the signals entry is
   // imported, otherwise the signals-free default over the members array. Created
-  // once per hook instance.
-  const storeRef = useRef<RosterStore<State<R> | undefined> | null>(null);
+  // once per hook instance. `signalMode` is recorded here (not re-derived per
+  // render) so it stays consistent with the store that was actually created.
+  const storeRef = useRef<{
+    store: RosterStore<State<R> | undefined>;
+    signalMode: boolean;
+  } | null>(null);
   if (storeRef.current === null) {
     const impl = getPresenceReactiveImpl();
     storeRef.current = impl
-      ? impl.createRoster<State<R> | undefined>()
-      : createDefaultRoster<State<R> | undefined>(() => membersRef.current);
+      ? { store: impl.createRoster<State<R> | undefined>(), signalMode: true }
+      : {
+          store: createDefaultRoster<State<R> | undefined>(
+            () => membersRef.current
+          ),
+          signalMode: false,
+        };
   }
-  const store = storeRef.current;
+  const { store, signalMode } = storeRef.current;
 
   useEffect(() => () => store.dispose(), [store]);
 
@@ -225,22 +239,29 @@ export function useRoom<R extends AnyRoomRefShape>(
       } catch {
         return;
       }
+      // In signal mode the store's signals drive re-renders, so `setMembers` is
+      // deliberately NOT called on presence frames: that is what stops the whole
+      // `useRoom` subtree from re-rendering on every update. `setSelfId` still
+      // fires (rare, on snapshot). In default mode `setMembers` is the reactive
+      // source and drives the coarse re-render.
       if (env.t === 'snapshot') {
         setSelfId(env.self);
-        setMembers(env.members);
+        if (!signalMode) setMembers(env.members);
         store.snapshot(env.members);
         return;
       }
       if (env.t === 'presence') {
         if (env.op === 'leave') {
-          setMembers((prev) => prev.filter((m) => m.id !== env.from));
+          if (!signalMode)
+            setMembers((prev) => prev.filter((m) => m.id !== env.from));
           store.leave(env.from);
         } else {
           // join | update: upsert by id. State may be undefined for a room
           // with no presence() seed (a void-state room); the snapshot path
           // and the presence registry both treat undefined as a valid member
           // state, so we must not skip the upsert when env.state is absent.
-          setMembers((prev) => upsertMember(prev, env.from, env.state));
+          if (!signalMode)
+            setMembers((prev) => upsertMember(prev, env.from, env.state));
           store.upsert(env.from, env.state);
         }
         return;
@@ -272,19 +293,32 @@ export function useRoom<R extends AnyRoomRefShape>(
     [sendRaw]
   );
 
-  // Derive `self` from the roster + the remembered self id. Kept in sync as
-  // presence deltas mutate the member with `id === selfId` (the server echoes
-  // the client's own presence updates back, so this is server-authoritative).
-  const self =
-    selfId === undefined ? undefined : members.find((m) => m.id === selfId);
+  // Keep the latest self id reachable from the result getters without forcing a
+  // `useRoom` re-render: `selfId` only changes via `setSelfId` (on snapshot),
+  // which re-renders anyway, so this ref is current whenever it matters.
+  const selfIdRef = useRef(selfId);
+  selfIdRef.current = selfId;
 
+  // `members` and `self` are lazy getters. In signal mode they read the store's
+  // signals when the CONSUMER accesses them, so a coarse `members` consumer
+  // subscribes to the whole roster (updates on any change) while a component
+  // that reads only `member(id)` does not re-render on other members. In default
+  // mode they return the `useState` value / an array `find`, coarse as before.
   return {
     send,
     setPresence,
-    members,
+    get members() {
+      return signalMode ? store.members.value : members;
+    },
     memberIds: store.memberIds,
     member: store.member,
-    self,
+    get self() {
+      const sid = selfIdRef.current;
+      if (sid === undefined) return undefined;
+      return signalMode
+        ? store.member(sid).value
+        : members.find((m) => m.id === sid);
+    },
     status: lifecycle.status,
     close: lifecycle.close,
     closeInfo: lifecycle.closeInfo,
