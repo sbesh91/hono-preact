@@ -41,7 +41,7 @@ const channel = defineChannel('demo')<{ x: number }>();
 // here so the hook's `ready` gate actually opens a connection under test,
 // mirroring the hand-built `RoomRef` in use-room.test.tsx.
 const room = {
-  ...defineRoom(channel, () => {}),
+  ...defineRoom(channel, { presence: () => ({ x: 0 }) }),
   [FORM_MODULE_FIELD]: 'pages/demo.server',
   [FORM_ROOM_FIELD]: 'demo',
 };
@@ -57,9 +57,7 @@ describe('useRoom roster store wiring (default impl)', () => {
   it('exposes memberIds and member(id) tracking the wire snapshot and deltas', async () => {
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
 
-    const { result } = renderHook(() =>
-      useRoom(room, { key: {}, presence: { x: 0 } })
-    );
+    const { result } = renderHook(() => useRoom(room, { presence: { x: 0 } }));
 
     await act(async () => {
       FakeWS.last!.open();
@@ -106,9 +104,7 @@ describe('useRoom roster store wiring (default impl)', () => {
 
   it('renders an empty roster on first render (SSR parity)', () => {
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
-    const { result } = renderHook(() =>
-      useRoom(room, { key: {}, presence: { x: 0 } })
-    );
+    const { result } = renderHook(() => useRoom(room, { presence: { x: 0 } }));
     expect(result.current.memberIds.value).toEqual([]);
     expect(result.current.member('anyone').value).toBeUndefined();
     expect(result.current.members).toEqual([]);
