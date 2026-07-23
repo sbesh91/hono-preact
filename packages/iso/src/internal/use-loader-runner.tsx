@@ -1,14 +1,10 @@
 import type { RouteHook } from 'preact-iso';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { LoaderRef } from '../define-loader.js';
-import { isBrowser } from '../is-browser.js';
 import { deletePreloadedData, deletePreloadedDeny } from './preload.js';
-import {
-  createLoaderSession,
-  nextAbortSignal,
-  type LoaderSession,
-} from './loader-session.js';
-import { buildLoaderReader } from './loader-readers.js';
+import { createLoaderSession, type LoaderSession } from './loader-session.js';
+import { buildLoaderReader, type LoaderPhaseOps } from './loader-readers.js';
+import { runReload, requestReload } from './loader-reload.js';
 import { runLoader } from './loader-runner.js';
 import { serializeLocationForCache } from './cache-key.js';
 import type {
@@ -95,8 +91,6 @@ export function useLoaderRunner<T>(
   const locationRef = useRef(location);
   locationRef.current = location;
 
-  const newAbortSignal = () => nextAbortSignal(session);
-
   useEffect(
     () => () => {
       if (session.abort) session.abort.abort();
@@ -181,103 +175,33 @@ export function useLoaderRunner<T>(
     [accumulate, applyChunk, loaderRef, id]
   );
 
-  const runReload = useCallback(() => {
-    // A reload supersedes the SSR-baked deny: drop the seed so the view projects
-    // from the real phase (loading -> success/coldError) as the refetch runs.
-    session.bakedDeny = null;
-    session.inFlight = true;
-    // Enter `revalidating` retaining the prior value (stale-while-revalidate);
-    // with NO settled value fall back to a cold `loading`. Presence is
-    // STRUCTURAL: the phase carries a value, OR a preload/cache value was adopted
-    // on `syncRef` (a preload/cache-hydrated loader keeps its phase at `loading`
-    // while its value lives on `syncRef`). NOT `prior !== undefined`, so a reload
-    // over a settled-`undefined` value still revalidates (review #2/#3).
-    setPhase((p) => {
-      const current = resolveCurrentValue(p, session.sync);
-      return current.present
-        ? { tag: 'revalidating', value: current.value }
-        : { tag: 'loading' };
+  // The write surface shared by the reader factories and the reload state
+  // machine: one way to move the phase, and both go through it. Built fresh each
+  // render so it closes over the current `accumulate`-dependent callbacks; every
+  // member is either a stable `useState` setter or a `useCallback`.
+  const ops: LoaderPhaseOps<T> = {
+    setPhase,
+    setStatus,
+    setError,
+    applyChunk,
+    subscribeAccumulate,
+  };
+
+  // The reload state machine lives in `loader-reload.ts`. Rebind the session's
+  // bound entry each render so it closes over the latest ops/accumulate, and
+  // read the location through a thunk so a reload uses the location as of when
+  // it runs, not when it was wired.
+  session.runReload = () =>
+    runReload<T>({
+      session,
+      ops,
+      loaderRef,
+      currentLocation: () => locationRef.current,
+      id,
+      accumulate,
     });
 
-    if (accumulate) {
-      // Streaming/live reload = resubscribe: `subscribeAccumulate` aborts the
-      // current stream (via newAbortSignal), resets to `initial`, reopens, and
-      // folds chunks through `reduce`. Reset the surfaced data to `initial` and
-      // drive status connecting -> open/closed/error, mirroring a fresh mount.
-      // `revalidating` keeps `reloading`/`loading` true until the first chunk.
-      setStatus('connecting');
-      subscribeAccumulate(newAbortSignal())
-        .then((firstChunk) => {
-          // applyChunk moves the phase to `success` (clears reloading).
-          applyChunk(firstChunk);
-          session.inFlight = false;
-          if (session.queuedReload) {
-            session.queuedReload = false;
-            session.runReload();
-          }
-        })
-        .catch((err: unknown) => {
-          setError(err);
-          setStatus('error');
-          session.inFlight = false;
-          session.queuedReload = false;
-        });
-      return;
-    }
-
-    const promise: Promise<T> = runLoader<T>(
-      loaderRef,
-      locationRef.current,
-      id,
-      newAbortSignal(),
-      {
-        onChunk: (value) => {
-          setPhase({ tag: 'success', value });
-          if (isBrowser()) {
-            loaderRef.cache.set(
-              value,
-              serializeLocationForCache(locationRef.current, loaderRef.params)
-            );
-          }
-        },
-        onError: (err) => setError(err),
-        onEnd: () => {
-          /* nothing to do */
-        },
-      }
-    );
-
-    promise
-      .then((result) => {
-        if (isBrowser())
-          loaderRef.cache.set(
-            result,
-            serializeLocationForCache(locationRef.current, loaderRef.params)
-          );
-        // A fresh `success` per settle (clears reloading); `result` may be
-        // `undefined`, which is a real state change here (review #10).
-        setPhase({ tag: 'success', value: result });
-        session.inFlight = false;
-        if (session.queuedReload) {
-          session.queuedReload = false;
-          session.runReload();
-        }
-      })
-      .catch((err: unknown) => {
-        setError(err);
-        session.inFlight = false;
-        session.queuedReload = false;
-      });
-  }, [loaderRef, accumulate, applyChunk, subscribeAccumulate]);
-  session.runReload = runReload;
-
-  const reload = useCallback(() => {
-    if (session.inFlight) {
-      session.queuedReload = true;
-      return;
-    }
-    session.runReload();
-  }, []);
+  const reload = useCallback(() => requestReload(session), [session]);
 
   // Stable reader: only rebuilt when location or loader identity changes.
   // Without this, every re-render (e.g. from a phase setState) would call
@@ -318,13 +242,7 @@ export function useLoaderRunner<T>(
 
     session.reader = buildLoaderReader<T>({
       session,
-      ops: {
-        setPhase,
-        setStatus,
-        setError,
-        applyChunk,
-        subscribeAccumulate,
-      },
+      ops,
       loaderRef,
       location,
       locKey,

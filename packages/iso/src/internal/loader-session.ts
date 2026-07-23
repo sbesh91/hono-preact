@@ -115,6 +115,17 @@ export function settleSession<T>(session: LoaderSession<T>): void {
 }
 
 /**
+ * The failure counterpart to `settleSession`: a reload or subscribe rejected,
+ * so clear the in-flight flag and ABANDON any queued reload rather than running
+ * it. A follow-up reload requested while a doomed one was in flight is dropped
+ * on purpose; the caller can request a fresh one.
+ */
+export function abandonReload<T>(session: LoaderSession<T>): void {
+  session.inFlight = false;
+  session.queuedReload = false;
+}
+
+/**
  * Abort any in-flight loader and install a fresh controller, returning its
  * signal for the new request.
  */
