@@ -8,6 +8,7 @@ import * as server from 'hono-preact/server';
 import * as viteApi from 'hono-preact/vite';
 import * as cloudflare from 'hono-preact/adapter-cloudflare';
 import * as node from 'hono-preact/adapter-node';
+import * as signals from 'hono-preact/signals';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
@@ -39,6 +40,7 @@ const BARRELS: Record<string, Record<string, unknown>> = {
   'hono-preact/vite': viteApi,
   'hono-preact/adapter-cloudflare': cloudflare,
   'hono-preact/adapter-node': node,
+  'hono-preact/signals': signals,
 };
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
