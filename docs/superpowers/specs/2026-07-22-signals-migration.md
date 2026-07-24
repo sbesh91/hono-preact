@@ -29,10 +29,17 @@ Ordered by payoff-to-risk. Each is a stacked sub-PR into this branch.
 
 | Phase | Scope | Sub-PR | Status |
 | --- | --- | --- | --- |
-| 0 | Decompose the loader runner (session / readers / reload). No signals, no behaviour change. | #341 | in review |
-| 1 | Presence roster as keyed signals; take floating-position out of the render path. | | not started |
-| 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | | not started |
+| 0 | Decompose the loader runner (session / readers / reload). No signals, no behaviour change. | #341 | merged into umbrella |
+| 1 | Presence roster as keyed signals (`memberIds` / `member(id)` on `useRoom`). Positioning DROPPED (see below). | #343 | merged into umbrella |
+| 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | | in progress |
 | 3 | Optimistic queue and the action/form stores. | | not started |
+
+Positioning (`use-position.ts`), grouped into Phase 1 by the investigation,
+was dropped: verification showed it already writes x/y straight to the DOM in
+the `autoUpdate` callback and only `setState`s on a side/align/arrow change, so
+it is already optimized. The residual re-render would need a breaking change to
+the public `PositionState` type to remove, which is not worth it. The
+investigation over-claimed it as a hot path.
 
 Routing (the investigation's Phase 4) is explicitly out of scope: it is a
 preact-iso replacement decision, not a reactivity change, and does not ride
@@ -40,24 +47,35 @@ along here.
 
 ## Running cost
 
-Measured with the repo's own probe against `origin/main`, loaders feature, gzip.
-Updated as phases land.
+Measured with the repo's own probe, gzip. Core is the number the framework's
+positioning rests on; per-feature deltas are the always-on plumbing each phase
+adds. Updated as phases land.
 
-| At | loaders total | delta vs main | note |
+| At | core | feature delta | note |
 | --- | --- | --- | --- |
-| Phase 0 | 9942 | +258 B | structural, parameter passing over closure capture; core unchanged |
+| Phase 0 | 4914 (+3) | loaders +258 B | structural, parameter passing over closure capture |
+| Phase 1 | 5519 unchanged | realtime +~65 B | the signal-mode branch + lazy getters in `useRoom` |
 
-The signal-backed phases add the `@preact/signals` cost (~3.3 kB gz) only for
-apps that opt in; the always-paid plumbing is tracked here as it lands.
+(The core number rebased between Phase 0 and Phase 1 as `origin/main` advanced;
+what matters is that each phase leaves core unchanged.) The opt-in signal glue
+is its own bucket: the `signals` entry is **289 B gz marginal**. `@preact/signals`
+itself (~3.3 kB gz) is a peer only apps that import `hono-preact/signals` install;
+it is external in the probe. An app that never imports the entry pays only the
+per-feature plumbing above.
 
 ## Invariants every phase must hold
 
 Carried from the investigation (§3) and proven on the spike:
 
-- **The mirror law.** A signal is an additional read channel, never the sole
-  source of truth, until every consumer of that source is converted. Making the
-  signal authoritative and skipping the host re-render freezes existing
-  `useData()` / `.View()` consumers.
+- **The mirror law.** A signal is an additional read channel; the existing
+  coarse value must stay reactive for its current consumers. The loader spike
+  showed the naive failure: making the signal authoritative and simply skipping
+  the host re-render freezes existing `useData()` / `.View()` consumers. Phase 1
+  showed the clean resolution: keep the coarse value reactive by exposing it as a
+  lazy getter that reads the store when a consumer accesses it (so a coarse
+  `members` consumer still updates), and let the granular win come from granular
+  consumers subscribing to one entity instead of the whole. The rule is
+  "don't break the coarse consumer", not "always keep the old `setState`".
 - **Render purity.** No signal write that notifies subscribers during the render
   pass. DOM cleanup stays deferred to effects.
 - **Server error propagation stays throw-based.** The SSR deny/coldError path
