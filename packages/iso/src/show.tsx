@@ -11,18 +11,27 @@ export type ShowProps<C> = {
   children: ComponentChildren | ((value: NonNullable<C>) => ComponentChildren);
 };
 
+// A component boundary for the function-child form. Running the child render
+// inside this component (via the thunk) means a signal read in it subscribes
+// THIS boundary, not the parent <Show>, so a child-internal signal re-renders
+// only this subtree.
+function ShowItem({ render }: { render: () => ComponentChildren }): VNode {
+  return <Fragment>{render()}</Fragment>;
+}
+
 /**
  * Conditional render bound to a signal: shows `children` when `when.value` is
- * truthy, else `fallback`. A function child receives the narrowed truthy value.
+ * truthy, else `fallback`. A function child receives the narrowed truthy value
+ * and runs inside its own component boundary, so its signal reads re-render that
+ * subtree alone rather than the whole `<Show>`.
  */
 export function Show<C>({ when, fallback, children }: ShowProps<C>): VNode {
   const value = when.value; // subscribes <Show> to the condition signal
   if (!value) {
     return <Fragment>{fallback ?? null}</Fragment>;
   }
-  return (
-    <Fragment>
-      {typeof children === 'function' ? children(value) : children}
-    </Fragment>
-  );
+  if (typeof children === 'function') {
+    return <ShowItem render={() => children(value)} />;
+  }
+  return <Fragment>{children}</Fragment>;
 }

@@ -78,4 +78,22 @@ describe('<For>', () => {
       render(<For each={each}>{(id) => <li>{id}</li>}</For>)
     ).toThrow(/duplicate key/i);
   });
+
+  it('updates a row when the child reads a signal INLINE (per-row boundary)', async () => {
+    // The row runs inside its own component boundary, so an inline `.value`
+    // read subscribes the row and stays live. (This fails if <For> caches the
+    // eagerly-called child vnode instead of a per-row Item component.)
+    const count = signal(5);
+    const each = signal<readonly string[]>(['a']);
+    render(
+      <For each={each}>
+        {(id) => <li data-testid={`r-${id}`}>{count.value}</li>}
+      </For>
+    );
+    expect(screen.getByTestId('r-a').textContent).toBe('5');
+    await act(async () => {
+      count.value = 6;
+    });
+    expect(screen.getByTestId('r-a').textContent).toBe('6');
+  });
 });

@@ -41,4 +41,19 @@ describe('<Show>', () => {
     );
     expect(container.textContent).toBe('');
   });
+
+  it('a signal read inside the function child stays live (per-subtree boundary)', async () => {
+    const when = signal(true);
+    const count = signal(1);
+    render(
+      <Show when={when}>
+        {() => <span data-testid="c">{count.value}</span>}
+      </Show>
+    );
+    expect(screen.getByTestId('c').textContent).toBe('1');
+    await act(async () => {
+      count.value = 2;
+    });
+    expect(screen.getByTestId('c').textContent).toBe('2');
+  });
 });

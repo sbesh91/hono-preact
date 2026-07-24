@@ -63,33 +63,39 @@ guard is extended (not weakened) to assert `for.tsx` / `show.tsx` do not import
 
 - `each: ReadonlyReactive<readonly T[]>` (e.g. `memberIds`, or a signal of any
   array). `<For>` reads `each.value` in its render, which auto-subscribes it.
-- `by?: (item: T, index: number) => Key`, default identity (`(item) => item`),
-  exact for `memberIds` (the ids are the keys).
+- `by?: (item: T, index: number) => unknown`, default identity (`(item) =>
+  item`), exact for `memberIds` (the ids are the keys). Keys are opaque, so there
+  is no second `Key` type parameter and no cast.
 - children: a single function `(item: T, index: number) => ComponentChildren`.
 
-Mechanism (the granular win): `<For>` keeps a per-key cache of rendered vnodes in
-a ref (`Map<Key, VNode>`). On each render it reads `each.value`, computes each
-item's key, reuses the cached vnode for a surviving key, invokes the child fn only
-for a newly appeared key, and drops cache entries for departed keys. The output
-vnode array is keyed by `Key`, so Preact reconciles by key. Result:
+Mechanism (the granular win): each row runs inside its own tiny component
+boundary (`Item`, which calls the child render), and `<For>` keeps a per-key
+cache of those `Item` vnodes in a ref (`Map<unknown, VNode>`). On each render it
+reads `each.value`, computes each item's key, reuses the cached `Item` vnode for a
+surviving key, mounts a fresh keyed `Item` only for a newly appeared key, and
+drops cache entries for departed keys. The output is keyed, so Preact reconciles
+by key. Result:
 
-- **Update** (a member's own signal changes): only that `<Row>` re-renders (it
-  subscribes to `member(id)` itself); `<For>` does not re-run, because `each` (the
-  id list) did not change.
+- **Update** (a row's own signal changes): the child render runs inside `Item`,
+  so a signal read there (inline `{member(id).value}` or via a nested component)
+  subscribes that `Item`, which re-renders alone and fresh; `<For>` does not
+  re-run, because `each` (the id list) did not change. This is the key reason for
+  the per-row boundary: without it, an inline signal read would subscribe `<For>`
+  and, because the cached vnode is frozen, render stale.
 - **Join / leave** (`each` changes): `<For>` re-renders and diffs keys, but
-  surviving rows keep their cached vnode (child fn not re-invoked, same vnode
-  reference), so Preact bails on them; only the added/removed rows mount/unmount.
+  surviving rows keep their cached `Item` vnode (same reference), so Preact bails
+  on them; only the added/removed rows mount/unmount.
 
 The presence gap closes without re-rendering the surviving rows.
 
-**Contract for children (documented):** a cached vnode closes over the props at
-first render, so `<For>` children must read changing state through signals (the
-framework idiom, e.g. `member(id)`), not through captured non-signal values (a
-surviving row's `index` argument likewise goes stale on reorder). Duplicate keys
-throw (unconditionally, in every build): a doubled key would put the same vnode
-reference in the children array twice and corrupt Preact's keyed reconciliation,
-so this fails fast rather than only in development; the error names the offending
-key.
+**Contract for children (documented):** a surviving row is not re-invoked by a
+list change, so its `item` / `index` arguments are captured at first render and go
+stale on reorder; drive changing per-row data through signals (the framework
+idiom, e.g. `member(id)`), which the row's `Item` boundary keeps live. Duplicate
+keys throw (unconditionally, in every build): a doubled key would put the same
+vnode reference in the children array twice and corrupt Preact's keyed
+reconciliation, so this fails fast rather than only in development; the error
+names the offending key.
 
 ## 4. `<Show>`
 
@@ -102,7 +108,10 @@ key.
 - `when: ReadonlyReactive<C>`; `<Show>` reads `when.value` (auto-subscribes),
   renders `children` when it is truthy, else `fallback` (default `null`).
 - children may be a node or `(value: NonNullable<C>) => ComponentChildren`, which
-  receives the narrowed truthy value (the common Solid `<Show>` ergonomics).
+  receives the narrowed truthy value (the common Solid `<Show>` ergonomics). The
+  function child runs inside its own component boundary (the same `Item` idea as
+  `<For>`), so a signal read in it subscribes that subtree, not the whole
+  `<Show>`.
 
 Both `<For>` and `<Show>` are small, side-effect-free, and tree-shakeable; they
 enter a bundle only when imported.
@@ -153,14 +162,19 @@ Numbers reported in the PR.
     the eviction and a leak/stale test must fail.
   - `by` keys arrays of objects correctly; reorder preserves row identity.
   - duplicate keys throw (unconditionally) with the offending key named.
+  - an INLINE signal read in the child (`{sig.value}`, not via a nested
+    component) stays live. **Mutation-check:** revert the per-row `Item` boundary
+    to an eager `children(item, i)` call and this test must fail (the frozen
+    cached vnode renders stale).
 - **`<Show>`** (unit): toggles children/fallback on `when.value`; passes the
-  narrowed value to a function child; renders fallback while falsy.
+  narrowed value to a function child; renders fallback while falsy; a signal read
+  inside the function child stays live (the per-subtree boundary).
 - **SSR** (unit): `<For>` renders its rows and `<Show>` its branch through
   `preact-render-to-string`; an empty `each` and a falsy `when` render nothing /
   the fallback.
 - **Module-graph guard**: extended for `for.tsx` / `show.tsx`.
-- **Types** (`*.test-d.ts`): `<For>`'s `by` default (identity infers `Key = T`)
-  and object-array inference; `<Show>`'s function-child narrowing.
+- **Types** (`*.test-d.ts`): `<For>`'s item inference in `children` and the `by`
+  extractor for object arrays; `<Show>`'s function-child `NonNullable` narrowing.
 - All eight pre-push steps.
 
 ## 8. Streaming-loader signals: split into a future phase (recorded 2026-07-24)
@@ -202,9 +216,12 @@ problem, not a plumbing one.
   vnodes), the phase delivers nothing. The two mutation-checked tests (survivor
   re-render, cache eviction) are the safety net; both must fail when the cache
   logic is broken.
-- **Stale-closure in cached children.** A cached vnode closes over first-render
-  props; a child that reads changing non-signal captures goes stale. Mitigated by
-  documenting the signals-idiom contract (section 3) and by the presence pattern
-  reading `member(id)` through a signal.
+- **Stale-closure in cached children.** A surviving row's `Item` keeps its
+  first-render `item` / `index` arguments (the vnode is cached), so a child that
+  reads changing NON-signal captures goes stale on reorder. Signal reads stay live
+  (the `Item` boundary re-renders the row on its own signals, inline or nested),
+  which is why the inline-signal test is a required guard. Mitigated by the
+  signals-idiom contract (section 3) and the presence pattern reading `member(id)`
+  through a signal.
 - **Key stability.** `by` must produce stable, unique keys; duplicates corrupt the
   cache. The unconditional duplicate-key throw and a reorder-identity test cover it.

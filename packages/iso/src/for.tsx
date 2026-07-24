@@ -9,21 +9,38 @@ export type ForProps<T> = {
   /** Derive a stable, unique key per item. Defaults to the item itself
    * (identity), which is exact for a `memberIds`-style array of keys. */
   by?: (item: T, index: number) => unknown;
-  /** Render one item. The result is cached per key, so a surviving row is NOT
-   * re-invoked on a list change; read changing state through signals (e.g.
-   * `member(id)`), not through captured non-signal props. Because a surviving
-   * row is not re-invoked, its captured `index` also goes stale on reorder;
-   * children that depend on position rather than identity should account for
-   * that. */
+  /** Render one item. Each row runs inside its own component boundary, so a
+   * signal read here (inline, e.g. `{member(id).value}`, or via a nested
+   * component) subscribes that row and re-renders it alone and fresh. A
+   * surviving row is otherwise not re-invoked on a list change, so its `item` /
+   * `index` arguments are captured at first render and go stale on reorder;
+   * drive changing per-row data through signals, not through those captured
+   * arguments. */
   children: (item: T, index: number) => ComponentChildren;
 };
 
+// A per-row component boundary. The child render runs HERE, inside a component,
+// so a signal read in it subscribes THIS row (which re-renders alone and fresh
+// on its own signal), not the parent <For>. This is the key difference from
+// calling `children` eagerly: an inline `{sig.value}` in a row stays live.
+function Item<T>({
+  item,
+  index,
+  render,
+}: {
+  item: T;
+  index: number;
+  render: (item: T, index: number) => ComponentChildren;
+}): VNode {
+  return <Fragment>{render(item, index)}</Fragment>;
+}
+
 /**
- * A keyed list helper. It caches each rendered row by key, so a membership
- * change (append / remove / reorder) reconciles by key and re-invokes the child
- * only for a newly appeared key; a surviving row keeps its cached vnode (same
- * reference), so Preact bails on it. Pair with a per-item signal so an item
- * update re-renders that row alone.
+ * A keyed list helper. It caches each row's component by key, so a membership
+ * change (append / remove / reorder) reconciles by key and mounts a row only
+ * for a newly appeared key; a surviving row keeps its cached vnode (same
+ * reference), so Preact bails on it. Each row runs inside its own component
+ * boundary, so a signal read in the child re-renders that row alone.
  */
 export function For<T>({ each, by, children }: ForProps<T>): VNode {
   const cacheRef = useRef<Map<unknown, VNode> | null>(null);
@@ -41,10 +58,10 @@ export function For<T>({ each, by, children }: ForProps<T>): VNode {
         `<For>: duplicate key ${String(key)}; keys must be unique.`
       );
     }
-    // Reuse the cached vnode for a surviving key (same reference, so Preact
-    // bails on that row); build a fresh keyed row only for a new key.
+    // Reuse the cached row for a surviving key (same reference, so Preact bails
+    // on that row); mount a fresh keyed row only for a new key.
     const row = prev.get(key) ?? (
-      <Fragment key={key}>{children(item, i)}</Fragment>
+      <Item key={key} item={item} index={i} render={children} />
     );
     next.set(key, row);
     out.push(row);
