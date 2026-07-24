@@ -1,9 +1,11 @@
 # Signals migration (umbrella)
 
-Date: 2026-07-22 (finalized 2026-07-24)
-Status: Ready. Phases 0-2 shipped on this branch; Phase 3 dropped; Phase 4
-is a future roadmap item, not part of this PR. This branch is the single PR
-to `main`.
+Date: 2026-07-22 (Phase 5 recorded 2026-07-24)
+Status: In progress. Phases 0-2 and Phase 5 shipped on this branch. Phase 5
+made signals the always-on data-layer opinion, which re-opens Phase 3 (now
+viable on that foundation) and keeps Phase 4 as the DX follow-on; both stack on
+top of Phase 5, out of order. This branch is the single PR to `main`, held open
+until the owner is comfortable with the whole signals transition.
 Branch: `feat/signals-migration`
 
 This is the charter for the signals-first migration. The work ships as **one
@@ -33,8 +35,9 @@ Ordered by payoff-to-risk. Each is a stacked sub-PR into this branch.
 | 0 | Decompose the loader runner (session / readers / reload). No signals, no behaviour change. | #341 | shipped (in this PR) |
 | 1 | Presence roster as keyed signals (`memberIds` / `member(id)` on `useRoom`). Positioning DROPPED (see below). | #343 | shipped (in this PR) |
 | 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | #344 | shipped (in this PR) |
-| 3 | Optimistic queue and the action/form stores. | | DROPPED (see below) |
-| 4 | Signals DX: primitive rendering helpers (a keyed `<For>`, and other ergonomics), plus streaming-loader signals as the follow-on to Phase 2. | | future roadmap (not in this PR) |
+| 3 | Optimistic queue and the action/form stores; per-field form errors. Delete `use-store-snapshot` / `use-force-update`. | | re-opened by Phase 5 (see below); stacks on top |
+| 4 | Signals DX: primitive rendering helpers (a keyed `<For>`, and other ergonomics), plus streaming-loader signals as the follow-on to Phase 2. | | roadmap; stacks on top of Phase 5 |
+| 5 | Signals as the always-on data layer: delete the opt-in seam and the `hono-preact/signals` subpath; loaders and rooms are signal-backed with no opt-in import. | #345 | shipped (in this PR) |
 
 **Phase 3 dropped (recorded 2026-07-24).** Assessment before starting it: the
 optimistic queue, `action-result-store`, and `form-submit-store` all sit on the
@@ -51,6 +54,18 @@ errors (the whole `FieldErrorsMap` is on one context today), is real but modest
 (forms are not a per-frame hot path) and is folded into the Phase 4 roadmap. The
 high-value granularity work (presence, loaders) is shipped; the migration stops
 where the value stops.
+
+**Phase 3 re-opened by Phase 5 (recorded 2026-07-24).** The drop rationale above
+rested on the zero-cost invariant: converting the always-loaded store consumers
+would either tax every forms app with `@preact/signals` or add dual-path
+complexity behind the opt-in seam. Phase 5 retired that invariant for the data
+layer and deleted the seam, so both objections are gone: signals is now always
+present for a data-layer app, and there is no dual path to add. Converting the
+optimistic queue and the action/form stores to signals now simply removes the
+hand-rolled `use-store-snapshot` / `use-force-update` bridges (built precisely to
+keep signals off the always-loaded path) rather than paying to keep them. The
+per-field form-error granularity (splitting the single `FieldErrorsMap` context)
+becomes worthwhile on the same foundation. Phase 3 stacks on top of Phase 5.
 
 **Deferred to Phase 4 (recorded 2026-07-24).** Phase 1's granular presence ships
 with the keyed `.map` consumption pattern
@@ -77,6 +92,19 @@ Routing (the investigation's original Phase 4) remains entirely out of scope
 unrelated to the DX Phase 4 above; the two just share a number across the two
 documents.
 
+**Phase 5: signals as the always-on data layer (shipped, #345).** Phases 1-2
+made presence and loader data granular only when the app imported the opt-in
+`hono-preact/signals` entry, behind a registration seam with a signals-free
+default path. Phase 5 makes signals the data-layer opinion: the signal factories
+moved into `internal/roster-signal.ts` and `internal/loader-signal.ts`, the
+consumers (`use-room.ts`, `loader.tsx`, `define-loader.ts`) import them directly,
+and the seam, the opt-in `signals.ts` entry, the `hono-preact/signals` subpath,
+and the default paths are deleted. The observable behaviour is exactly the
+Phase 1-2 signal-mode path (deletion of the alternative, not a rewrite), pinned
+by the tests those phases already shipped plus a module-graph guard that keeps
+`@preact/signals` reachable only through the two factory modules. See
+`2026-07-24-signals-always-on-design.md`.
+
 ## Running cost
 
 Measured with the repo's own probe, gzip. Core is the number the framework's
@@ -87,13 +115,16 @@ adds. Updated as phases land.
 | --- | --- | --- | --- |
 | Phase 0 | 4914 (+3) | loaders +258 B | structural, parameter passing over closure capture |
 | Phase 1 | 5519 unchanged | realtime +~65 B | the signal-mode branch + lazy getters in `useRoom` |
+| Phase 5 | 5521 unchanged | realtime 2261 B, loaders 10215 B (marginal) | seam removed; the `signals` opt-in bucket is gone, its glue folded into the two feature buckets |
 
-(The core number rebased between Phase 0 and Phase 1 as `origin/main` advanced;
-what matters is that each phase leaves core unchanged.) The opt-in signal glue
-is its own bucket: the `signals` entry is **289 B gz marginal**. `@preact/signals`
-itself (~3.3 kB gz) is a peer only apps that import `hono-preact/signals` install;
-it is external in the probe. An app that never imports the entry pays only the
-per-feature plumbing above.
+(The core number rebased across phases as `origin/main` advanced; what matters
+is that each phase leaves core unchanged.) Through Phase 2 the signal glue was
+its own opt-in bucket (the `signals` entry, ~289 B gz marginal) and
+`@preact/signals` (~3.3 kB gz) was a peer only apps importing `hono-preact/signals`
+installed. **Phase 5 removes that bucket and the opt-in:** `@preact/signals` is
+still external in the probe (a peer the app installs), but it is now reached
+through the always-loaded data-layer modules, so an app that uses a loader or a
+room ships it unconditionally. An app that uses neither still ships no signals.
 
 ## Invariants every phase must hold
 
@@ -112,5 +143,10 @@ Carried from the investigation (§3) and proven on the spike:
   pass. DOM cleanup stays deferred to effects.
 - **Server error propagation stays throw-based.** The SSR deny/coldError path
   cannot move to a reactive channel.
-- **Zero cost when unused.** An app that does not opt into signals pays no new
-  bytes beyond the phase's always-on plumbing, which is measured and reported.
+- **Zero cost when unused (retired for the data layer by Phase 5).** Through
+  Phase 2 this held: an app that did not opt into signals paid no `@preact/signals`
+  bytes. Phase 5 deliberately reverses it for the data layer: signals is the
+  opinion, so using a loader or a room now loads `@preact/signals` (~3.3 kB gz),
+  measured and reported. The narrower invariant that survives: **core stays
+  signals-free** (an app that touches neither the loader nor the room data layer
+  ships no signals), enforced by the module-graph guard and the core size number.
