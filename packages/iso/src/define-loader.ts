@@ -4,13 +4,17 @@ import type {
   ComponentType,
   FunctionComponent,
 } from 'preact';
-import { useContext } from 'preact/hooks';
+import { useContext, useRef } from 'preact/hooks';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
 import type { Serialize } from './internal/serialize.js';
 import { createCache, type LoaderCache } from './cache.js';
-import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
+import {
+  LoaderDataContext,
+  LoaderErrorContext,
+  LoaderViewSignalContext,
+} from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
 import type { AccumulateOptions } from './internal/use-loader-runner.js';
@@ -20,6 +24,10 @@ import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
 import type { ServerCaller } from './server-caller.js';
+import {
+  getLoaderReactiveImpl,
+  type ReadonlyReactive,
+} from './internal/reactive.js';
 export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
 /**
@@ -183,6 +191,23 @@ export interface LoaderRef<T, Live extends boolean = false> {
    * `never` on a streaming loader (it has no single value).
    */
   useData: Live extends true ? never : () => LoaderState<Serialize<T>>;
+  /** The loader's state as a reactive value. Read `.value`. With the
+   * `hono-preact/signals` entry imported this is a granular signal, so a
+   * component that binds it updates without the loader host re-rendering it;
+   * otherwise it is a coarse snapshot that updates through the data context.
+   * `never` on a streaming loader (its status is separate state). */
+  useDataSignal: Live extends true
+    ? never
+    : () => ReadonlyReactive<LoaderState<Serialize<T>>>;
+  /** A reactive projection of one field of the loaded data. Read `.value` in
+   * render. `fallback` is returned while loading. `never` on a streaming
+   * loader. */
+  useFieldSignal: Live extends true
+    ? never
+    : <R>(
+        select: (data: Serialize<T>) => R,
+        fallback: R
+      ) => ReadonlyReactive<R>;
   useError(): Error | null;
   invalidate(): void;
   /**
@@ -547,6 +572,42 @@ function makeLoaderRef(
     }
   }
 
+  // Shared body for `useDataSignal` / `useFieldSignal` (the latter derives off
+  // the former's reactive). A plain local fn rather than a `this` call keeps
+  // the object literal's method typing simple and avoids an `as any` on `this`.
+  function readDataSignal(): ReadonlyReactive<LoaderState<unknown>> {
+    if (isStreaming) {
+      throw new Error(
+        'This is a streaming loader: useDataSignal() is single-value only; consume it via `loader.View(render, { initial, reduce })`.'
+      );
+    }
+    const ctx = useContext(LoaderViewSignalContext);
+    if (!ctx) {
+      throw new Error(
+        'loader.useDataSignal() must be called inside a `loader.View` render function or a `<Loader>`.'
+      );
+    }
+    // Structural context read: `LoaderViewSignalContext` is typed as an opaque
+    // `{ value: unknown }` so core names no signal shape; at runtime, for a
+    // single-value loader, its value is a `LoaderState | null` (null only on a
+    // cold error, which never reaches a mounted child). Treat null as loading.
+    const source = ctx as ReadonlyReactive<LoaderState<unknown> | null>;
+    const impl = getLoaderReactiveImpl();
+    const stateRef = useRef<ReadonlyReactive<LoaderState<unknown>> | null>(
+      null
+    );
+    if (stateRef.current === null) {
+      stateRef.current = impl
+        ? impl.derive(source, (s) => s ?? { status: 'loading' })
+        : {
+            get value() {
+              return source.value ?? { status: 'loading' };
+            },
+          };
+    }
+    return stateRef.current;
+  }
+
   const ref: LoaderRef<unknown> = {
     __id,
     __moduleKey: opts?.__moduleKey,
@@ -598,6 +659,26 @@ function makeLoaderRef(
         );
       }
       return ctx;
+    },
+    useDataSignal() {
+      return readDataSignal();
+    },
+    useFieldSignal<R>(select: (data: unknown) => R, fallback: R) {
+      const state = readDataSignal();
+      const impl = getLoaderReactiveImpl();
+      const ref = useRef<ReadonlyReactive<R> | null>(null);
+      if (ref.current === null) {
+        const project = (s: LoaderState<unknown>): R =>
+          s.status === 'loading' ? fallback : select(s.data);
+        ref.current = impl
+          ? impl.derive(state, project)
+          : {
+              get value() {
+                return project(state.value);
+              },
+            };
+      }
+      return ref.current;
     },
     useError() {
       return useContext(LoaderErrorContext);
