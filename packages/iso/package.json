@@ -42,10 +42,6 @@
     "./page": {
       "types": "./dist/page-only.d.ts",
       "import": "./dist/page-only.js"
-    },
-    "./signals": {
-      "types": "./dist/signals.d.ts",
-      "import": "./dist/signals.js"
     }
   },
   "scripts": {

@@ -5,8 +5,6 @@ import type { JSX } from 'preact';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
 import { useReload } from '../../reload-context.js';
-import { installLoaderSignals } from '../../signals.js';
-import { registerLoaderReactiveImpl } from '../reactive.js';
 import type { RouteHook } from 'preact-iso';
 
 const loc = {
@@ -17,14 +15,12 @@ const loc = {
 
 afterEach(() => {
   cleanup();
-  registerLoaderReactiveImpl(null);
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
 describe('loader field granularity through <Loader> (signal mode)', () => {
   it('a field change re-renders only the bound field node, not a sibling field', async () => {
-    installLoaderSignals();
     // A loader whose value changes across reloads.
     let n = 1;
     const loader = defineLoader<{ a: number; b: number }>(async () => ({

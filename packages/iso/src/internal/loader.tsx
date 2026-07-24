@@ -23,11 +23,8 @@ import {
   useLoaderRunner,
   type AccumulateOptions,
 } from './use-loader-runner.js';
-import {
-  getLoaderReactiveImpl,
-  type PhaseCell,
-  type ReadonlyReactive,
-} from './reactive.js';
+import { createPhaseCell } from './loader-signal.js';
+import type { PhaseCell, ReadonlyReactive } from './reactive.js';
 export { serializeLocationForCache } from './cache-key.js';
 
 // A route-independent loader runs with no location. Its zero-value location is
@@ -241,29 +238,25 @@ export function LoaderHost<T>({
     [memoStatus, memoData, memoError]
   );
 
-  // Signal mirror (opt-in). The host writes the memoized `viewState` into a
+  // Signal mirror (always-on). The host writes the memoized `viewState` into a
   // phase cell each render; an unchanged `viewState` is the SAME ref, so the
   // cell.set is a no-op (the signal skips notify). A `useFieldSignal` child
   // subscribes to a projection of this and updates alone. Created once per host
-  // instance; null in default mode. Typed to match `viewState`'s actual shape
-  // (a single-value `LoaderState` OR a streaming `StreamState`, same union
-  // `LoaderDataContext` already carries), not narrowed to the single-value case.
+  // instance. Typed to match `viewState`'s actual shape (a single-value
+  // `LoaderState` OR a streaming `StreamState`, same union `LoaderDataContext`
+  // already carries), not narrowed to the single-value case.
   const viewCellRef = useRef<PhaseCell<
     LoaderState<T> | StreamState<T> | null
   > | null>(null);
   if (viewCellRef.current === null) {
-    const impl = getLoaderReactiveImpl();
-    if (impl)
-      viewCellRef.current = impl.createPhaseCell<
-        LoaderState<T> | StreamState<T> | null
-      >(null);
+    viewCellRef.current = createPhaseCell<
+      LoaderState<T> | StreamState<T> | null
+    >(null);
   }
   const viewCell = viewCellRef.current;
-  if (viewCell) viewCell.set(viewState);
-  // In default mode expose a plain snapshot so `useDataSignal` still returns a
-  // correct (coarse) value; consumers update through the data-context re-render.
+  viewCell.set(viewState);
   const viewSignal: ReadonlyReactive<LoaderState<T> | StreamState<T> | null> =
-    viewCell ? viewCell.source : { value: viewState };
+    viewCell.source;
 
   // A COLD error: a SINGLE-VALUE load that failed before ANY value settled. The
   // old Suspense path threw the reader so an error boundary caught it; the state

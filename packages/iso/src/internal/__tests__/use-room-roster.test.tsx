@@ -53,7 +53,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('useRoom roster store wiring (default impl)', () => {
+describe('useRoom roster store wiring', () => {
   it('exposes memberIds and member(id) tracking the wire snapshot and deltas', async () => {
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
 

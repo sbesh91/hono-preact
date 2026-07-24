@@ -1,22 +1,16 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/preact';
-import {
-  registerPresenceReactiveImpl,
-  getPresenceReactiveImpl,
-} from '../reactive.js';
-import { installPresenceSignals } from '../../signals.js';
+import { createSignalRoster } from '../roster-signal.js';
 
 afterEach(() => {
   cleanup();
-  registerPresenceReactiveImpl(null);
   vi.restoreAllMocks();
 });
 
-describe('presence granularity (signal impl)', () => {
+describe('presence granularity (signal roster)', () => {
   it('a single member update re-renders only that row', async () => {
-    installPresenceSignals();
-    const store = getPresenceReactiveImpl()!.createRoster<number>();
+    const store = createSignalRoster<number>();
     store.snapshot([
       { id: 'a', state: 1 },
       { id: 'b', state: 2 },
