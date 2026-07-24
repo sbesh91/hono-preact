@@ -119,6 +119,13 @@ describe('hono-preact/vite export', () => {
   });
 });
 
+describe('hono-preact/signals export', () => {
+  it('surfaces the opt-in signal-backed presence installer', async () => {
+    const m = await import('hono-preact/signals');
+    expect(typeof m.installPresenceSignals).toBe('function');
+  });
+});
+
 describe('hono-preact/internal export', () => {
   it('surfaces the escape-hatch primitives', async () => {
     const m = await import('hono-preact/internal');

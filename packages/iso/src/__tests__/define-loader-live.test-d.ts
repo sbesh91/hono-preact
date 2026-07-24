@@ -42,6 +42,9 @@ function _liveProbes() {
   // A live loader has no single value: `useData` and `Boundary` are `never`.
   expectTypeOf(live.useData).toBeNever();
   expectTypeOf(live.Boundary).toBeNever();
+  // Same for the signal read-side: single-value only.
+  expectTypeOf(live.useDataSignal).toBeNever();
+  expectTypeOf(live.useFieldSignal).toBeNever();
 }
 
 // A single-value loader (Promise fn): single-value form only.

@@ -47,6 +47,10 @@ export default defineConfig({
         __dirname,
         'packages/iso/src/page-only.ts'
       ),
+      '@hono-preact/iso/signals': path.resolve(
+        __dirname,
+        'packages/iso/src/signals.ts'
+      ),
       '@hono-preact/iso': path.resolve(__dirname, 'packages/iso/src/index.ts'),
       '@hono-preact/server/internal/runtime': path.resolve(
         __dirname,
@@ -91,6 +95,10 @@ export default defineConfig({
       'hono-preact/page': path.resolve(
         __dirname,
         'packages/hono-preact/src/page.ts'
+      ),
+      'hono-preact/signals': path.resolve(
+        __dirname,
+        'packages/hono-preact/src/signals.ts'
       ),
       'hono-preact': path.resolve(
         __dirname,
