@@ -84,9 +84,12 @@ The presence gap closes without re-rendering the surviving rows.
 
 **Contract for children (documented):** a cached vnode closes over the props at
 first render, so `<For>` children must read changing state through signals (the
-framework idiom, e.g. `member(id)`), not through captured non-signal values.
-Duplicate keys throw in development (a keyed list requires unique keys); the
-error names the offending key.
+framework idiom, e.g. `member(id)`), not through captured non-signal values (a
+surviving row's `index` argument likewise goes stale on reorder). Duplicate keys
+throw (unconditionally, in every build): a doubled key would put the same vnode
+reference in the children array twice and corrupt Preact's keyed reconciliation,
+so this fails fast rather than only in development; the error names the offending
+key.
 
 ## 4. `<Show>`
 
@@ -116,7 +119,8 @@ options patches under `preact-render-to-string` are already proven safe
 
 **New files:**
 
-- `packages/iso/src/for.tsx` - `<For>` and its `ForProps<T, Key>` type. Pure
+- `packages/iso/src/for.tsx` - `<For>` and its `ForProps<T>` type (keys are
+  opaque, typed `unknown`, so no second `Key` type parameter and no cast). Pure
   Preact.
 - `packages/iso/src/show.tsx` - `<Show>` and its `ShowProps<C>` type. Pure Preact.
 
@@ -148,7 +152,7 @@ Numbers reported in the PR.
     entry (assert survivors' render count is unchanged). **Mutation-check:** skip
     the eviction and a leak/stale test must fail.
   - `by` keys arrays of objects correctly; reorder preserves row identity.
-  - duplicate keys throw in development with the offending key named.
+  - duplicate keys throw (unconditionally) with the offending key named.
 - **`<Show>`** (unit): toggles children/fallback on `when.value`; passes the
   narrowed value to a function child; renders fallback while falsy.
 - **SSR** (unit): `<For>` renders its rows and `<Show>` its branch through
@@ -203,4 +207,4 @@ problem, not a plumbing one.
   documenting the signals-idiom contract (section 3) and by the presence pattern
   reading `member(id)` through a signal.
 - **Key stability.** `by` must produce stable, unique keys; duplicates corrupt the
-  cache. The dev-mode duplicate-key throw and a reorder-identity test cover it.
+  cache. The unconditional duplicate-key throw and a reorder-identity test cover it.

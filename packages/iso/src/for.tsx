@@ -26,8 +26,10 @@ export type ForProps<T> = {
  * update re-renders that row alone.
  */
 export function For<T>({ each, by, children }: ForProps<T>): VNode {
-  const cacheRef = useRef<Map<unknown, VNode>>(new Map());
-  const prev = cacheRef.current;
+  const cacheRef = useRef<Map<unknown, VNode> | null>(null);
+  // Lazy first-render init so later renders do not allocate a throwaway Map
+  // (the initializer would otherwise run every render and be discarded).
+  const prev = (cacheRef.current ??= new Map());
   const items = each.value; // subscribes <For> to the list signal
   const next = new Map<unknown, VNode>();
   const out: VNode[] = [];
