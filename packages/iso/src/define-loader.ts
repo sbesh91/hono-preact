@@ -578,13 +578,13 @@ function makeLoaderRef(
   function readDataSignal(): ReadonlyReactive<LoaderState<unknown>> {
     if (isStreaming) {
       throw new Error(
-        'This is a streaming loader: useDataSignal() is single-value only; consume it via `loader.View(render, { initial, reduce })`.'
+        'This is a streaming loader: useDataSignal() / useFieldSignal() are single-value only; consume it via `loader.View(render, { initial, reduce })`.'
       );
     }
     const ctx = useContext(LoaderViewSignalContext);
     if (!ctx) {
       throw new Error(
-        'loader.useDataSignal() must be called inside a `loader.View` render function or a `<Loader>`.'
+        'loader.useDataSignal() / useFieldSignal() must be called inside a `loader.View` render function or a `<Loader>`.'
       );
     }
     // Structural context read: `LoaderViewSignalContext` is typed as an opaque
