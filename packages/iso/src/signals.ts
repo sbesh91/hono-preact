@@ -85,7 +85,7 @@ export function installPresenceSignals(): void {
  */
 export function installLoaderSignals(): void {
   registerLoaderReactiveImpl({
-    createPhaseCell: <T,>(initial: T): PhaseCell<T> => {
+    createPhaseCell: <T>(initial: T): PhaseCell<T> => {
       const s = signal(initial);
       return {
         set(value) {
