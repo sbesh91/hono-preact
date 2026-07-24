@@ -52,4 +52,9 @@ describe('signals are the always-on data layer', () => {
       'internal/roster-signal.ts',
     ]);
   });
+
+  it('the rendering helpers are pure Preact (no @preact/signals import)', () => {
+    expect(reads('for.tsx', "'@preact/signals'")).toBe(false);
+    expect(reads('show.tsx', "'@preact/signals'")).toBe(false);
+  });
 });
