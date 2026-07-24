@@ -93,6 +93,7 @@ export {
   type RouteMatchOptions,
 } from './route-active.js';
 export { NavLink, type NavLinkProps } from './nav-link.js';
+export { For, type ForProps } from './for.js';
 export { buildPath } from './build-path.js';
 
 // Forms.
