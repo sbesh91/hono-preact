@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/preact';
+import { render, screen, cleanup, waitFor } from '@testing-library/preact';
 import type { JSX } from 'preact';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
@@ -43,6 +43,31 @@ describe('useDataSignal / useFieldSignal (default mode, no signals entry)', () =
     );
     // On first client render the loader is loading (no cache/preload here).
     expect(screen.getByTestId('v').textContent).toContain('(loading)');
+  });
+
+  it('UPDATES to the settled value in default mode (does not freeze at loading)', async () => {
+    // Regression: in default mode the view-signal context value is a fresh
+    // snapshot each render, so `useDataSignal` / `useFieldSignal` must read the
+    // current render's value, not a memoized getter frozen over the first
+    // render. Without the fix this stays '(loading)' forever.
+    const loader = defineLoader<{ title: string }>(async () => ({
+      title: 'settled',
+    }));
+
+    function View(): JSX.Element {
+      const title = loader.useFieldSignal((d) => d.title, '(loading)');
+      return <p data-testid="w">{title.value}</p>;
+    }
+
+    render(
+      <Loader loader={loader} location={loc}>
+        <View />
+      </Loader>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('w').textContent).toBe('settled')
+    );
   });
 
   it('throws a clear error when called outside a <Loader>', () => {

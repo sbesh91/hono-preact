@@ -593,17 +593,29 @@ function makeLoaderRef(
     // cold error, which never reaches a mounted child). Treat null as loading.
     const source = ctx as ReadonlyReactive<LoaderState<unknown> | null>;
     const impl = getLoaderReactiveImpl();
+    // `useRef` is called unconditionally to keep hook order stable; it is only
+    // USED in signal mode. (`impl` is registered once at import and never
+    // toggles, so the branch below is stable per component instance anyway.)
     const stateRef = useRef<ReadonlyReactive<LoaderState<unknown>> | null>(
       null
     );
+    if (!impl) {
+      // Default mode: `source` (the context value) is a FRESH `{ value }`
+      // snapshot every host render, and there is no subscription to keep stable,
+      // so return a fresh reactive over the CURRENT render's source. Memoizing
+      // here would freeze the getter over the first render's stale snapshot and
+      // pin the value forever (the consumer still re-renders via context churn,
+      // but would keep reading render-0's data).
+      return {
+        get value() {
+          return source.value ?? { status: 'loading' };
+        },
+      };
+    }
+    // Signal mode: `source` is a single stable signal; memoize the derived
+    // reactive so a binding does not resubscribe each render.
     if (stateRef.current === null) {
-      stateRef.current = impl
-        ? impl.derive(source, (s) => s ?? { status: 'loading' })
-        : {
-            get value() {
-              return source.value ?? { status: 'loading' };
-            },
-          };
+      stateRef.current = impl.derive(source, (s) => s ?? { status: 'loading' });
     }
     return stateRef.current;
   }
@@ -667,16 +679,23 @@ function makeLoaderRef(
       const state = readDataSignal();
       const impl = getLoaderReactiveImpl();
       const ref = useRef<ReadonlyReactive<R> | null>(null);
+      const project = (s: LoaderState<unknown>): R =>
+        s.status === 'loading' ? fallback : select(s.data);
+      if (!impl) {
+        // Default mode: fresh reactive over the current `state`, mirroring
+        // `readDataSignal` above (memoizing would freeze the projection over the
+        // first render's stale state and closure). This also reads the current
+        // render's `select` / `fallback`.
+        return {
+          get value() {
+            return project(state.value);
+          },
+        };
+      }
+      // Signal mode: memoize the derived projection so the binding is stable;
+      // `select` / `fallback` are captured once (documented, like `useData`).
       if (ref.current === null) {
-        const project = (s: LoaderState<unknown>): R =>
-          s.status === 'loading' ? fallback : select(s.data);
-        ref.current = impl
-          ? impl.derive(state, project)
-          : {
-              get value() {
-                return project(state.value);
-              },
-            };
+        ref.current = impl.derive(state, project);
       }
       return ref.current;
     },
