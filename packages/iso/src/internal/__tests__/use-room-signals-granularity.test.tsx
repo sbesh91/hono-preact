@@ -1,17 +1,15 @@
 // @vitest-environment happy-dom
-// The headline proof, THROUGH useRoom (not the store in isolation): with the
-// signals entry installed, a presence update re-renders only the moved member's
-// row. Neither the mapping consumer nor the other rows re-render, and crucially
-// useRoom itself does not re-render (it no longer calls setMembers in signal
-// mode). This is what makes the win real for a real consumer, with no memo.
+// The headline proof, THROUGH useRoom (not the store in isolation): a presence
+// update re-renders only the moved member's row. Neither the mapping consumer
+// nor the other rows re-render, and crucially useRoom itself does not
+// re-render (it never calls a coarse setState on a presence frame). This is
+// what makes the win real for a real consumer, with no memo.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/preact';
 import { defineChannel } from '../../define-channel.js';
 import { defineRoom } from '../../define-room.js';
 import { useRoom } from '../../use-room.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from '../contract.js';
-import { registerPresenceReactiveImpl } from '../reactive.js';
-import { installPresenceSignals } from '../../signals.js';
 
 class FakeWS {
   static last: FakeWS | null = null;
@@ -52,14 +50,12 @@ type RoomHook = ReturnType<typeof useRoom<typeof room>>;
 afterEach(() => {
   cleanup();
   FakeWS.last = null;
-  registerPresenceReactiveImpl(null);
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
-describe('useRoom granularity through the hook (signal mode)', () => {
+describe('useRoom granularity through the hook', () => {
   it('a presence update re-renders only the moved row, not the consumer or siblings', async () => {
-    installPresenceSignals();
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
 
     const boardRenders = vi.fn();
@@ -122,7 +118,6 @@ describe('useRoom granularity through the hook (signal mode)', () => {
   });
 
   it('a self presence echo re-renders a `self` consumer but not a sibling reading another member', async () => {
-    installPresenceSignals();
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
 
     const selfRenders = vi.fn();
@@ -180,13 +175,12 @@ describe('useRoom granularity through the hook (signal mode)', () => {
   });
 
   it('a coarse `members` consumer still updates on any presence change', async () => {
-    installPresenceSignals();
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
 
     function Counter() {
       const r = useRoom(room, { presence: { x: 0 } });
       // Reading `members` subscribes to the whole roster (coarse), so this
-      // updates on any member change even in signal mode.
+      // updates on any member change.
       return <p data-testid="count">{r.members.length}</p>;
     }
 

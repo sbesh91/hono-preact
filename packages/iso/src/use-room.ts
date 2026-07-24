@@ -16,12 +16,8 @@ import type {
   SocketCloseInfo,
   ReconnectOptions,
 } from './internal/ws-lifecycle.js';
-import { createDefaultRoster } from './internal/default-roster.js';
-import {
-  getPresenceReactiveImpl,
-  type ReadonlyReactive,
-  type RosterStore,
-} from './internal/reactive.js';
+import { createSignalRoster } from './internal/roster-signal.js';
+import type { ReadonlyReactive, RosterStore } from './internal/reactive.js';
 
 // Re-export the shared lifecycle types so consumers can name them off useRoom.
 export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
@@ -118,16 +114,14 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
    * presence() seed (void-state rooms). */
   members: ReadonlyArray<PresenceMember<State<R> | undefined>>;
   /** Membership ids as a reactive value; changes on join/leave only. Read
-   * `.value`. With the `hono-preact/signals` entry imported this is a granular
-   * signal; otherwise it reads coarsely through `members`. */
+   * `.value`. */
   memberIds: ReadonlyReactive<readonly string[]>;
-  /** One member's entry as a reactive value. With the signals entry imported,
-   * `.value` changes only when THAT member's presence changes, so a row bound to
-   * `member(id)` re-renders alone. Read `.value` in render, and only for ids
-   * currently in `memberIds`: a binding created for an absent id does not observe
-   * that id later joining (re-read `member(id)` fresh each render, as the keyed
-   * `memberIds.value.map(...)` pattern does). Without the signals entry it reads
-   * coarsely through `members`. */
+  /** One member's entry as a reactive value. `.value` changes only when THAT
+   * member's presence changes, so a row bound to `member(id)` re-renders alone.
+   * Read `.value` in render, and only for ids currently in `memberIds`: a
+   * binding created for an absent id does not observe that id later joining
+   * (re-read `member(id)` fresh each render, as the keyed
+   * `memberIds.value.map(...)` pattern does). */
   member: (
     id: string
   ) => ReadonlyReactive<PresenceMember<State<R> | undefined> | undefined>;
@@ -164,37 +158,15 @@ export function useRoom<R extends AnyRoomRefShape>(
   ...args: UseRoomArgs<R>
 ): UseRoomResult<R> {
   const opts = args[0];
-  const [members, setMembers] = useState<
-    ReadonlyArray<PresenceMember<State<R> | undefined>>
-  >([]);
-  // The self id from the latest snapshot; `self` is derived from `members`.
+  // The self id from the latest snapshot; `self` is derived from the store.
   const [selfId, setSelfId] = useState<string | undefined>(undefined);
 
-  // Track the latest members array so the signals-free default store can read
-  // through to it.
-  const membersRef = useRef(members);
-  membersRef.current = members;
-
-  // The granular roster store: the signal-backed impl when the signals entry is
-  // imported, otherwise the signals-free default over the members array. Created
-  // once per hook instance. `signalMode` is recorded here (not re-derived per
-  // render) so it stays consistent with the store that was actually created.
-  const storeRef = useRef<{
-    store: RosterStore<State<R> | undefined>;
-    signalMode: boolean;
-  } | null>(null);
+  // The granular, signal-backed roster store. Created once per hook instance.
+  const storeRef = useRef<RosterStore<State<R> | undefined> | null>(null);
   if (storeRef.current === null) {
-    const impl = getPresenceReactiveImpl();
-    storeRef.current = impl
-      ? { store: impl.createRoster<State<R> | undefined>(), signalMode: true }
-      : {
-          store: createDefaultRoster<State<R> | undefined>(
-            () => membersRef.current
-          ),
-          signalMode: false,
-        };
+    storeRef.current = createSignalRoster<State<R> | undefined>();
   }
-  const { store, signalMode } = storeRef.current;
+  const store = storeRef.current;
 
   useEffect(() => () => store.dispose(), [store]);
 
@@ -239,29 +211,23 @@ export function useRoom<R extends AnyRoomRefShape>(
       } catch {
         return;
       }
-      // In signal mode the store's signals drive re-renders, so `setMembers` is
-      // deliberately NOT called on presence frames: that is what stops the whole
-      // `useRoom` subtree from re-rendering on every update. `setSelfId` still
-      // fires (rare, on snapshot). In default mode `setMembers` is the reactive
-      // source and drives the coarse re-render.
+      // The store's signals drive re-renders, so no `setMembers` call is
+      // needed on presence frames: that is what stops the whole `useRoom`
+      // subtree from re-rendering on every update. `setSelfId` still fires
+      // (rare, on snapshot).
       if (env.t === 'snapshot') {
         setSelfId(env.self);
-        if (!signalMode) setMembers(env.members);
         store.snapshot(env.members);
         return;
       }
       if (env.t === 'presence') {
         if (env.op === 'leave') {
-          if (!signalMode)
-            setMembers((prev) => prev.filter((m) => m.id !== env.from));
           store.leave(env.from);
         } else {
           // join | update: upsert by id. State may be undefined for a room
           // with no presence() seed (a void-state room); the snapshot path
           // and the presence registry both treat undefined as a valid member
           // state, so we must not skip the upsert when env.state is absent.
-          if (!signalMode)
-            setMembers((prev) => upsertMember(prev, env.from, env.state));
           store.upsert(env.from, env.state);
         }
         return;
@@ -299,51 +265,30 @@ export function useRoom<R extends AnyRoomRefShape>(
   const selfIdRef = useRef(selfId);
   selfIdRef.current = selfId;
 
-  // `members` and `self` are lazy getters. In signal mode they read the store's
-  // signals when the CONSUMER accesses them, so a coarse `members` consumer
-  // subscribes to the whole roster (updates on any change) while a component
-  // that reads only `member(id)` does not re-render on other members. In default
-  // mode they return the `useState` value / an array `find`, coarse as before.
+  // `members` and `self` are lazy getters that read the store's signals when
+  // the CONSUMER accesses them, so a coarse `members` consumer subscribes to
+  // the whole roster (updates on any change) while a component that reads
+  // only `member(id)` does not re-render on other members.
   return {
     send,
     setPresence,
     get members() {
-      return signalMode ? store.members.value : members;
+      return store.members.value;
     },
     memberIds: store.memberIds,
     member: store.member,
     get self() {
       const sid = selfIdRef.current;
       if (sid === undefined) return undefined;
-      // In signal mode this subscribes the consumer to self's OWN signal, so a
-      // self presence echo re-renders a `self` reader without re-rendering
-      // useRoom. Relies on the server seeding self into the roster before the
-      // snapshot (room-engine joinPresence precedes roster), so `member(sid)`
-      // resolves to a real signal; a protocol violation (self id absent from
-      // the roster) would not recover on a later join here, unlike default mode.
-      return signalMode
-        ? store.member(sid).value
-        : members.find((m) => m.id === sid);
+      // Subscribes the consumer to self's OWN signal, so a self presence echo
+      // re-renders a `self` reader without re-rendering useRoom. Relies on the
+      // server seeding self into the roster before the snapshot (room-engine
+      // joinPresence precedes roster), so `member(sid)` resolves to a real
+      // signal.
+      return store.member(sid).value;
     },
     status: lifecycle.status,
     close: lifecycle.close,
     closeInfo: lifecycle.closeInfo,
   };
-}
-
-/** Upsert a member by id: replace state in place, or append a new entry. */
-function upsertMember<S>(
-  prev: ReadonlyArray<PresenceMember<S>>,
-  id: string,
-  state: S
-): ReadonlyArray<PresenceMember<S>> {
-  const next = prev.slice();
-  const i = next.findIndex((m) => m.id === id);
-  const entry: PresenceMember<S> = { id, state };
-  if (i === -1) {
-    next.push(entry);
-  } else {
-    next[i] = entry;
-  }
-  return next;
 }

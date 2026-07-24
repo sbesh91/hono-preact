@@ -1,22 +1,10 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
-import {
-  getPresenceReactiveImpl,
-  registerPresenceReactiveImpl,
-} from '../reactive.js';
-import { installPresenceSignals } from '../../signals.js';
-
-afterEach(() => registerPresenceReactiveImpl(null));
+import { describe, it, expect } from 'vitest';
+import { createSignalRoster } from '../roster-signal.js';
 
 describe('signal-backed roster', () => {
-  it('registers an implementation on install', () => {
-    installPresenceSignals();
-    expect(getPresenceReactiveImpl()).not.toBeNull();
-  });
-
   it('tracks snapshot, upsert, and leave', () => {
-    installPresenceSignals();
-    const store = getPresenceReactiveImpl()!.createRoster<{ x: number }>();
+    const store = createSignalRoster<{ x: number }>();
 
     store.snapshot([{ id: 'a', state: { x: 1 } }]);
     expect(store.memberIds.value).toEqual(['a']);
@@ -34,8 +22,7 @@ describe('signal-backed roster', () => {
   });
 
   it('returns a STABLE signal per id (identity preserved across calls)', () => {
-    installPresenceSignals();
-    const store = getPresenceReactiveImpl()!.createRoster<number>();
+    const store = createSignalRoster<number>();
     store.upsert('a', 1);
     expect(store.member('a')).toBe(store.member('a'));
   });
@@ -44,8 +31,7 @@ describe('signal-backed roster', () => {
     // The granularity invariant at the store level: updating a member touches
     // only that member's signal, never the ids signal. If `upsert` rewrote
     // `memberIds` on every call, this reference check would fail.
-    installPresenceSignals();
-    const store = getPresenceReactiveImpl()!.createRoster<number>();
+    const store = createSignalRoster<number>();
     store.snapshot([{ id: 'a', state: 1 }]);
     const idsBefore = store.memberIds.value;
     store.upsert('a', 2); // existing member update
@@ -53,8 +39,7 @@ describe('signal-backed roster', () => {
   });
 
   it('members reflects the roster and tracks an update', () => {
-    installPresenceSignals();
-    const store = getPresenceReactiveImpl()!.createRoster<number>();
+    const store = createSignalRoster<number>();
     store.snapshot([
       { id: 'a', state: 1 },
       { id: 'b', state: 2 },
@@ -71,8 +56,7 @@ describe('signal-backed roster', () => {
   });
 
   it('snapshot dedupes a duplicate id in ids while byId keeps one signal', () => {
-    installPresenceSignals();
-    const store = getPresenceReactiveImpl()!.createRoster<number>();
+    const store = createSignalRoster<number>();
     store.snapshot([
       { id: 'a', state: 1 },
       { id: 'a', state: 2 },
