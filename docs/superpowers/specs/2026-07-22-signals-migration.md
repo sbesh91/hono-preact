@@ -31,8 +31,22 @@ Ordered by payoff-to-risk. Each is a stacked sub-PR into this branch.
 | --- | --- | --- | --- |
 | 0 | Decompose the loader runner (session / readers / reload). No signals, no behaviour change. | #341 | merged into umbrella |
 | 1 | Presence roster as keyed signals (`memberIds` / `member(id)` on `useRoom`). Positioning DROPPED (see below). | #343 | merged into umbrella |
-| 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | | in progress |
+| 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | #344 | in review |
 | 3 | Optimistic queue and the action/form stores. | | not started |
+| 4 | Signals DX: primitive rendering helpers (a keyed `<For>`, and other ergonomics), plus streaming-loader signals as the follow-on to Phase 2. | | not started |
+
+**Deferred to Phase 4 (recorded 2026-07-24).** Phase 1's granular presence ships
+with the keyed `.map` consumption pattern
+(`memberIds.value.map((id) => <Row sig={member(id)} />)`), which is granular on
+the frequent case (a presence UPDATE re-renders only the moved row) but coarse
+on membership change (a join/leave re-renders the mapping consumer and its rows,
+keyed reconciliation aside). A Solid-style `<For each={memberIds}>` would make
+join/leave granular too by subscribing to the list internally and diffing by key
+without re-rendering the parent. It was shown in an early Phase 1 API option but
+dropped from the shipped design to keep the surface small; that tradeoff is now
+owned, and the helper is deferred to a dedicated DX phase rather than bolted onto
+Phase 1. Phase 4 is also the home for the streaming-loader signals Phase 2
+leaves out (Phase 2 is single-value only).
 
 Positioning (`use-position.ts`), grouped into Phase 1 by the investigation,
 was dropped: verification showed it already writes x/y straight to the DOM in
@@ -41,9 +55,10 @@ it is already optimized. The residual re-render would need a breaking change to
 the public `PositionState` type to remove, which is not worth it. The
 investigation over-claimed it as a hot path.
 
-Routing (the investigation's Phase 4) is explicitly out of scope: it is a
-preact-iso replacement decision, not a reactivity change, and does not ride
-along here.
+Routing (the investigation's original Phase 4) remains entirely out of scope
+(it is a preact-iso replacement decision, not a reactivity change) and is
+unrelated to the DX Phase 4 above; the two just share a number across the two
+documents.
 
 ## Running cost
 
