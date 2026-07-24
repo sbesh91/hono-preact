@@ -11,7 +11,10 @@ export type ForProps<T> = {
   by?: (item: T, index: number) => unknown;
   /** Render one item. The result is cached per key, so a surviving row is NOT
    * re-invoked on a list change; read changing state through signals (e.g.
-   * `member(id)`), not through captured non-signal props. */
+   * `member(id)`), not through captured non-signal props. Because a surviving
+   * row is not re-invoked, its captured `index` also goes stale on reorder;
+   * children that depend on position rather than identity should account for
+   * that. */
   children: (item: T, index: number) => ComponentChildren;
 };
 
