@@ -1,8 +1,9 @@
 # Signals migration (umbrella)
 
-Date: 2026-07-22
-Status: In progress. This branch is the single PR that ships the whole
-migration to `main`.
+Date: 2026-07-22 (finalized 2026-07-24)
+Status: Ready. Phases 0-2 shipped on this branch; Phase 3 dropped; Phase 4
+is a future roadmap item, not part of this PR. This branch is the single PR
+to `main`.
 Branch: `feat/signals-migration`
 
 This is the charter for the signals-first migration. The work ships as **one
@@ -29,11 +30,27 @@ Ordered by payoff-to-risk. Each is a stacked sub-PR into this branch.
 
 | Phase | Scope | Sub-PR | Status |
 | --- | --- | --- | --- |
-| 0 | Decompose the loader runner (session / readers / reload). No signals, no behaviour change. | #341 | merged into umbrella |
-| 1 | Presence roster as keyed signals (`memberIds` / `member(id)` on `useRoom`). Positioning DROPPED (see below). | #343 | merged into umbrella |
-| 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | #344 | in review |
-| 3 | Optimistic queue and the action/form stores. | | not started |
-| 4 | Signals DX: primitive rendering helpers (a keyed `<For>`, and other ergonomics), plus streaming-loader signals as the follow-on to Phase 2. | | not started |
+| 0 | Decompose the loader runner (session / readers / reload). No signals, no behaviour change. | #341 | shipped (in this PR) |
+| 1 | Presence roster as keyed signals (`memberIds` / `member(id)` on `useRoom`). Positioning DROPPED (see below). | #343 | shipped (in this PR) |
+| 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | #344 | shipped (in this PR) |
+| 3 | Optimistic queue and the action/form stores. | | DROPPED (see below) |
+| 4 | Signals DX: primitive rendering helpers (a keyed `<For>`, and other ergonomics), plus streaming-loader signals as the follow-on to Phase 2. | | future roadmap (not in this PR) |
+
+**Phase 3 dropped (recorded 2026-07-24).** Assessment before starting it: the
+optimistic queue, `action-result-store`, and `form-submit-store` all sit on the
+**always-loaded** actions/forms path, not an opt-in one, and they carry no
+granularity win to convert. The optimistic value is a single projected value
+(not keyed). The action/form stores already narrow per-key through
+`use-store-snapshot` (a consumer re-renders only when its own action's result
+changes), so signals would only swap the mechanism. `use-store-snapshot` is in
+fact deliberately hand-rolled to keep `@preact/signals`/compat off the
+always-loaded path. Converting these would either tax every forms app (~3.3 kB,
+violating zero-cost) or add dual-path complexity behind the opt-in seam for no
+user-facing benefit. The one genuine granularity opportunity, per-field form
+errors (the whole `FieldErrorsMap` is on one context today), is real but modest
+(forms are not a per-frame hot path) and is folded into the Phase 4 roadmap. The
+high-value granularity work (presence, loaders) is shipped; the migration stops
+where the value stops.
 
 **Deferred to Phase 4 (recorded 2026-07-24).** Phase 1's granular presence ships
 with the keyed `.map` consumption pattern
