@@ -2,8 +2,10 @@ import { signal, computed, type Signal } from '@preact/signals';
 import type { PresenceMember } from './internal/room-envelope.js';
 import {
   registerPresenceReactiveImpl,
+  registerLoaderReactiveImpl,
   type ReadonlyReactive,
   type RosterStore,
+  type PhaseCell,
 } from './internal/reactive.js';
 
 /**
@@ -75,4 +77,27 @@ export function installPresenceSignals(): void {
   });
 }
 
+/**
+ * The signal-backed loader implementation: `createPhaseCell` is a `Signal`, and
+ * `derive` is a `computed`. Reading a derived signal in a component subscribes
+ * that component, so a `useFieldSignal` node updates alone when its field
+ * changes, without the loader host re-rendering it.
+ */
+export function installLoaderSignals(): void {
+  registerLoaderReactiveImpl({
+    createPhaseCell: <T,>(initial: T): PhaseCell<T> => {
+      const s = signal(initial);
+      return {
+        set(value) {
+          s.value = value;
+        },
+        source: s,
+      };
+    },
+    derive: <T, R>(source: ReadonlyReactive<T>, select: (v: T) => R) =>
+      computed(() => select(source.value)),
+  });
+}
+
 installPresenceSignals();
+installLoaderSignals();
