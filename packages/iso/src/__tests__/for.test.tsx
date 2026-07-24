@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/preact';
 import { signal } from '@preact/signals';
 import { For } from '../for.js';
