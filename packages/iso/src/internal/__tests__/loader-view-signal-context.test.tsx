@@ -6,8 +6,6 @@ import type { JSX } from 'preact';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
 import { LoaderViewSignalContext } from '../contexts.js';
-import { installLoaderSignals } from '../../signals.js';
-import { registerLoaderReactiveImpl } from '../reactive.js';
 import type { RouteHook } from 'preact-iso';
 
 const loc = {
@@ -18,13 +16,11 @@ const loc = {
 
 afterEach(() => {
   cleanup();
-  registerLoaderReactiveImpl(null);
   vi.restoreAllMocks();
 });
 
 describe('LoaderViewSignalContext provision', () => {
   it('provides a reactive whose value tracks the loader state (signal mode)', async () => {
-    installLoaderSignals();
     const loader = defineLoader<{ n: number }>(async () => ({ n: 1 }));
 
     let seen: { readonly value: unknown } | null = null;

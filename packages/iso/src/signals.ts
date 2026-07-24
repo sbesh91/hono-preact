@@ -1,18 +1,19 @@
-import { signal, computed } from '@preact/signals';
 import {
   registerPresenceReactiveImpl,
   registerLoaderReactiveImpl,
-  type ReadonlyReactive,
-  type PhaseCell,
 } from './internal/reactive.js';
 import { createSignalRoster } from './internal/roster-signal.js';
+import { createPhaseCell, derive } from './internal/loader-signal.js';
 
 /**
  * The opt-in signals entry (the `hono-preact/signals` subpath). Importing this
- * module installs the signal-backed roster: `member(id)` becomes a per-member
- * signal, so a presence update patches one bound row instead of re-rendering
- * every consumer. This is the ONLY module that imports `@preact/signals`; apps
- * that never import it pay no signal bytes.
+ * module registers the signal-backed roster and loader implementations against
+ * `internal/reactive.js`'s registration seam, so `useRoom` and the loader hooks
+ * pick up the granular, per-binding update behaviour those factories provide.
+ * It is a thin wrapper: the actual `@preact/signals` usage lives in the
+ * data-layer factory modules it imports (`internal/roster-signal.js`,
+ * `internal/loader-signal.js`), which the always-on `useRoom` / loader path
+ * already imports directly.
  */
 
 /** Register the signal-backed roster. Called on import; exported so a test can
@@ -30,19 +31,7 @@ export function installPresenceSignals(): void {
  * changes, without the loader host re-rendering it.
  */
 export function installLoaderSignals(): void {
-  registerLoaderReactiveImpl({
-    createPhaseCell: <T>(initial: T): PhaseCell<T> => {
-      const s = signal(initial);
-      return {
-        set(value) {
-          s.value = value;
-        },
-        source: s,
-      };
-    },
-    derive: <T, R>(source: ReadonlyReactive<T>, select: (v: T) => R) =>
-      computed(() => select(source.value)),
-  });
+  registerLoaderReactiveImpl({ createPhaseCell, derive });
 }
 
 installPresenceSignals();
