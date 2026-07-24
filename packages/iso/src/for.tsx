@@ -41,8 +41,9 @@ export function For<T>({ each, by, children }: ForProps<T>): VNode {
     }
     // Reuse the cached vnode for a surviving key (same reference, so Preact
     // bails on that row); build a fresh keyed row only for a new key.
-    const row =
-      prev.get(key) ?? <Fragment key={key}>{children(item, i)}</Fragment>;
+    const row = prev.get(key) ?? (
+      <Fragment key={key}>{children(item, i)}</Fragment>
+    );
     next.set(key, row);
     out.push(row);
   }

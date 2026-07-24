@@ -20,9 +20,7 @@ describe('<For>', () => {
     const each = signal<readonly string[]>(['a', 'b', 'c']);
     const renders = new Map<string, number>();
     const Row = makeRow(renders);
-    render(
-      <For each={each}>{(id) => <Row id={id} />}</For>
-    );
+    render(<For each={each}>{(id) => <Row id={id} />}</For>);
     expect(screen.getByTestId('row-a')).toBeTruthy();
     expect(screen.getByTestId('row-c')).toBeTruthy();
     expect([...renders.values()]).toEqual([1, 1, 1]);
