@@ -51,3 +51,38 @@ export function registerPresenceReactiveImpl(
 export function getPresenceReactiveImpl(): PresenceReactiveImpl | null {
   return presenceImpl;
 }
+
+/**
+ * A settable reactive cell mirroring one loader's projected `LoaderState`. The
+ * loader host writes it each render (with the memoized state, so an unchanged
+ * value is a no-op); `useDataSignal` reads `source`. Signal-backed in signal
+ * mode; unused in default mode (the host falls back to a context snapshot).
+ */
+export type PhaseCell<T> = {
+  set(value: T): void;
+  readonly source: ReadonlyReactive<T>;
+};
+
+/** Factory for the loader signal machinery, registered by the signals entry. */
+export type LoaderReactiveImpl = {
+  createPhaseCell<T>(initial: T): PhaseCell<T>;
+  /** A memoized projection off a reactive source (a `computed` in signal mode). */
+  derive<T, R>(
+    source: ReadonlyReactive<T>,
+    select: (v: T) => R
+  ): ReadonlyReactive<R>;
+};
+
+let loaderImpl: LoaderReactiveImpl | null = null;
+
+/** Install (or clear, with `null`) the signal-backed loader implementation. */
+export function registerLoaderReactiveImpl(
+  impl: LoaderReactiveImpl | null
+): void {
+  loaderImpl = impl;
+}
+
+/** The registered loader implementation, or null when the signals entry is unused. */
+export function getLoaderReactiveImpl(): LoaderReactiveImpl | null {
+  return loaderImpl;
+}

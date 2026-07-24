@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import { useContext, useId, useMemo } from 'preact/hooks';
+import { useContext, useId, useMemo, useRef } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { toStreamState } from '../loader-state.js';
 import type { LoaderState, StreamState } from '../loader-state.js';
@@ -10,6 +10,7 @@ import {
   LoaderDataContext,
   LoaderErrorContext,
   LoaderIdContext,
+  LoaderViewSignalContext,
 } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
@@ -22,6 +23,11 @@ import {
   useLoaderRunner,
   type AccumulateOptions,
 } from './use-loader-runner.js';
+import {
+  getLoaderReactiveImpl,
+  type PhaseCell,
+  type ReadonlyReactive,
+} from './reactive.js';
 export { serializeLocationForCache } from './cache-key.js';
 
 // A route-independent loader runs with no location. Its zero-value location is
@@ -138,7 +144,9 @@ function DataReader<T>({
     : { kind: 'data', value: raw };
   return (
     <LoaderDataContext.Provider value={state}>
-      <Envelope anchor={anchor}>{children}</Envelope>
+      <LoaderViewSignalContext.Provider value={{ value: state }}>
+        <Envelope anchor={anchor}>{children}</Envelope>
+      </LoaderViewSignalContext.Provider>
     </LoaderDataContext.Provider>
   );
 }
@@ -233,6 +241,30 @@ export function LoaderHost<T>({
     [memoStatus, memoData, memoError]
   );
 
+  // Signal mirror (opt-in). The host writes the memoized `viewState` into a
+  // phase cell each render; an unchanged `viewState` is the SAME ref, so the
+  // cell.set is a no-op (the signal skips notify). A `useFieldSignal` child
+  // subscribes to a projection of this and updates alone. Created once per host
+  // instance; null in default mode. Typed to match `viewState`'s actual shape
+  // (a single-value `LoaderState` OR a streaming `StreamState`, same union
+  // `LoaderDataContext` already carries), not narrowed to the single-value case.
+  const viewCellRef = useRef<PhaseCell<
+    LoaderState<T> | StreamState<T> | null
+  > | null>(null);
+  if (viewCellRef.current === null) {
+    const impl = getLoaderReactiveImpl();
+    if (impl)
+      viewCellRef.current = impl.createPhaseCell<
+        LoaderState<T> | StreamState<T> | null
+      >(null);
+  }
+  const viewCell = viewCellRef.current;
+  if (viewCell) viewCell.set(viewState);
+  // In default mode expose a plain snapshot so `useDataSignal` still returns a
+  // correct (coarse) value; consumers update through the data-context re-render.
+  const viewSignal: ReadonlyReactive<LoaderState<T> | StreamState<T> | null> =
+    viewCell ? viewCell.source : { value: viewState };
+
   // A COLD error: a SINGLE-VALUE load that failed before ANY value settled. The
   // old Suspense path threw the reader so an error boundary caught it; the state
   // path surfaces the error without throwing, so reproduce that propagation
@@ -254,7 +286,9 @@ export function LoaderHost<T>({
   // render the view directly from runner state (never calls `reader.read()`).
   const content = isBrowser() ? (
     <LoaderDataContext.Provider value={viewState}>
-      <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
+      <LoaderViewSignalContext.Provider value={viewSignal}>
+        <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
+      </LoaderViewSignalContext.Provider>
     </LoaderDataContext.Provider>
   ) : (
     <DataReader
