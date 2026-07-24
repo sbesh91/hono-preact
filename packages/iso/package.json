@@ -42,6 +42,10 @@
     "./page": {
       "types": "./dist/page-only.d.ts",
       "import": "./dist/page-only.js"
+    },
+    "./signals": {
+      "types": "./dist/signals.d.ts",
+      "import": "./dist/signals.js"
     }
   },
   "scripts": {
@@ -62,6 +66,7 @@
   },
   "sideEffects": false,
   "dependencies": {
+    "@preact/signals": "^2.9.4",
     "@standard-schema/spec": "^1.1.0"
   }
 }

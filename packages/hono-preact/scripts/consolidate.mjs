@@ -49,6 +49,7 @@ const DIST_PATHS = {
   '@hono-preact/iso/internal/runtime': 'iso/internal-runtime.js',
   '@hono-preact/iso/internal': 'iso/internal.js',
   '@hono-preact/iso/page': 'iso/page-only.js',
+  '@hono-preact/iso/signals': 'iso/signals.js',
   '@hono-preact/iso': 'iso/index.js',
   '@hono-preact/server/internal/runtime': 'server/internal-runtime.js',
   '@hono-preact/server/internal/cloudflare': 'server/internal-cloudflare.js',
@@ -101,7 +102,7 @@ async function rewriteImports(filePath) {
   const isTypeFile = filePath.endsWith('.d.ts');
 
   let rewritten = original.replace(
-    /(['"])(@hono-preact\/(?:iso\/internal\/runtime|iso\/internal|iso\/page|iso|server\/internal\/runtime|server\/internal\/cloudflare|server|vite\/adapter-cloudflare|vite\/adapter-node|vite))(['"])/g,
+    /(['"])(@hono-preact\/(?:iso\/internal\/runtime|iso\/internal|iso\/page|iso\/signals|iso|server\/internal\/runtime|server\/internal\/cloudflare|server|vite\/adapter-cloudflare|vite\/adapter-node|vite))(['"])/g,
     (match, q1, source, q2) => {
       const distRel = DIST_PATHS[source];
       if (!distRel) return match;

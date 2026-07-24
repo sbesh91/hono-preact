@@ -41,6 +41,10 @@
       "types": "./dist/page.d.ts",
       "import": "./dist/page.js"
     },
+    "./signals": {
+      "types": "./dist/signals.d.ts",
+      "import": "./dist/signals.js"
+    },
     "./server": {
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js"
@@ -87,6 +91,7 @@
     "@babel/traverse": "^8.0.0",
     "@babel/types": "^8.0.0",
     "@preact/preset-vite": "^2.10.5",
+    "@preact/signals": "^2.9.4",
     "lightningcss": "^1.32.0",
     "magic-string": "^0.30.21"
   },

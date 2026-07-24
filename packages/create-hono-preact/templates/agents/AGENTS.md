@@ -57,6 +57,9 @@ Import from these subpaths of the `hono-preact` package:
   `honoPreact({ adapter: cloudflareAdapter() })`.
 - `hono-preact/adapter-cloudflare` - `cloudflareAdapter` for Cloudflare Workers.
 - `hono-preact/adapter-node` - `nodeAdapter` for Node.
+- `hono-preact/signals` - opt-in: importing it installs the signal-backed
+  presence roster (`installPresenceSignals`), so a member update re-renders
+  only that member's row instead of every consumer of a room's roster.
 
 The UI component library is a separate package, `hono-preact-ui` (Dialog,
 Popover, Tooltip, Menu, Select, Combobox, plus headless hooks). It ships unstyled.

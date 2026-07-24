@@ -235,6 +235,9 @@ importers:
       '@preact/preset-vite':
         specifier: ^2.10.5
         version: 2.10.5(@babel/core@7.29.0)(preact@10.29.1)(rollup@4.60.2)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(tsx@4.21.0))
+      '@preact/signals':
+        specifier: ^2.9.4
+        version: 2.9.4(preact@10.29.1)
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -284,6 +287,9 @@ importers:
 
   packages/iso:
     dependencies:
+      '@preact/signals':
+        specifier: ^2.9.4
+        version: 2.9.4(preact@10.29.1)
       '@standard-schema/spec':
         specifier: ^1.1.0
         version: 1.1.0
@@ -1303,6 +1309,14 @@ packages:
     peerDependencies:
       '@babel/core': 7.x
       vite: ^8.0.8
+
+  '@preact/signals-core@1.14.4':
+    resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
+
+  '@preact/signals@2.9.4':
+    resolution: {integrity: sha512-JzAZXcRkmCNf9wVuxNI7UWseu3++Mm0dZ6UFyjFby44CyKIl7Y06oOsW3KA5Nx0L8tpE87OY5pLe0uQ0xcWKrg==}
+    peerDependencies:
+      preact: '>= 10.25.0 || >=11.0.0-0'
 
   '@prefresh/babel-plugin@0.5.3':
     resolution: {integrity: sha512-57LX2SHs4BX2s1IwCjNzTE2OJeEepRCNf1VTEpbNcUyHfMO68eeOWGDIt4ob9aYlW6PEWZ1SuwNikuoIXANDtQ==}
@@ -5176,6 +5190,13 @@ snapshots:
       - preact
       - rollup
       - supports-color
+
+  '@preact/signals-core@1.14.4': {}
+
+  '@preact/signals@2.9.4(preact@10.29.1)':
+    dependencies:
+      '@preact/signals-core': 1.14.4
+      preact: 10.29.1
 
   '@prefresh/babel-plugin@0.5.3': {}
 
