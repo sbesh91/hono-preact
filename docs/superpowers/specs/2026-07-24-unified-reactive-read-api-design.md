@@ -156,23 +156,39 @@ reduce)` owns the fold, since the reducer now lives on the consumer, not the hos
   (the Phase 2 mechanism, `LoaderViewSignalContext`), returning it as a
   `ReadonlySignal`.
 
-Open items the plan must resolve, prototype-first, flagged as risks (9):
+**Resolved (2026-07-24): uniform host-bound.** Investigation showed the spec's
+first preference (both standalone, "call it anywhere") is infeasible: a
+single-value `useData` cannot go standalone, SSR needs the loader to suspend so
+its value bakes into the HTML, and the framework does that by rendering a
+*separate* child that reads the `reader` and throws while the runner-owner stays
+stable through render-to-string's subtree replay. A hook that both owned the
+runner and threw would lose its session on replay. So **both `useData` forms are
+host-bound: read inside a `<Loader>` / `.View`.** The contract is uniform.
 
-1. **Uniform host requirement.** Single-value `useData()` reads a host context
-   (needs a `<Loader>` / `.View` ancestor); a live `useData` that drives its own
-   runner would work standalone. The plan must make the usage contract uniform,
-   preferably "call `useData()` anywhere" for both (single-value driving its own
-   cache-deduped runner), or, if standalone SSR suspense proves too invasive,
-   keep both host-bound and document one contract. The surface in 3 does not
-   change either way; only the "where can I call it" rule does.
-2. **SSR.** A live `useData` renders `connecting` on the server and reconnects on
-   the client (the existing streaming SSR contract); a standalone single-value
-   `useData` would need to suspend on the reader server-side. The plan validates
-   this against the `#287` SSR scars and the existing streaming SSR tests.
-3. **Multiple live consumers** of one loader with different reducers: one shared
-   stream subscription with per-consumer folds, or one subscription each. The
-   plan decides against the stream registry ("one subscriber per `loaderId`") and
-   documents the outcome; the common single-consumer case is unaffected.
+Wiring that follows from that decision:
+
+- **`.View` is untouched.** The streaming `.View(render, { initial, reduce })`
+  keeps its existing runner **fold-mode**; nothing about the released render-prop
+  path changes.
+- **A new runner collect-mode** feeds `useData`. A live `<Loader>` consumed via
+  `useData` (rather than `.View`) runs the runner in collect-mode: it appends
+  each chunk to an ordered log signal and tracks status, without folding. The
+  host exposes this as a `LoaderStreamContext` (a `ReadonlySignal` of the chunk
+  log plus a status signal).
+- **`useData(initial, reduce)` folds the log.** It reads `LoaderStreamContext`
+  and returns a `ReadonlySignal<StreamState<Acc>>` by folding the log through
+  `reduce` (incremental, ref-tracked by last-consumed index, so O(n) over the
+  stream, not O(n^2)). Multiple `useData` consumers under one host share the one
+  log and fold independently; a late-mounting consumer folds from the retained
+  log, so it never misses a chunk.
+- **SSR.** The live host renders `connecting` (empty log) on the server and
+  reconnects on the client, the existing streaming SSR contract; single-value
+  keeps the host's `DataReader` suspense. Validated against the `#287` scars and
+  the streaming SSR tests.
+
+The one accepted cost (owner-approved): the collect-mode log **retains chunk
+history** for late-mount correctness, so a long unbounded stream grows memory. A
+windowed/bounded-log option is a future refinement, noted, not built here.
 
 ## 8. Transition
 
