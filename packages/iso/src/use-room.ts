@@ -16,8 +16,10 @@ import type {
   SocketCloseInfo,
   ReconnectOptions,
 } from './internal/ws-lifecycle.js';
-import { createSignalRoster } from './internal/roster-signal.js';
-import type { RosterStore } from './internal/reactive.js';
+import {
+  createSignalRoster,
+  type RosterStore,
+} from './internal/roster-signal.js';
 import type { ReadonlySignal } from '@preact/signals';
 
 // Re-export the shared lifecycle types so consumers can name them off useRoom.

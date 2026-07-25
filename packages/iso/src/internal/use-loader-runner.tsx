@@ -126,11 +126,11 @@ export function useLoaderRunner<T>(
   const session = sessionRef.current;
 
   // Collect-mode's reactive output: created once, lazily, only when `collect`
-  // is set, via `loader-signal.ts`'s factory (this file never calls
-  // `@preact/signals` directly, see `signals-always-on.test.ts`). Writing
-  // these does NOT re-render this host, which is the point (a `useData`
-  // consumer reads them independently via `LoaderStreamContext`, granularly).
-  // See `applyCollectChunk` / `subscribeCollect` below.
+  // is set, via `loader-signal.ts`'s factory (which pairs the signals with the
+  // batched mutators that keep them atomic). Writing these does NOT re-render
+  // this host, which is the point (a `useData` consumer reads them
+  // independently via `LoaderStreamContext`, granularly). See
+  // `applyCollectChunk` / `subscribeCollect` below.
   const collectRef = useRef<CollectSignals | null>(null);
   if (collect && collectRef.current === null) {
     collectRef.current = createCollectSignals();

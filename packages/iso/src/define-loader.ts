@@ -26,7 +26,8 @@ import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
 import type { ServerCaller } from './server-caller.js';
-import { derive, foldStream } from './internal/loader-signal.js';
+import { foldStream } from './internal/loader-signal.js';
+import { useComputed } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
@@ -597,13 +598,10 @@ function makeLoaderRef(
     // The context's signal carries the WHOLE consumption union, and
     // `ReadonlySignal<A | B>` is not assignable to `ReadonlySignal<A>`, so the
     // narrowing has to happen INSIDE a derived signal rather than at the read.
-    // `source` is a single stable signal (see `LoaderDataProvider`); memoize
-    // the derived reactive so a binding does not resubscribe each render.
-    const stateRef = useRef<ReadonlySignal<LoaderState<unknown>> | null>(null);
-    if (stateRef.current === null) {
-      stateRef.current = derive(source, toSingleValueState);
-    }
-    return stateRef.current;
+    // `source` is a single stable signal (see `LoaderDataProvider`);
+    // `useComputed` memoizes the derived reactive for this component instance
+    // so a binding does not resubscribe each render.
+    return useComputed(() => toSingleValueState(source.value));
   }
 
   // Shared body for `useData` (live arm). Reads the collect-mode host's

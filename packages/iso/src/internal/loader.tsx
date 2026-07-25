@@ -30,9 +30,9 @@ export { serializeLocationForCache } from './cache-key.js';
 // Collect-mode's SSR placeholder: a live loader hosted for `useData` renders
 // `connecting` with an empty log on the server (the same "no baked streaming
 // value, the client reconnects on mount" contract `accumulate` already uses
-// below). Built via `loader-signal.ts`'s factory (this file never calls
-// `@preact/signals` directly, see `signals-always-on.test.ts`), and never
-// mutated, so one instance is safe to share across every request/render.
+// below). Built via `loader-signal.ts`'s factory so the four signals are
+// created in one place, and never mutated, so one instance is safe to share
+// across every request/render.
 const SSR_STREAM_VALUE: LoaderStreamValue = createCollectSignals();
 
 // A route-independent loader runs with no location. Its zero-value location is

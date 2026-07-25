@@ -28,7 +28,14 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Bundle an entry source string in isolation and return its gzip size in bytes.
-export async function bundleSize(entryContents, resolveDir) {
+// `external` defaults to the peers a consumer already ships. A caller passes a
+// narrower list when it wants a dependency's bytes COUNTED rather than assumed
+// (the core-size-floor test does this for @preact/signals).
+export async function bundleSize(
+  entryContents,
+  resolveDir,
+  external = EXTERNAL
+) {
   const result = await build({
     stdin: { contents: entryContents, resolveDir, loader: 'js' },
     bundle: true,
@@ -36,7 +43,7 @@ export async function bundleSize(entryContents, resolveDir) {
     format: 'esm',
     platform: 'browser',
     write: false,
-    external: EXTERNAL,
+    external,
     // Match Vite's production `define` so DEV-gated framework code (the
     // inert-class warning, ws-lifecycle dev traps, etc.) is dropped before we
     // measure. Without this the probe over-reports: it sizes code Vite would
@@ -58,7 +65,7 @@ export async function bundleSize(entryContents, resolveDir) {
 // the same CI job. Without the filter, esbuild fails to resolve the missing
 // path and the whole measurement crashes; with it, the module simply measures
 // as absent on that ref instead.
-function entryFor(modules, distBase) {
+export function entryFor(modules, distBase) {
   return modules
     .filter((m) => existsSync(join(distBase, m)))
     .map((m, i) => `export * as m${i} from '${join(distBase, m)}';`)

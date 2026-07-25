@@ -8,7 +8,7 @@ import {
   FieldErrorPrefixContext,
   fieldErrorId,
 } from '../internal/field-errors-context.js';
-import { createFieldErrorStore } from '../internal/store-signal.js';
+import { createFieldErrorStore } from '../internal/field-error-signal.js';
 
 afterEach(() => {
   cleanup();

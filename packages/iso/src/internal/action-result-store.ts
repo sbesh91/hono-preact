@@ -1,5 +1,5 @@
 import type { DenyCode } from '../outcomes.js';
-import { createStoreSignal } from './store-signal.js';
+import { signal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 
 type Key = string; // `${module}::${action}`
@@ -30,19 +30,20 @@ function key(module: string, action: string): Key {
 }
 
 // The signal holds the whole keyed map (a fresh Map instance on every write,
-// so the identity change drives the signal); `store.js` is the sanctioned
-// `@preact/signals` importer, so this module never imports it directly (the
-// module-graph guard).
-const store = createStoreSignal<ReadonlyMap<Key, StoredActionEntry>>(new Map());
+// so the identity change drives the signal). Module-private and WRITABLE; the
+// mutators below are the only writers.
+const store = signal<ReadonlyMap<Key, StoredActionEntry>>(new Map());
 
 /**
  * The reactive read channel: `useActionResult`'s `useComputed` reads
  * `.value` (subscribing); `getLastActionResult` below reads `.peek()`
  * (non-reactive, for callers that compare identity rather than subscribe).
+ * Published as a `ReadonlySignal` so a consumer can subscribe but cannot
+ * write around `setLastActionResult` / `clearLastActionResult`.
  */
 export const lastActionResultSignal: ReadonlySignal<
   ReadonlyMap<Key, StoredActionEntry>
-> = store.signal;
+> = store;
 
 /**
  * Pure filter over a map snapshot: by stub identity if given, otherwise the
@@ -69,19 +70,19 @@ export function setLastActionResult(
   const k = key(module, action);
   // Delete-then-set to bump to most-recent position in Map iteration order,
   // so no-stub readers see the latest action result, not the earliest.
-  const next = new Map(store.signal.peek());
+  const next = new Map(store.peek());
   next.delete(k);
   next.set(k, { ...result, module, action });
-  store.set(next);
+  store.value = next;
 }
 
 export function clearLastActionResult(module: string, action: string): void {
   const k = key(module, action);
-  const current = store.signal.peek();
+  const current = store.peek();
   if (!current.has(k)) return;
   const next = new Map(current);
   next.delete(k);
-  store.set(next);
+  store.value = next;
 }
 
 /**
@@ -92,5 +93,5 @@ export function getLastActionResult(stub?: {
   __module: string;
   __action: string;
 }): StoredActionEntry | null {
-  return pickLastActionResult(store.signal.peek(), stub);
+  return pickLastActionResult(store.peek(), stub);
 }

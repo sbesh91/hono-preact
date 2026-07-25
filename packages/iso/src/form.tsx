@@ -37,7 +37,7 @@ import {
   FieldErrorPrefixContext,
   type FieldErrorsMap,
 } from './internal/field-errors-context.js';
-import { createFieldErrorStore } from './internal/store-signal.js';
+import { createFieldErrorStore } from './internal/field-error-signal.js';
 
 /**
  * The `action` prop accepts either a plain action stub or the branded value

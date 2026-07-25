@@ -1,20 +1,18 @@
 import type { ComponentChildren } from 'preact';
-import { useRef } from 'preact/hooks';
+import { useSignal } from '@preact/signals';
 import { LoaderDataContext, type LoaderData } from './contexts.js';
-import { createPhaseCell } from './loader-signal.js';
-import type { PhaseCell } from './reactive.js';
 
 /**
  * Puts one loader's projected consumption union on `LoaderDataContext` as a
  * signal, and owns the two properties every provision site needs:
  *
- *  - The signal's IDENTITY is stable for this provider's lifetime. A ref-held
- *    cell is created on the first render and WRITTEN on every subsequent one,
+ *  - The signal's IDENTITY is stable for this provider's lifetime. `useSignal`
+ *    creates the cell on the first render and every later render WRITES it,
  *    rather than a fresh signal being handed down each render. Consumers
  *    memoize their projection off the provided signal on first read
- *    (`readDataSignal` in `define-loader.ts` holds its derived signal in a
- *    `useRef`), so a fresh identity per render would freeze every consumer at
- *    the first value.
+ *    (`readDataSignal` in `define-loader.ts` reads it inside a `useComputed`),
+ *    so a fresh identity per render would freeze every consumer at the first
+ *    value.
  *  - An unchanged state is a no-op. `LoaderHost` memoizes the union it passes
  *    in, so an unchanged render writes the SAME reference and the signal skips
  *    the notify.
@@ -31,14 +29,10 @@ export function LoaderDataProvider({
   state: LoaderData;
   children: ComponentChildren;
 }) {
-  const cellRef = useRef<PhaseCell<LoaderData> | null>(null);
-  if (cellRef.current === null) {
-    cellRef.current = createPhaseCell<LoaderData>(state);
-  } else {
-    cellRef.current.set(state);
-  }
+  const cell = useSignal<LoaderData>(state);
+  cell.value = state;
   return (
-    <LoaderDataContext.Provider value={cellRef.current.source}>
+    <LoaderDataContext.Provider value={cell}>
       {children}
     </LoaderDataContext.Provider>
   );
