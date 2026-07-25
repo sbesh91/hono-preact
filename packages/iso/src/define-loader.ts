@@ -127,11 +127,14 @@ type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
  * the fn return type: `AsyncGenerator` -> `true`, `Promise` -> `false`) selects
  * the consumption surface at the type level:
  *
- * - `LoaderRef<T, true>` (a streaming loader) exposes ONLY the accumulating
- *   `View(render, { initial, reduce })` form; `useData` and `Boundary` are
- *   `never` (a streaming loader has no single value).
- * - `LoaderRef<T, false>` exposes ONLY the single-value `View(render)` form,
- *   plus `useData()` and `Boundary`.
+ * - `LoaderRef<T, true>` (a streaming loader) exposes the accumulating
+ *   `View(render, { initial, reduce })` form and the adaptive
+ *   `useData(initial, reduce)` read; `Boundary` runs in collect-mode (children
+ *   fold the stream via `useData(initial, reduce)`). The single-value
+ *   `View(render)` and argument-free `useData()` are `never` (a streaming loader
+ *   has no single value).
+ * - `LoaderRef<T, false>` exposes the single-value `View(render)` form, the
+ *   argument-free `useData()`, and `Boundary`.
  *
  * Using the wrong form is therefore a compile error rather than a runtime throw.
  * `Live` defaults to `false` (the common, non-streaming case) so a bare
