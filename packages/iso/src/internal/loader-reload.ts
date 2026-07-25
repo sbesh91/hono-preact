@@ -30,6 +30,9 @@ export type ReloadDeps<T> = {
   currentLocation: () => RouteHook;
   id: string;
   accumulate?: AccumulateOptions;
+  /** Collect-mode: see `BuildReaderArgs.collect` in `loader-readers.ts`. Shares
+   * the resubscribe branch below with `accumulate` (never both set). */
+  collect?: boolean;
 };
 
 /**
@@ -43,7 +46,8 @@ export type ReloadDeps<T> = {
  * paths cannot drift apart.
  */
 export function runReload<T>(deps: ReloadDeps<T>): void {
-  const { session, ops, loaderRef, currentLocation, id, accumulate } = deps;
+  const { session, ops, loaderRef, currentLocation, id, accumulate, collect } =
+    deps;
 
   // A reload supersedes the SSR-baked deny: drop the seed so the view projects
   // from the real phase (loading -> success/coldError) as the refetch runs.
@@ -63,12 +67,16 @@ export function runReload<T>(deps: ReloadDeps<T>): void {
       : { tag: 'loading' };
   });
 
-  if (accumulate) {
-    // Streaming/live reload = resubscribe: `subscribeAccumulate` aborts the
-    // current stream (via its own abort), resets to `initial`, reopens, and
-    // folds chunks through `reduce`. Drive status connecting -> open/closed/
-    // error, mirroring a fresh mount. `revalidating` keeps `reloading` true
-    // until the first chunk lands.
+  if (accumulate || collect) {
+    // Streaming/live reload = resubscribe: `ops.subscribeAccumulate` (fold-mode
+    // `subscribeAccumulate`, or collect-mode's `subscribeCollect`, selected by
+    // `use-loader-runner.tsx`) aborts the current stream, resets to `initial` /
+    // clears the retained log, reopens, and folds/appends chunks. Drive status
+    // connecting -> open/closed/error, mirroring a fresh mount. `revalidating`
+    // keeps `reloading` true until the first chunk lands. The `setStatus` call
+    // below is fold-mode's own `useState`; collect-mode's status lives on its
+    // own signal (reset inside `subscribeCollect`), so this is a harmless no-op
+    // for collect (nothing reads that `useState` in collect-mode).
     ops.setStatus('connecting');
     ops
       .subscribeAccumulate(nextAbortSignal(session))

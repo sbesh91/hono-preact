@@ -60,8 +60,9 @@ Isomorphic primitives shared between server and client (`packages/iso/`):
 
 - **Routing**: `defineRoutes`, `Routes`, `RouteDef`, `LayoutProps`, `ViewProps`, `RoutesManifest`, `FlatRoute`, `ServerRoute`. The route-table primitive and runtime mounter.
 - **Page bindings**: `definePage(Component, { errorFallback, Wrapper })` factory plus `<Page>`, `WrapperProps`. Used by views that need a Wrapper. Page-layer middleware is declared via `use` on the route node in `routes.ts`; entries are built with `defineServerMiddleware`, `defineClientMiddleware`, and `defineStreamObserver`. Loader consumption (`.View()`) lives inside the page's JSX tree; loading UI is rendered by switching on the `LoaderState` status inside `.View()`.
-- **Loaders**: `defineLoader`, `LoaderRef`, `useReload`. (`LoaderRef` carries `useData()`, `useError()`, `invalidate()`, `cache`, `.View()`, and `.Boundary`.)
+- **Loaders**: `defineLoader`, `LoaderRef`, `useReload`. (`LoaderRef` carries `useData()`, `useError()`, `invalidate()`, `cache`, `.View()`, and `.Boundary`. `useData()` returns a `ReadonlySignal`.)
 - **Actions**: `defineAction`, `useAction`, `useOptimistic`, `useOptimisticAction`, `<Form>`.
+- **Signals**: `@preact/signals` primitives (`signal`, `computed`, `effect`, `batch`, `untracked`, `useSignal`, `useComputed`, `useSignalEffect`, and the `Signal`/`ReadonlySignal` types) are re-exported directly from `hono-preact`.
 - **Caching**: `createCache` (advanced: shared caches across loaders).
 - **Middleware**: `defineServerMiddleware`, `defineClientMiddleware`, `defineStreamObserver`, `defineApp`, plus the outcome constructors `redirect`, `deny` (and `render` at the `hono-preact/page` subpath) and predicates `isOutcome` / `isRedirect` / `isDeny` / `isRender`. See [Middleware](/docs/middleware).
 - **Utilities**: `prefetch`, `isBrowser`, `Route`/`Router`/`lazy` (re-exports of preact-iso for advanced use).

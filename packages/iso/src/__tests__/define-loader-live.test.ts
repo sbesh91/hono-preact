@@ -41,13 +41,13 @@ describe('defineLoader({ live })', () => {
     expect(() => ref.useData()).toThrow(/useData/);
   });
 
-  it('throws when a streaming loader is consumed via the Boundary escape hatch', () => {
+  it('exposes .Boundary as a collect-mode host on a streaming loader (no longer throws)', () => {
     const ref = defineLoader<number>(gen, { live: true });
-    // A bare .Boundary (no accumulate) on a streaming loader would suspend forever;
-    // it throws instead (runtime defense-in-depth; the type makes `.Boundary`
-    // `never` on a streaming ref). View's own delegation passes `accumulate`, so
-    // it is unaffected.
-    expect(() => ref.Boundary({ children: null })).toThrow(/View/);
+    // A streaming .Boundary WITHOUT accumulate now runs collect-mode: it is the
+    // public host for `useData(initial, reduce)` consumers, so it returns the
+    // host vnode rather than throwing. The end-to-end collect behaviour (folding
+    // through the public .Boundary) is covered in use-data-live.test.tsx.
+    expect(() => ref.Boundary({ children: null })).not.toThrow();
   });
 
   // Note: single-value + accumulate is prevented at the TYPE level (a

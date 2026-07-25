@@ -152,7 +152,7 @@ import { serverLoaders } from './movies.server.js';
 const moviesLoader = serverLoaders.default;
 
 const MovieList = () => {
-  const { data } = moviesLoader.useData();
+  const { data } = moviesLoader.useData().value;
   if (!data) return <p>Loading...</p>;
   return (
     <ul>

@@ -18,7 +18,7 @@ const ProjectBoardPage: FunctionComponent = () => {
   // and every chip needs the current ?insights= value to preserve it.
   const { searchParams } = useRoute();
   const { projectId: currentSlug } = useParams('/demo/projects/:projectId');
-  const { status, data } = boardLoader.useData();
+  const { status, data } = boardLoader.useData().value;
 
   // Keep the last good board on screen during a SAME-PROJECT reload instead of
   // flashing the full-page skeleton. A ?priority= change is a COLD keyed reload

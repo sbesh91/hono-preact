@@ -138,7 +138,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const data = 'data' in s ? s.data : undefined;
       const { reload } = useReload();
       return (
@@ -188,7 +188,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const data = 'data' in s ? s.data : undefined;
       const { reload } = useReload();
       const [count, setCount] = useState(0);
@@ -262,7 +262,7 @@ describe('v3 <Loader> stability', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const data = 'data' in s ? s.data : undefined;
       return <span data-testid="msg">{data?.msg}</span>;
     }
@@ -327,7 +327,7 @@ describe('v3 <Loader> stability', () => {
     // subtree). A useReload() consumer mounted directly in the children can fire
     // reload() before the initial fetch resolves; the runner must queue it.
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const data = 'data' in s ? s.data : undefined;
       const { reload } = useReload();
       return (
@@ -385,7 +385,7 @@ describe('v3 <Loader> stability', () => {
     });
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const data = 'data' in s ? s.data : undefined;
       return <span data-testid="q">{data ? data.q || '(empty)' : ''}</span>;
     }
@@ -434,7 +434,7 @@ describe('Loader: parametric loader cache should key on location', () => {
     );
 
     function Page({ id }: { id: string }) {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const data = 'data' in s ? s.data : undefined;
       return <p data-testid={`title-${id}`}>{data?.title}</p>;
     }
@@ -525,7 +525,7 @@ describe('Loader: useError() on successful static load', () => {
     let observedMsg: string | undefined = undefined;
     function Child() {
       observed = ref.useError();
-      const s = ref.useData();
+      const s = ref.useData().value;
       const data = 'data' in s ? s.data : undefined;
       observedMsg = data?.msg;
       return null;
@@ -549,9 +549,10 @@ describe('LoaderRef.useData(): discriminated LoaderState (review #1,#2)', () => 
     }));
     let seenUseData: unknown = null;
     function Child() {
-      // useData() now hands back the discriminated union, not the raw value.
-      seenUseData = ref.useData();
-      const s = ref.useData();
+      // useData() hands back a reactive signal of the discriminated union;
+      // read `.value` to get the union itself.
+      seenUseData = ref.useData().value;
+      const s = ref.useData().value;
       const data = 'data' in s ? s.data : undefined;
       return <span data-testid="title">{data?.title}</span>;
     }
@@ -587,7 +588,7 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
     const ref = defineLoader<string | undefined>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       if (s.status === 'loading') return <span data-testid="out">loading</span>;
       if (s.status === 'success')
         return <span data-testid="out">done:{String(s.data)}</span>;
@@ -632,7 +633,7 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
     const ref = defineLoader<{ n: number }>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const { reload } = useReload();
       let body: string;
       if (s.status === 'revalidating') body = `reval:${JSON.stringify(s.data)}`;
@@ -695,7 +696,7 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
     const ref = defineLoader<{ n: number } | undefined>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const { reload } = useReload();
       let body: string;
       if (s.status === 'revalidating') body = 'reval';
@@ -746,7 +747,7 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
     const ref = defineLoader<{ v: number }>(async () => ({ v: 1 }));
     const seen: unknown[] = [];
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       seen.push(s);
       const [, setN] = useState(0);
       return (
@@ -810,7 +811,7 @@ describe('stale-while-error for preloaded loaders on stream error (R1R2 review)'
     let capturedId: string | null = null;
     function Child() {
       capturedId = useContext(LoaderIdContext);
-      const s = ref.useData();
+      const s = ref.useData().value;
       let body: string;
       if (s.status === 'loading') body = 'loading';
       else if (s.status === 'revalidating')
@@ -889,7 +890,7 @@ describe('undefined/null loader values (re-review #192 deep fix)', () => {
     const ref = defineLoader<string | undefined>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const { reload } = useReload();
       let body: string;
       if (s.status === 'loading') body = 'loading';
@@ -959,7 +960,7 @@ describe('undefined/null loader values (re-review #192 deep fix)', () => {
     const ref = defineLoader<string | undefined>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       const { reload } = useReload();
       let body: string;
       if (s.status === 'loading') body = 'loading';
@@ -1014,7 +1015,7 @@ describe('undefined/null loader values (re-review #192 deep fix)', () => {
     const ref = defineLoader<string | null>(fn);
 
     function Child() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       let body: string;
       if (s.status === 'loading') body = 'loading';
       else if (s.status === 'success')

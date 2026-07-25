@@ -1,15 +1,17 @@
 // Type-level enforcement of the streaming/single-value `.View` discriminant.
 // Run under `pnpm test:types`. The discriminant is driven by the fn return type:
-// an AsyncGenerator fn produces `LoaderRef<T, true>` (accumulating `.View` only,
-// `useData` and `Boundary` are `never`); a Promise fn produces `LoaderRef<T, false>`
-// (single-value `.View`, `useData`, `Boundary`). `{ live: true }` is a runtime
-// SSR flag only; it no longer controls the type discriminant. Misusing the wrong
-// form is a compile error.
+// an AsyncGenerator fn produces `LoaderRef<T, true>` (accumulating `.View`,
+// `useData(initial, reduce)`; `Boundary` still `never`); a Promise fn produces
+// `LoaderRef<T, false>` (single-value `.View`, `useData()`, `Boundary`).
+// `{ live: true }` is a runtime SSR flag only; it no longer controls the type
+// discriminant. Misusing the wrong form is a compile error.
 import { expectTypeOf } from 'vitest';
+import type { ReadonlySignal } from '@preact/signals';
 import {
   defineLoader,
   type LoaderRef,
   type LoaderState,
+  type StreamState,
 } from '../define-loader.js';
 
 async function* gen(): AsyncGenerator<number, void, unknown> {
@@ -39,12 +41,18 @@ function _liveProbes() {
   // @ts-expect-error the single-value `.View(render)` form is not available on a live loader
   live.View(() => null);
 
-  // A live loader has no single value: `useData` and `Boundary` are `never`.
-  expectTypeOf(live.useData).toBeNever();
-  expectTypeOf(live.Boundary).toBeNever();
-  // Same for the signal read-side: single-value only.
-  expectTypeOf(live.useDataSignal).toBeNever();
-  expectTypeOf(live.useFieldSignal).toBeNever();
+  // The live arm of `useData` requires `(initial, reduce)`; `Acc` is inferred
+  // from both, and the return type is `ReadonlySignal<StreamState<Acc>>` (the
+  // same shape `.View`'s accumulating render fn receives, wrapped in a signal).
+  const total = live.useData(0, (acc, n) => acc + n);
+  expectTypeOf(total).toEqualTypeOf<ReadonlySignal<StreamState<number>>>();
+
+  // @ts-expect-error a live loader's `useData` requires (initial, reduce); calling it with no args is a type error
+  live.useData();
+
+  // A live loader's `Boundary` is a collect-mode host (children fold via
+  // `useData(initial, reduce)`); it is no longer `never`.
+  expectTypeOf(live.Boundary).not.toBeNever();
 }
 
 // A single-value loader (Promise fn): single-value form only.
@@ -63,8 +71,11 @@ function _staticProbes() {
   // @ts-expect-error the accumulating `{ initial, reduce }` form is not available on a single-value loader
   stat.View(() => null, { initial: [] as number[], reduce: (acc) => acc });
 
-  // The single-value affordances are present; useData() is the discriminated state.
-  expectTypeOf(stat.useData()).toEqualTypeOf<LoaderState<{ at: string }>>();
+  // The single-value affordances are present; useData() returns a reactive
+  // signal of the discriminated state (pattern-match `.value.status`).
+  expectTypeOf(stat.useData()).toEqualTypeOf<
+    ReadonlySignal<LoaderState<{ at: string }>>
+  >();
 }
 
 // A bare `LoaderRef<T>` defaults to the single-value form (Live=false), so its
@@ -77,7 +88,9 @@ function _defaultRefProbes(loader: LoaderRef<{ n: number }>) {
     }
     return null;
   });
-  expectTypeOf(loader.useData()).toEqualTypeOf<LoaderState<{ n: number }>>();
+  expectTypeOf(loader.useData()).toEqualTypeOf<
+    ReadonlySignal<LoaderState<{ n: number }>>
+  >();
 }
 
 void _liveProbes;

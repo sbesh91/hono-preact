@@ -226,6 +226,23 @@ export {
 } from 'hoofd/preact';
 export type { MetaOptions, LinkOptions, ScriptOptions } from 'hoofd/preact';
 
+// Signals: re-exported first-party. The framework owns the signals integration
+// (the always-on data-layer opinion), so it offers @preact/signals' primitives
+// through its own entry rather than making apps depend on @preact/signals
+// directly. Tree-shakeable and side-effect free; the barrel adds nothing to the
+// always-loaded core graph.
+export {
+  signal,
+  computed,
+  effect,
+  batch,
+  untracked,
+  useSignal,
+  useComputed,
+  useSignalEffect,
+} from '@preact/signals';
+export type { Signal, ReadonlySignal } from '@preact/signals';
+
 // View transition lifecycle hook.
 export {
   useViewTransitionLifecycle,

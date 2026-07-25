@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import type { RouteHook } from 'preact-iso';
 import { useContext, useId, useMemo, useRef } from 'preact/hooks';
+import type { ReadonlySignal } from '@preact/signals';
 import { isBrowser } from '../is-browser.js';
 import { toStreamState } from '../loader-state.js';
 import type { LoaderState, StreamState } from '../loader-state.js';
@@ -10,7 +11,9 @@ import {
   LoaderDataContext,
   LoaderErrorContext,
   LoaderIdContext,
+  LoaderStreamContext,
   LoaderViewSignalContext,
+  type LoaderStreamValue,
 } from './contexts.js';
 import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
@@ -23,9 +26,17 @@ import {
   useLoaderRunner,
   type AccumulateOptions,
 } from './use-loader-runner.js';
-import { createPhaseCell } from './loader-signal.js';
-import type { PhaseCell, ReadonlyReactive } from './reactive.js';
+import { createPhaseCell, createCollectSignals } from './loader-signal.js';
+import type { PhaseCell } from './reactive.js';
 export { serializeLocationForCache } from './cache-key.js';
+
+// Collect-mode's SSR placeholder: a live loader hosted for `useData` renders
+// `connecting` with an empty log on the server (the same "no baked streaming
+// value, the client reconnects on mount" contract `accumulate` already uses
+// below). Built via `loader-signal.ts`'s factory (this file never calls
+// `@preact/signals` directly, see `signals-always-on.test.ts`), and never
+// mutated, so one instance is safe to share across every request/render.
+const SSR_STREAM_VALUE: LoaderStreamValue = createCollectSignals();
 
 // A route-independent loader runs with no location. Its zero-value location is
 // invariant, so a single frozen module-level instance serves every render and
@@ -81,11 +92,14 @@ export function renderDenyFallback(
 function DataReader<T>({
   reader,
   accumulate,
+  collect,
   errorFallback,
   children,
 }: {
   reader: { read: () => T };
   accumulate?: AccumulateOptions;
+  /** Collect-mode: see `LoaderHostProps.collect`. */
+  collect?: boolean;
   errorFallback?:
     | ComponentChildren
     | ((err: Error, reset: () => void) => ComponentChildren);
@@ -133,18 +147,30 @@ function DataReader<T>({
   //  - Single-value consumption: the server render is settled (the reader awaited
   //    the value), so project a `success` `LoaderState` and bake the value into
   //    `data-loader` for the client preload to adopt.
-  const state: LoaderState<T> | StreamState<T> = accumulate
-    ? toStreamState('connecting', { present: false }, null)
-    : { status: 'success', data: raw };
-  const anchor: HydrationAnchor = accumulate
-    ? { kind: 'none' }
-    : { kind: 'data', value: raw };
-  return (
+  //  - Collect consumption (`useData(initial, reduce)` on a live loader):
+  //    exactly the same `connecting`/no-bake treatment as `accumulate`, since a
+  //    live loader's SSR-side value is likewise discarded (the client always
+  //    reconnects). Also seeds `LoaderStreamContext` with an empty log so a
+  //    `useData` consumer under SSR sees `connecting` structurally instead of
+  //    hitting the "no host" throw.
+  const state: LoaderState<T> | StreamState<T> =
+    accumulate || collect
+      ? toStreamState('connecting', { present: false }, null)
+      : { status: 'success', data: raw };
+  const anchor: HydrationAnchor =
+    accumulate || collect ? { kind: 'none' } : { kind: 'data', value: raw };
+  const body = (
     <LoaderDataContext.Provider value={state}>
       <LoaderViewSignalContext.Provider value={{ value: state }}>
         <Envelope anchor={anchor}>{children}</Envelope>
       </LoaderViewSignalContext.Provider>
     </LoaderDataContext.Provider>
+  );
+  if (!collect) return body;
+  return (
+    <LoaderStreamContext.Provider value={SSR_STREAM_VALUE}>
+      {body}
+    </LoaderStreamContext.Provider>
   );
 }
 
@@ -158,6 +184,14 @@ type LoaderHostProps<T> = {
     | ((err: Error, reset: () => void) => ComponentChildren);
   /** Present for streaming consumption: fold every chunk into accumulated state. */
   accumulate?: AccumulateOptions;
+  /**
+   * Present for collect consumption: a live loader hosted for `useData(initial,
+   * reduce)` rather than `.View` accumulate. Runs the runner's collect-mode
+   * (appends every chunk to a retained log signal instead of folding) and
+   * provides `LoaderStreamContext` to descendants. Never set together with
+   * `accumulate`.
+   */
+  collect?: boolean;
   children: ComponentChildren;
 };
 
@@ -165,6 +199,7 @@ export function LoaderHost<T>({
   loader: loaderRef,
   location: locationProp,
   accumulate,
+  collect,
   children,
   errorFallback,
 }: LoaderHostProps<T>) {
@@ -203,12 +238,13 @@ export function LoaderHost<T>({
   // before the value lands. So the server path additionally suspends on the
   // runner's stable `reader` via a SEPARATE `DataReader` child (Mechanism B),
   // letting `renderToStringAsync` await the loader and bake the resolved value.
-  const { view, reloading, reload, reader } = useLoaderRunner<T>(
-    loaderRef,
-    location,
-    id,
-    accumulate
-  );
+  const {
+    view,
+    reloading,
+    reload,
+    reader,
+    collect: collectSignals,
+  } = useLoaderRunner<T>(loaderRef, location, id, accumulate, collect);
 
   // The runner builds the public union (or a cold-error signal) STRUCTURALLY;
   // `loader.tsx` only ROUTES it (review #6). `ViewRenderer` / `useData()` READ
@@ -240,8 +276,8 @@ export function LoaderHost<T>({
 
   // Signal mirror (always-on). The host writes the memoized `viewState` into a
   // phase cell each render; an unchanged `viewState` is the SAME ref, so the
-  // cell.set is a no-op (the signal skips notify). A `useFieldSignal` child
-  // subscribes to a projection of this and updates alone. Created once per host
+  // cell.set is a no-op (the signal skips notify). A `useData()` consumer
+  // projects this via `useComputed` and updates alone. Created once per host
   // instance. Typed to match `viewState`'s actual shape (a single-value
   // `LoaderState` OR a streaming `StreamState`, same union `LoaderDataContext`
   // already carries), not narrowed to the single-value case.
@@ -255,7 +291,7 @@ export function LoaderHost<T>({
   }
   const viewCell = viewCellRef.current;
   viewCell.set(viewState);
-  const viewSignal: ReadonlyReactive<LoaderState<T> | StreamState<T> | null> =
+  const viewSignal: ReadonlySignal<LoaderState<T> | StreamState<T> | null> =
     viewCell.source;
 
   // A COLD error: a SINGLE-VALUE load that failed before ANY value settled. The
@@ -277,16 +313,26 @@ export function LoaderHost<T>({
   // SERVER (`!isBrowser()`): suspend on the stable reader from a SEPARATE child
   // so render-to-string awaits the loader and bakes the resolved value. CLIENT:
   // render the view directly from runner state (never calls `reader.read()`).
+  // Collect-mode additionally wraps children in `LoaderStreamContext` so a
+  // live loader's `useData(initial, reduce)` can find its host.
+  const envelopedChildren = collectSignals ? (
+    <LoaderStreamContext.Provider value={collectSignals}>
+      <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
+    </LoaderStreamContext.Provider>
+  ) : (
+    <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
+  );
   const content = isBrowser() ? (
     <LoaderDataContext.Provider value={viewState}>
       <LoaderViewSignalContext.Provider value={viewSignal}>
-        <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
+        {envelopedChildren}
       </LoaderViewSignalContext.Provider>
     </LoaderDataContext.Provider>
   ) : (
     <DataReader
       reader={reader}
       accumulate={accumulate}
+      collect={collect}
       errorFallback={errorFallback}
     >
       {children}

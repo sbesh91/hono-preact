@@ -1,6 +1,7 @@
 import { signal, computed, type Signal } from '@preact/signals';
 import type { PresenceMember } from './room-envelope.js';
-import type { ReadonlyReactive, RosterStore } from './reactive.js';
+import type { RosterStore } from './reactive.js';
+import type { ReadonlySignal } from '@preact/signals';
 
 /**
  * The signal-backed roster: `member(id)` is a per-member signal, so a presence
@@ -51,7 +52,7 @@ export function createSignalRoster<S>(): RosterStore<S> {
     },
     memberIds: ids,
     members,
-    member(id): ReadonlyReactive<PresenceMember<S> | undefined> {
+    member(id): ReadonlySignal<PresenceMember<S> | undefined> {
       return byId.get(id) ?? absent;
     },
     dispose() {

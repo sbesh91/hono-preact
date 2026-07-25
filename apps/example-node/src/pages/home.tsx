@@ -9,7 +9,7 @@ const homeLoader = serverLoaders.default;
 const countLoader = serverLoaders.count;
 
 const HomePage: FunctionComponent = () => {
-  const { data } = homeLoader.useData();
+  const { data } = homeLoader.useData().value;
   if (!data) return <p>Loading...</p>;
   const { message } = data;
   return (

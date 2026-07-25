@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, cleanup, waitFor } from '@testing-library/preact';
+import { useComputed } from '@preact/signals';
 import type { JSX } from 'preact';
 import { defineLoader } from '../../define-loader.js';
 import { Loader } from '../loader.js';
@@ -34,12 +35,18 @@ describe('loader field granularity through <Loader> (signal mode)', () => {
 
     function TitleField(): JSX.Element {
       titleRenders();
-      const a = loader.useFieldSignal((d) => d.a, 0);
+      const state = loader.useData();
+      const a = useComputed(() =>
+        state.value.status === 'loading' ? 0 : state.value.data.a
+      );
       return <p data-testid="a">{a.value}</p>;
     }
     function OtherField(): JSX.Element {
       otherRenders();
-      const b = loader.useFieldSignal((d) => d.b, 0);
+      const state = loader.useData();
+      const b = useComputed(() =>
+        state.value.status === 'loading' ? 0 : state.value.data.b
+      );
       return <p data-testid="b">{b.value}</p>;
     }
     function ReloadButton(): JSX.Element {

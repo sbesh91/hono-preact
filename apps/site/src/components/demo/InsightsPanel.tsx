@@ -112,7 +112,7 @@ const InsightsBody: FunctionComponent<{
   slug: string;
   taskSignature: string;
 }> = ({ slug, taskSignature }) => {
-  const state = insightsLoader.useData();
+  const state = insightsLoader.useData().value;
   const staleError = insightsLoader.useError();
   const { searchParams } = useRoute();
   const { reload } = useReload();

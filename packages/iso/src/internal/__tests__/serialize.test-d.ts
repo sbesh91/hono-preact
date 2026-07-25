@@ -2,6 +2,7 @@
 // `pnpm test:types` (`vitest --typecheck.only`); tsc is the oracle. These pin
 // the JSON round-trip transform applied at the loader/action client boundary.
 import { expectTypeOf } from 'vitest';
+import type { ReadonlySignal } from '@preact/signals';
 import type { Serialize } from '../serialize.js';
 import type { LoaderRef, LoaderState } from '../../define-loader.js';
 import type { UseActionResult } from '../../action.js';
@@ -116,10 +117,11 @@ expectTypeOf<
 // (not just that Serialize<T> works in isolation). A reverted seam fails here.
 // ---------------------------------------------------------------------------
 
-// Loader: `useData()` exposes the discriminated state over the wire shape, and
-// the `View` render arg's data-carrying arms expose the wire shape.
+// Loader: `useData()` exposes the discriminated state over the wire shape (as
+// a reactive signal), and the `View` render arg's data-carrying arms expose
+// the wire shape.
 expectTypeOf<ReturnType<LoaderRef<{ at: Date }>['useData']>>().toEqualTypeOf<
-  LoaderState<{ at: string }>
+  ReadonlySignal<LoaderState<{ at: string }>>
 >();
 
 // `View` applies Serialize on both forms: the non-live single-value form's
