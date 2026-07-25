@@ -37,6 +37,7 @@ import {
   FieldErrorPrefixContext,
   type FieldErrorsMap,
 } from './internal/field-errors-context.js';
+import { createFieldErrorStore } from './internal/store-signal.js';
 
 /**
  * The `action` prop accepts either a plain action stub or the branded value
@@ -125,6 +126,19 @@ export function Form<TPayload, TResult>({
   // A stable per-Form prefix so `<FieldError>` ids are unique across forms and
   // `useFieldErrorProps` can wire `aria-describedby` to them.
   const fieldErrorPrefix = useId();
+  // The per-field error store: created once for this Form instance (mirrors
+  // `use-room.ts`'s `createSignalRoster` ref) and driven below from the
+  // merged `fieldErrors`. Kept as a stable object across renders so
+  // `<FieldErrorsContext.Provider value={fieldErrorStore}>` never changes
+  // reference -- only `setAll`'s per-field signal writes propagate, which is
+  // what gives descendants their per-field granularity.
+  const fieldErrorStoreRef = useRef<ReturnType<
+    typeof createFieldErrorStore
+  > | null>(null);
+  if (!fieldErrorStoreRef.current) {
+    fieldErrorStoreRef.current = createFieldErrorStore();
+  }
+  const fieldErrorStore = fieldErrorStoreRef.current;
   const [clearedServerFields, setClearedServerFields] = useState<Set<string>>(
     () => new Set()
   );
@@ -231,6 +245,16 @@ export function Form<TPayload, TResult>({
     }
     return { ...out, ...clientErrors };
   }, [serverErrors, clientErrors, clearedServerFields]);
+
+  // Drive the per-field store from the merged map. `setAll` only touches
+  // (and notifies) the per-field signals whose messages actually changed, so
+  // this unconditional call every render is cheap and does not spuriously
+  // re-render an unrelated field's consumer. Writing during render (not in a
+  // `useEffect`) means the very first render -- including the server-seeded
+  // no-JS/SSR deny path, where `serverErrors` already reflects
+  // `ActionResultContext` -- has the store populated before any descendant
+  // reads it, so first paint matches the server.
+  fieldErrorStore.setAll(fieldErrors);
 
   const handleSubmit = useCallback(
     async (e: Event) => {
@@ -476,7 +500,7 @@ export function Form<TPayload, TResult>({
       <input type="hidden" name={FORM_MODULE_FIELD} value={moduleKey} />
       <input type="hidden" name={FORM_ACTION_FIELD} value={actionName} />
       <FieldErrorPrefixContext.Provider value={fieldErrorPrefix}>
-        <FieldErrorsContext.Provider value={fieldErrors}>
+        <FieldErrorsContext.Provider value={fieldErrorStore}>
           <fieldset disabled={pending} class="hp-form-fieldset">
             {children}
           </fieldset>
