@@ -20,7 +20,7 @@ describe('useOptimistic SSR with transition: true', () => {
           transition: true,
         }
       );
-      return h('span', null, String(value.length));
+      return h('span', null, String(value.value.length));
     }
 
     // Prerender the component in a node environment. This exercises the
@@ -48,7 +48,7 @@ describe('useOptimistic SSR with transition: true', () => {
           transition: true,
         }
       );
-      return h('div', null, h('span', null, String(value[0])));
+      return h('div', null, h('span', null, String(value.value[0])));
     }
 
     const result = await prerender(h(Component, null));

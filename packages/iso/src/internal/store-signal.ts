@@ -1,4 +1,4 @@
-import { signal, useComputed } from '@preact/signals';
+import { signal, useComputed, useSignal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 
 /**
@@ -33,4 +33,24 @@ export function createStoreSignal<T>(initial: T): StoreSignal<T> {
  */
 export function useStoreValue<R>(project: () => R): ReadonlySignal<R> {
   return useComputed(project);
+}
+
+/**
+ * A component-scoped (not module-level) settable signal: `useSignal` creates
+ * it once for the component instance and persists it across renders. This is
+ * the per-call-site counterpart to `createStoreSignal`'s module-level store,
+ * for hooks that need a mutable signal cell scoped to one hook call (e.g.
+ * `useOptimistic`'s queue) without importing `@preact/signals` directly.
+ */
+export function useStoreState<T>(initial: T): {
+  readonly value: ReadonlySignal<T>;
+  set(next: T): void;
+} {
+  const s = useSignal(initial);
+  return {
+    value: s,
+    set(next: T) {
+      s.value = next;
+    },
+  };
 }
