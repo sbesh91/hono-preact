@@ -80,7 +80,7 @@ const Movies = ({ loaderData }) => {
 
   return (
     <ul>
-      {movies.map((m) => (
+      {movies.value.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -88,7 +88,7 @@ const Movies = ({ loaderData }) => {
 };
 ```
 
-`addOptimistic(payload)` appends a queue entry and returns an `OptimisticHandle`:
+`movies` is a `ReadonlySignal<TBase>`; read `.value` to get the current projection. `addOptimistic(payload)` appends a queue entry and returns an `OptimisticHandle`:
 
 ```ts
 type OptimisticHandle = {
