@@ -47,8 +47,10 @@ function _generatorBodyDrivesStreamingRef() {
     yield 1;
   });
   expectTypeOf(s.View).toBeFunction();
-  // A streaming ref has no single value: useData and Boundary are never.
-  expectTypeOf(s.useData).toBeNever();
+  // A streaming ref has no single-value host: `Boundary` is `never`. `useData`
+  // is NOT `never`: it takes `(initial, reduce)` (the live arm), same as
+  // `.View`'s accumulating form.
+  expectTypeOf(s.useData).toBeFunction();
   expectTypeOf(s.Boundary).toBeNever();
 }
 

@@ -49,6 +49,14 @@ export type BuildReaderArgs<T> = {
   /** The `useId()` anchoring this loader's SSR envelope and stream channel. */
   id: string;
   accumulate?: AccumulateOptions;
+  /**
+   * Collect-mode: a live loader hosted for `useData(initial, reduce)` rather
+   * than `.View` accumulate. Shares the SAME streaming-subscription reader
+   * shape as `accumulate` (open once, SSR stub / suspend, `wrapPromise`); only
+   * the chunk handling differs, and that lives entirely in `ops` (built by
+   * `use-loader-runner.tsx`), not here. Never set together with `accumulate`.
+   */
+  collect?: boolean;
 };
 
 /**
@@ -68,7 +76,8 @@ export type BuildReaderArgs<T> = {
 export function buildLoaderReader<T>(args: BuildReaderArgs<T>): {
   read: () => T;
 } {
-  const { session, ops, loaderRef, location, locKey, id, accumulate } = args;
+  const { session, ops, loaderRef, location, locKey, id, accumulate, collect } =
+    args;
   const { setPhase, setStatus, setError, applyChunk, subscribeAccumulate } =
     ops;
   const newAbortSignal = () => nextAbortSignal(session);
@@ -109,17 +118,22 @@ export function buildLoaderReader<T>(args: BuildReaderArgs<T>): {
     // Stub reader: the client never reads it; reload() rebuilds a real one
     // for either consumption form.
     return { read: () => undefined as unknown as T };
-  } else if (accumulate) {
+  } else if (accumulate || collect) {
     // A live loader never runs on the server (its infinite generator would
     // hang renderToStringAsync); LoaderHost renders the fallback for
     // live+server, so this stub reader is not consumed there.
     const buildLiveServerReader = (): { read: () => T } => {
-      session.acc = accumulate.initial;
+      // Collect-mode has no `accumulate.initial` (it never folds); only seed
+      // `session.acc` for the fold-mode (`.View` accumulate) case.
+      if (accumulate) session.acc = accumulate.initial;
       return { read: () => undefined as unknown as T };
     };
 
     // Streaming consumption: fold every chunk into accumulated state via the
     // shared `subscribeAccumulate`/`applyChunk` helpers (also used by reload).
+    // `ops.subscribeAccumulate`/`ops.applyChunk` are already mode-aware
+    // (collect vs fold), selected by `use-loader-runner.tsx`; this factory is
+    // agnostic to which mode is active.
     const buildStreamingReader = (): { read: () => T } => {
       session.inFlight = true;
       return wrapPromise(
@@ -127,7 +141,10 @@ export function buildLoaderReader<T>(args: BuildReaderArgs<T>): {
           .then((firstChunk) => {
             applyChunk(firstChunk);
             settle();
-            return session.acc as T;
+            // Collect-mode never populates `session.acc` (nothing folds into
+            // it); the client never reads this resolved value either way, so
+            // the raw first chunk is a fine stand-in.
+            return accumulate ? (session.acc as T) : firstChunk;
           })
           .catch((err: unknown) => {
             // State-based surfacing: the old Suspense reader propagated this

@@ -1,6 +1,11 @@
 import type { Context } from 'hono';
 import { createContext } from 'preact';
-import type { LoaderState, StreamState } from '../loader-state.js';
+import type { ReadonlySignal } from '@preact/signals';
+import type {
+  LoaderState,
+  StreamState,
+  StreamStatus,
+} from '../loader-state.js';
 
 export const HonoRequestContext = createContext<{ context?: Context }>({});
 
@@ -27,3 +32,20 @@ export const LoaderViewSignalContext = createContext<{
 export const ActiveLoaderIdContext = createContext<symbol | null>(null);
 
 export const LoaderErrorContext = createContext<Error | null>(null);
+
+/**
+ * The runner's COLLECT-mode state for a live loader hosted for `useData`
+ * (not `.View` accumulate): the retained chunk log plus status/error, as
+ * reactive signals. `loader.tsx` provides this when the host runs collect-mode;
+ * the live `useData(initial, reduce)` arm in `define-loader.ts` reads it and
+ * folds `chunks` through the caller's `reduce`. `null` outside a collect host,
+ * which is how `useData`'s live arm detects a missing host and throws.
+ */
+export type LoaderStreamValue = {
+  chunks: ReadonlySignal<readonly unknown[]>;
+  status: ReadonlySignal<StreamStatus>;
+  error: ReadonlySignal<Error | null>;
+};
+export const LoaderStreamContext = createContext<LoaderStreamValue | null>(
+  null
+);

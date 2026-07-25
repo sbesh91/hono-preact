@@ -30,8 +30,9 @@ function _probes() {
     })
   );
 
-  // Streaming ref: useData and Boundary are never; accumulating View is available.
-  expectTypeOf(ref.useData).toBeNever();
+  // Streaming ref: `Boundary` is never; `useData` takes `(initial, reduce)`
+  // (the live arm) and accumulating `View` is available.
+  expectTypeOf(ref.useData).toBeFunction();
   expectTypeOf(ref.Boundary).toBeNever();
   ref.View<number[]>(
     (s) => {

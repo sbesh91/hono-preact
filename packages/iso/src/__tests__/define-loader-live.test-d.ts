@@ -1,19 +1,17 @@
 // Type-level enforcement of the streaming/single-value `.View` discriminant.
 // Run under `pnpm test:types`. The discriminant is driven by the fn return type:
-// an AsyncGenerator fn produces `LoaderRef<T, true>` (accumulating `.View` only,
-// `useData` and `Boundary` are `never`); a Promise fn produces `LoaderRef<T, false>`
-// (single-value `.View`, `useData`, `Boundary`). `{ live: true }` is a runtime
-// SSR flag only; it no longer controls the type discriminant. Misusing the wrong
-// form is a compile error.
-//
-// `useData` on a live loader is still `never` after this task; the live
-// `useData(initial, reduce)` arm is added in Task 4.
+// an AsyncGenerator fn produces `LoaderRef<T, true>` (accumulating `.View`,
+// `useData(initial, reduce)`; `Boundary` still `never`); a Promise fn produces
+// `LoaderRef<T, false>` (single-value `.View`, `useData()`, `Boundary`).
+// `{ live: true }` is a runtime SSR flag only; it no longer controls the type
+// discriminant. Misusing the wrong form is a compile error.
 import { expectTypeOf } from 'vitest';
 import type { ReadonlySignal } from '@preact/signals';
 import {
   defineLoader,
   type LoaderRef,
   type LoaderState,
+  type StreamState,
 } from '../define-loader.js';
 
 async function* gen(): AsyncGenerator<number, void, unknown> {
@@ -43,9 +41,16 @@ function _liveProbes() {
   // @ts-expect-error the single-value `.View(render)` form is not available on a live loader
   live.View(() => null);
 
-  // A live loader has no single-value shape yet: `useData` and `Boundary` are
-  // `never` (the live `useData(initial, reduce)` arm lands in Task 4).
-  expectTypeOf(live.useData).toBeNever();
+  // The live arm of `useData` requires `(initial, reduce)`; `Acc` is inferred
+  // from both, and the return type is `ReadonlySignal<StreamState<Acc>>` (the
+  // same shape `.View`'s accumulating render fn receives, wrapped in a signal).
+  const total = live.useData(0, (acc, n) => acc + n);
+  expectTypeOf(total).toEqualTypeOf<ReadonlySignal<StreamState<number>>>();
+
+  // @ts-expect-error a live loader's `useData` requires (initial, reduce); calling it with no args is a type error
+  live.useData();
+
+  // A live loader still has no single-value host: `Boundary` is `never`.
   expectTypeOf(live.Boundary).toBeNever();
 }
 
