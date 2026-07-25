@@ -1,13 +1,13 @@
 # Signals migration (umbrella)
 
-Date: 2026-07-22 (Phase 4 recorded 2026-07-24)
-Status: In progress. Phases 0-2, Phase 5, and Phase 4 shipped on this branch.
-Phase 5 made signals the always-on data-layer opinion; Phase 4 added the keyed
-`<For>` / `<Show>` rendering helpers on that foundation. Remaining: Phase 3
-(store conversion, re-opened by Phase 5) and the streaming-loader signals split
-out of Phase 4, both stacking on top, out of order. This branch is the single PR
-to `main`, held open until the owner is comfortable with the whole signals
-transition.
+Date: 2026-07-22 (Phase 4b recorded 2026-07-25)
+Status: In progress. Phases 0-2, 5, 4, and 4b shipped on this branch. Phase 5
+made signals the always-on data-layer opinion; Phase 4 added the keyed `<For>` /
+`<Show>` rendering helpers; Phase 4b unified the loader read into one adaptive
+`useData` (single-value + live), re-exported `@preact/signals` first-party, and
+retired `ReadonlyReactive`. Remaining: **Phase 3** (store conversion, re-opened
+by Phase 5). This branch is the single PR to `main`, held open until the owner is
+comfortable with the whole signals transition.
 Branch: `feat/signals-migration`
 
 This is the charter for the signals-first migration. The work ships as **one
@@ -39,7 +39,7 @@ Ordered by payoff-to-risk. Each is a stacked sub-PR into this branch.
 | 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | #344 | shipped (in this PR) |
 | 3 | Optimistic queue and the action/form stores; per-field form errors. Delete `use-store-snapshot` / `use-force-update`. | | re-opened by Phase 5 (see below); stacks on top |
 | 4 | Signals DX: keyed `<For>` / `<Show>` rendering helpers (per-row component boundary; atomicity proven). Streaming-loader signals split out (see below). | #346 | shipped (in this PR) |
-| 4b | Streaming-loader signals (was Phase 4 Part B): a signal read channel for live loaders. | | future; needs the accumulator-typing design |
+| 4b | Unified reactive read API: one adaptive `useData` (single-value `()` + live `(initial, reduce)`), both returning signals; removes `useDataSignal` / `useFieldSignal`; re-exports `@preact/signals` first-party; retires `ReadonlyReactive` for `ReadonlySignal`; live `.Boundary` collect-mode host. Absorbs the split-out streaming signals. | #347 | shipped (in this PR) |
 | 5 | Signals as the always-on data layer: delete the opt-in seam and the `hono-preact/signals` subpath; loaders and rooms are signal-backed with no opt-in import. | #345 | shipped (in this PR) |
 
 **Phase 3 dropped (recorded 2026-07-24).** Assessment before starting it: the
@@ -92,6 +92,22 @@ type is chosen at the consumption site (the reducer), so a read-side
 deferred to its own spec rather than shipped as a type lie. The host plumbing
 already exists, so 4b is a type/API problem, not a wiring one.
 
+**Phase 4b: unified reactive read API (shipped, #347).** The owner resolved the
+4b typing question by making the reducer a required argument of the read hook
+exactly when the loader is live, so `Acc` is inferred: one adaptive `useData`,
+`useData()` on a single-value loader and `useData(initial, reduce)` on a live one,
+both returning signals. This dissolves the accumulator-typing problem and, on the
+owner's "no duplication, no `-Signal` suffix" direction, folds in a broader
+cleanup: `useDataSignal` / `useFieldSignal` are removed (projection is
+`useComputed` off `useData`), `@preact/signals` is re-exported first-party from
+`hono-preact` (the hoofd precedent), and `ReadonlyReactive` is retired for the
+real `ReadonlySignal`. Live consumption is host-bound and uniform: `.Boundary` on
+a streaming loader (was `never`) is a collect-mode host that provides the chunk
+log so each `useData(initial, reduce)` under it folds independently; `.View`
+fold-mode is untouched. Review caught two `foldStream` correctness bugs (reload
+corruption, cold-error fabrication), both fixed and mutation-checked. See
+`2026-07-24-unified-reactive-read-api-design.md`.
+
 Positioning (`use-position.ts`), grouped into Phase 1 by the investigation,
 was dropped: verification showed it already writes x/y straight to the DOM in
 the `autoUpdate` callback and only `setState`s on a side/align/arrow change, so
@@ -129,6 +145,7 @@ adds. Updated as phases land.
 | Phase 1 | 5519 unchanged | realtime +~65 B | the signal-mode branch + lazy getters in `useRoom` |
 | Phase 5 | 5521 unchanged | realtime 2261 B, loaders 10215 B (marginal) | seam removed; the `signals` opt-in bucket is gone, its glue folded into the two feature buckets |
 | Phase 4 | 5521 unchanged | signals-dx 307 B (marginal) | pure-Preact `<For>` / `<Show>`; a new tree-shakeable bucket, imports no `@preact/signals` |
+| Phase 4b | 5524 (+3 noise) | loaders 10545 B, realtime 2261 B | one adaptive `useData` + collect-mode streaming; `@preact/signals` re-export stays tree-shaken out of core |
 
 (The core number rebased across phases as `origin/main` advanced; what matters
 is that each phase leaves core unchanged.) Through Phase 2 the signal glue was
