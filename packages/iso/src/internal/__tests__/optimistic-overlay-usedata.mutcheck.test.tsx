@@ -109,15 +109,17 @@ describe('P0-1 <OptimisticOverlay> projection reaches loader.useData()', () => {
   // Baseline-parity probe. At merge base 845a00ed, `useData()` WAS literally
   // `useContext(LoaderDataContext)` + an `isLoaderState` narrow + `return ctx`
   // (see `git show 845a00ed:packages/iso/src/define-loader.ts`). This probe
-  // reproduces that body verbatim, so if it sees the projection then the
-  // pre-PR behaviour is established by construction and the failures above are
-  // a released-API PARITY BREAK, not a pre-existing gap.
+  // reproduces that body, so if it sees the projection then the pre-PR
+  // behaviour is established by construction and the failures above are a
+  // released-API PARITY BREAK, not a pre-existing gap. The one adaptation:
+  // that context carried the union as a plain snapshot, so the equivalent read
+  // today unwraps the channel's signal (`?.value`) before the same field read.
   it('(baseline parity) the merge-base useData() body DOES see the projection', async () => {
     const loader = makeLoader(async () => [{ id: 'a', text: 'first' }]);
 
     function BaselineConsumer(): JSX.Element {
       // eslint-disable-next-line react-hooks/rules-of-hooks
-      const ctx = useContext(LoaderDataContext);
+      const ctx = useContext(LoaderDataContext)?.value ?? null;
       const ids =
         ctx && 'data' in ctx && ctx.data
           ? (ctx.data as Todo[]).map((t) => t.id).join(',')

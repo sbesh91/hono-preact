@@ -23,6 +23,10 @@ export type ViewState = (LoaderState<unknown> | StreamState<unknown>) & {
 // and a single-value loader's `LoaderState` both ride the same context and are
 // read here without a second derivation (review #6). Lives here, next to its
 // context dependency, rather than in define-loader.ts.
+//
+// Reading `.value` SUBSCRIBES this component to the loader's state, so a render
+// function updates on the loader's own change rather than only when the host
+// re-provides the context.
 export function ViewRenderer({
   props,
   render,
@@ -30,7 +34,7 @@ export function ViewRenderer({
   props: Record<string, unknown>;
   render: (args: ViewState) => ComponentChildren;
 }) {
-  const state = useContext(LoaderDataContext);
+  const state = useContext(LoaderDataContext)?.value ?? null;
   if (!state) {
     throw new Error(
       'loader.View render function must be rendered inside a `loader.View` / `loader.Boundary`.'

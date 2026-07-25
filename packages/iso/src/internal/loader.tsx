@@ -1,20 +1,18 @@
 import type { ComponentChildren } from 'preact';
 import type { RouteHook } from 'preact-iso';
-import { useContext, useId, useMemo, useRef } from 'preact/hooks';
-import type { ReadonlySignal } from '@preact/signals';
+import { useContext, useId, useMemo } from 'preact/hooks';
 import { isBrowser } from '../is-browser.js';
 import { toStreamState } from '../loader-state.js';
 import type { LoaderState, StreamState } from '../loader-state.js';
 import { ReloadContext } from '../reload-context.js';
 import {
   ActiveLoaderIdContext,
-  LoaderDataContext,
   LoaderErrorContext,
   LoaderIdContext,
   LoaderStreamContext,
-  LoaderViewSignalContext,
   type LoaderStreamValue,
 } from './contexts.js';
+import { LoaderDataProvider } from './loader-data-provider.js';
 import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from './route-locations.js';
 import { ErrorBoundary } from './route-boundary.js';
@@ -26,8 +24,7 @@ import {
   useLoaderRunner,
   type AccumulateOptions,
 } from './use-loader-runner.js';
-import { createPhaseCell, createCollectSignals } from './loader-signal.js';
-import type { PhaseCell } from './reactive.js';
+import { createCollectSignals } from './loader-signal.js';
 export { serializeLocationForCache } from './cache-key.js';
 
 // Collect-mode's SSR placeholder: a live loader hosted for `useData` renders
@@ -159,12 +156,15 @@ function DataReader<T>({
       : { status: 'success', data: raw };
   const anchor: HydrationAnchor =
     accumulate || collect ? { kind: 'none' } : { kind: 'data', value: raw };
+  // The server provides the SAME signal-valued channel the client does. The
+  // state is settled by the time this renders and never changes again, but the
+  // channel's shape is not allowed to differ by environment: a consumer that
+  // reads `.value` (or calls any other `ReadonlySignal` method) has to work
+  // identically under SSR.
   const body = (
-    <LoaderDataContext.Provider value={state}>
-      <LoaderViewSignalContext.Provider value={{ value: state }}>
-        <Envelope anchor={anchor}>{children}</Envelope>
-      </LoaderViewSignalContext.Provider>
-    </LoaderDataContext.Provider>
+    <LoaderDataProvider state={state}>
+      <Envelope anchor={anchor}>{children}</Envelope>
+    </LoaderDataProvider>
   );
   if (!collect) return body;
   return (
@@ -262,7 +262,9 @@ export function LoaderHost<T>({
   // change the loader state, so memoized `useData()` consumers stay stable
   // (review #7). The runner builds a fresh `view.state` each render; this
   // `useMemo` keyed on its fields returns the cached reference when nothing
-  // changed. `null` on a cold error (which routes to the boundary, not context).
+  // changed, which is also what makes `LoaderDataProvider`'s write a no-op on
+  // an unchanged render. `null` on a cold error (which routes to the boundary,
+  // not context).
   const renderState = view.kind === 'render' ? view.state : null;
   const memoStatus = renderState ? renderState.status : null;
   const memoData =
@@ -273,26 +275,6 @@ export function LoaderHost<T>({
     () => renderState,
     [memoStatus, memoData, memoError]
   );
-
-  // Signal mirror (always-on). The host writes the memoized `viewState` into a
-  // phase cell each render; an unchanged `viewState` is the SAME ref, so the
-  // cell.set is a no-op (the signal skips notify). A `useData()` consumer
-  // projects this via `useComputed` and updates alone. Created once per host
-  // instance. Typed to match `viewState`'s actual shape (a single-value
-  // `LoaderState` OR a streaming `StreamState`, same union `LoaderDataContext`
-  // already carries), not narrowed to the single-value case.
-  const viewCellRef = useRef<PhaseCell<
-    LoaderState<T> | StreamState<T> | null
-  > | null>(null);
-  if (viewCellRef.current === null) {
-    viewCellRef.current = createPhaseCell<
-      LoaderState<T> | StreamState<T> | null
-    >(null);
-  }
-  const viewCell = viewCellRef.current;
-  viewCell.set(viewState);
-  const viewSignal: ReadonlySignal<LoaderState<T> | StreamState<T> | null> =
-    viewCell.source;
 
   // A COLD error: a SINGLE-VALUE load that failed before ANY value settled. The
   // old Suspense path threw the reader so an error boundary caught it; the state
@@ -323,11 +305,9 @@ export function LoaderHost<T>({
     <Envelope anchor={{ kind: 'none' }}>{children}</Envelope>
   );
   const content = isBrowser() ? (
-    <LoaderDataContext.Provider value={viewState}>
-      <LoaderViewSignalContext.Provider value={viewSignal}>
-        {envelopedChildren}
-      </LoaderViewSignalContext.Provider>
-    </LoaderDataContext.Provider>
+    <LoaderDataProvider state={viewState}>
+      {envelopedChildren}
+    </LoaderDataProvider>
   ) : (
     <DataReader
       reader={reader}

@@ -48,7 +48,9 @@ describe('signals are the always-on data layer', () => {
 
   it('useRoom / loader consume the signal factories directly (no registration seam)', () => {
     expect(reads('use-room.ts', 'createSignalRoster')).toBe(true);
-    expect(reads('internal/loader.tsx', 'createPhaseCell')).toBe(true);
+    expect(reads('internal/loader-data-provider.tsx', 'createPhaseCell')).toBe(
+      true
+    );
     expect(reads('define-loader.ts', 'derive')).toBe(true);
     // The removed seam is gone from reactive.ts.
     expect(reads('internal/reactive.ts', 'registerPresenceReactiveImpl')).toBe(

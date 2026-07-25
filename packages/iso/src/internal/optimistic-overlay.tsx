@@ -1,13 +1,15 @@
 import type { ComponentChildren } from 'preact';
-import { useContext, useRef } from 'preact/hooks';
-import { LoaderDataContext, LoaderViewSignalContext } from './contexts.js';
-import { createPhaseCell } from './loader-signal.js';
-import type { PhaseCell } from './reactive.js';
+import { useContext } from 'preact/hooks';
+import { LoaderDataContext, type LoaderData } from './contexts.js';
+import { LoaderDataProvider } from './loader-data-provider.js';
 import type { LoaderRef } from '../define-loader.js';
-import type { LoaderState, StreamState } from '../loader-state.js';
 
-/** The consumption union <Page> puts on `LoaderDataContext`. */
-type ConsumptionState = LoaderState<unknown> | StreamState<unknown>;
+/**
+ * The consumption union <Page> puts on `LoaderDataContext`, minus the cold-error
+ * `null` (which `loader.tsx` routes to the `errorFallback` instead of rendering
+ * the children this overlay lives among).
+ */
+type ConsumptionState = NonNullable<LoaderData>;
 
 /** The data-bearing arms: everything but the cold `loading` / `connecting`. */
 type DataBearing = Exclude<
@@ -48,7 +50,9 @@ export function OptimisticOverlay<T, A>({
   pending = [],
   children,
 }: OverlayProps<T, A>) {
-  const ctx = useContext(LoaderDataContext);
+  // Reading `.value` subscribes the overlay to the loader's state, so a settled
+  // load re-projects here even when nothing re-renders the overlay from above.
+  const ctx = useContext(LoaderDataContext)?.value ?? null;
   if (!ctx)
     throw new Error(
       '<OptimisticOverlay> must be inside a route page that has a loader'
@@ -87,29 +91,10 @@ export function OptimisticOverlay<T, A>({
       ? { status: 'revalidating', data: projected }
       : ctx;
 
-  // `useData()` reads `LoaderViewSignalContext`, NOT `LoaderDataContext`, so the
-  // overlay has to re-provide that channel too or its projection never reaches a
-  // descendant's `loader.useData()` (it would read the host's raw loader state
-  // straight through this component).
-  //
-  // The identity of the provided reactive must be STABLE across renders:
-  // `readDataSignal` in define-loader.ts memoizes its `derive(source, …)` behind
-  // a `useRef` on FIRST render, so handing down a fresh `{ value: arm }` object
-  // per render would freeze every consumer at the projection's first value.
-  // Hold one phase cell for the lifetime of the overlay and write the new arm
-  // into it each render, exactly as `LoaderHost` does with its own view cell.
-  const cellRef = useRef<PhaseCell<ConsumptionState> | null>(null);
-  if (cellRef.current === null) {
-    cellRef.current = createPhaseCell<ConsumptionState>(arm);
-  } else {
-    cellRef.current.set(arm);
-  }
-
-  return (
-    <LoaderDataContext.Provider value={arm}>
-      <LoaderViewSignalContext.Provider value={cellRef.current.source}>
-        {children}
-      </LoaderViewSignalContext.Provider>
-    </LoaderDataContext.Provider>
-  );
+  // Re-provide the ONE loader channel with the projected arm, so every reader
+  // below (a `.View` render function, a descendant's `loader.useData()`) sees
+  // the projection rather than the host's raw loader state. `LoaderDataProvider`
+  // owns the stable-identity contract that a consumer's memoized projection
+  // depends on.
+  return <LoaderDataProvider state={arm}>{children}</LoaderDataProvider>;
 }

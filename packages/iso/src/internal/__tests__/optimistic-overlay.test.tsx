@@ -2,8 +2,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/preact';
 import { useContext } from 'preact/hooks';
+import { signal } from '@preact/signals';
 import { OptimisticOverlay } from '../optimistic-overlay.js';
-import { LoaderDataContext } from '../contexts.js';
+import { LoaderDataContext, type LoaderData } from '../contexts.js';
 import { defineLoader } from '../../define-loader.js';
 
 afterEach(() => {
@@ -21,16 +22,23 @@ const reducer = (base: Todo[], action: Action): Todo[] => {
 };
 
 function DataReader() {
-  const ctx = useContext(LoaderDataContext);
+  const ctx = useContext(LoaderDataContext)?.value ?? null;
   const data = ctx && 'data' in ctx ? ctx.data : undefined;
   return <pre data-testid="out">{JSON.stringify(data)}</pre>;
+}
+
+/** The host's channel: the consumption union as a signal, as <Page> provides it. */
+function hostSignal(state: LoaderData) {
+  return signal<LoaderData>(state);
 }
 
 describe('<OptimisticOverlay>', () => {
   it('passes base data through unchanged when pending is empty', () => {
     const base: Todo[] = [{ id: 'a', text: 'first' }];
     const { getByTestId } = render(
-      <LoaderDataContext.Provider value={{ status: 'success', data: base }}>
+      <LoaderDataContext.Provider
+        value={hostSignal({ status: 'success', data: base })}
+      >
         <OptimisticOverlay loader={todoLoader} reducer={reducer}>
           <DataReader />
         </OptimisticOverlay>
@@ -46,7 +54,9 @@ describe('<OptimisticOverlay>', () => {
       { kind: 'add', todo: { id: 'c', text: 'third' } },
     ];
     const { getByTestId } = render(
-      <LoaderDataContext.Provider value={{ status: 'success', data: base }}>
+      <LoaderDataContext.Provider
+        value={hostSignal({ status: 'success', data: base })}
+      >
         <OptimisticOverlay
           loader={todoLoader}
           reducer={reducer}
@@ -71,7 +81,9 @@ describe('<OptimisticOverlay>', () => {
       { kind: 'remove', id: 'a' },
     ];
     const { getByTestId } = render(
-      <LoaderDataContext.Provider value={{ status: 'success', data: base }}>
+      <LoaderDataContext.Provider
+        value={hostSignal({ status: 'success', data: base })}
+      >
         <OptimisticOverlay
           loader={todoLoader}
           reducer={reducer}
@@ -92,7 +104,9 @@ describe('<OptimisticOverlay>', () => {
       { kind: 'add', todo: { id: 'b', text: 'second' } },
     ];
     render(
-      <LoaderDataContext.Provider value={{ status: 'success', data: base }}>
+      <LoaderDataContext.Provider
+        value={hostSignal({ status: 'success', data: base })}
+      >
         <OptimisticOverlay
           loader={todoLoader}
           reducer={reducer}
@@ -123,7 +137,7 @@ describe('<OptimisticOverlay>', () => {
       { kind: 'add', todo: { id: 'b', text: 'second' } },
     ];
     const { getByTestId } = render(
-      <LoaderDataContext.Provider value={{ status: 'loading' }}>
+      <LoaderDataContext.Provider value={hostSignal({ status: 'loading' })}>
         <OptimisticOverlay
           loader={todoLoader}
           reducer={tolerantReducer}
@@ -142,7 +156,7 @@ describe('<OptimisticOverlay>', () => {
     // No data AND no pending actions: there is nothing to project, so the
     // genuine cold `loading` arm must pass through (no data leaks onto context).
     const { getByTestId } = render(
-      <LoaderDataContext.Provider value={{ status: 'loading' }}>
+      <LoaderDataContext.Provider value={hostSignal({ status: 'loading' })}>
         <OptimisticOverlay loader={todoLoader} reducer={reducer}>
           <DataReader />
         </OptimisticOverlay>

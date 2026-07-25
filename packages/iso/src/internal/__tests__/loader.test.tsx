@@ -47,7 +47,7 @@ afterEach(() => {
 // renders a "loading" marker until a data-carrying arm is present, then the
 // data. This replaces the Suspense `fallback` prop, which no longer exists.
 function Probe({ testid = 'msg' }: { testid?: string }) {
-  const ctx = useContext(LoaderDataContext);
+  const ctx = useContext(LoaderDataContext)?.value ?? null;
   if (ctx?.status === 'loading')
     return <span data-testid="loading">loading</span>;
   const data =
@@ -70,7 +70,7 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Capture() {
-      captured = useContext(LoaderDataContext);
+      captured = useContext(LoaderDataContext)?.value ?? null;
       return <Probe />;
     }
 
@@ -111,7 +111,7 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     const ref = defineLoader<number>(async () => 0);
     let observed: unknown = 'unset';
     function Capture() {
-      const ctx = useContext(LoaderDataContext);
+      const ctx = useContext(LoaderDataContext)?.value ?? null;
       const data = ctx && 'data' in ctx ? ctx.data : undefined;
       observed = data;
       return <span data-testid="val">{String(data)}</span>;
