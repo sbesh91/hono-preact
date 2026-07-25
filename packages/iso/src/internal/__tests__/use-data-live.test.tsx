@@ -2,7 +2,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/preact';
 import { useComputed } from '@preact/signals';
-import { defineLoader } from '../../define-loader.js';
 // A live loader test harness that lets the test push chunks. The exact harness
 // mirrors the existing streaming loader tests (loader-signal-ssr.test.tsx);
 // reuse their chunk-driving helper for the underlying stream source.
@@ -95,5 +94,32 @@ describe('live useData(initial, reduce)', () => {
     );
     // Late mount must reflect the full fold (1+2+3), not just chunks after mount.
     expect(screen.getByTestId('late').textContent).toBe('6');
+  });
+
+  it('is consumable through the PUBLIC .Boundary collect-mode host', async () => {
+    // The public host: an app writes `<liveLoader.Boundary>` and folds inside
+    // via `useData(initial, reduce)`, no reaching into internals.
+    const h = makeLiveLoaderHarness<number>();
+    const Boundary = h.loader.Boundary;
+    function View() {
+      const total = h.loader.useData(0, (acc, n) => acc + n);
+      return (
+        <p data-testid="b">
+          {total.value.status === 'connecting'
+            ? 'connecting'
+            : String(total.value.data)}
+        </p>
+      );
+    }
+    render(
+      <Boundary>
+        <View />
+      </Boundary>
+    );
+    expect(screen.getByTestId('b').textContent).toBe('connecting');
+    await act(async () => {
+      await h.push(4);
+    });
+    expect(screen.getByTestId('b').textContent).toBe('4');
   });
 });

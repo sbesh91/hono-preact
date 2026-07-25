@@ -30,10 +30,10 @@ function _probes() {
     })
   );
 
-  // Streaming ref: `Boundary` is never; `useData` takes `(initial, reduce)`
-  // (the live arm) and accumulating `View` is available.
+  // Streaming ref: `Boundary` is a collect-mode host; `useData` takes
+  // `(initial, reduce)` (the live arm) and accumulating `View` is available.
   expectTypeOf(ref.useData).toBeFunction();
-  expectTypeOf(ref.Boundary).toBeNever();
+  expectTypeOf(ref.Boundary).not.toBeNever();
   ref.View<number[]>(
     (s) => {
       if (s.status === 'open' || s.status === 'closed') {

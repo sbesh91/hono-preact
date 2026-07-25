@@ -206,13 +206,22 @@ export interface LoaderRef<T, Live extends boolean = false> {
   useError(): Error | null;
   invalidate(): void;
   /**
-   * The lower-level state-based boundary (single-value loaders): it renders its
-   * children eagerly and provides the loader's state on context, which children
-   * read via `useData()` (pattern-match on `.value.status`). `never` on a
-   * streaming loader: consume it via the accumulating `.View` form instead.
+   * The lower-level state-based host: it renders its children eagerly and
+   * provides the loader's reactive state on context, which children read via
+   * `useData()`. On a single-value loader, children call `useData()`
+   * (pattern-match `.value.status`). On a streaming loader, the boundary runs in
+   * collect-mode and children call `useData(initial, reduce)` to fold the stream
+   * (each consumer folds independently off the one shared subscription). The
+   * accumulating `.View(render, { initial, reduce })` form remains available as
+   * the render-prop alternative.
    */
   Boundary: Live extends true
-    ? never
+    ? ComponentType<{
+        errorFallback?:
+          | ComponentChildren
+          | ((err: Error, reset: () => void) => ComponentChildren);
+        children: ComponentChildren;
+      }>
     : ComponentType<{
         errorFallback?:
           | ComponentChildren
@@ -660,21 +669,12 @@ function makeLoaderRef(
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
     Boundary: (props) => {
-      // The same `accumulate` <-> `isStreaming` invariant `View` enforces,
-      // applied to the lower-level escape hatch (`View` delegates here, so
-      // these guards must allow streaming+accumulate, which is exactly what
-      // `View` passes).
-      if (isStreaming && !props.accumulate) {
-        // A streaming loader has no single value; a bare `.Boundary` would
-        // suspend forever on the infinite generator. Defense-in-depth for JS
-        // callers: the discriminated `LoaderRef<T, true>` already makes this a
-        // type error (and `Boundary` is `never` on a streaming loader). Keyed
-        // on the fn prototype check, which is reliable across both SSR and
-        // client paths.
-        throw new Error(
-          'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.Boundary`.'
-        );
-      }
+      // A streaming loader hosted WITHOUT `accumulate` runs in collect-mode:
+      // the host provides the raw chunk-log context and children fold it via
+      // `useData(initial, reduce)`. A streaming loader WITH `accumulate` is the
+      // fold-mode path `View` delegates here (it always passes the reducer).
+      // A single-value loader ignores both and provides its `LoaderState`.
+      const collect = isStreaming && !props.accumulate;
       // Non-streaming + accumulate is valid on the server: `DataReader` keys the
       // SSR projection on the consumption form (accumulate), so an accumulating
       // consumer renders the `connecting` StreamState on the server, matching the
@@ -683,6 +683,7 @@ function makeLoaderRef(
         loader: ref,
         errorFallback: props.errorFallback,
         accumulate: props.accumulate,
+        collect,
         children: props.children,
       });
     },

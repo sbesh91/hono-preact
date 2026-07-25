@@ -47,11 +47,11 @@ function _generatorBodyDrivesStreamingRef() {
     yield 1;
   });
   expectTypeOf(s.View).toBeFunction();
-  // A streaming ref has no single-value host: `Boundary` is `never`. `useData`
-  // is NOT `never`: it takes `(initial, reduce)` (the live arm), same as
-  // `.View`'s accumulating form.
+  // A streaming ref's `Boundary` is a collect-mode host (children fold via
+  // `useData(initial, reduce)`), no longer `never`. `useData` takes
+  // `(initial, reduce)` (the live arm), same as `.View`'s accumulating form.
   expectTypeOf(s.useData).toBeFunction();
-  expectTypeOf(s.Boundary).toBeNever();
+  expectTypeOf(s.Boundary).not.toBeNever();
 }
 
 // 3. Route-form on defineLoader is GONE.

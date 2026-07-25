@@ -50,8 +50,9 @@ function _liveProbes() {
   // @ts-expect-error a live loader's `useData` requires (initial, reduce); calling it with no args is a type error
   live.useData();
 
-  // A live loader still has no single-value host: `Boundary` is `never`.
-  expectTypeOf(live.Boundary).toBeNever();
+  // A live loader's `Boundary` is a collect-mode host (children fold via
+  // `useData(initial, reduce)`); it is no longer `never`.
+  expectTypeOf(live.Boundary).not.toBeNever();
 }
 
 // A single-value loader (Promise fn): single-value form only.
