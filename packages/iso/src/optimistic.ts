@@ -67,9 +67,21 @@ export function useOptimistic<TBase, TPayload>(
     lastBaseRef.current = base;
   }
 
+  // Holds `reducer` as a tracked signal for the same reason `base` is held
+  // above: the value computed is created once (`useComputed` is
+  // `useMemo(..., [])`), so a plain closure capture would pin the fold to the
+  // reducer passed on the mount render, and a call site whose reducer closes
+  // over changing props (`(acc, p) => acc + p * mult`) would keep folding with
+  // the stale one. A fresh arrow per render is a new reference, so this writes
+  // during render; the value computed is read later in the SAME render pass,
+  // which reconciles the version before the batch ends, so no re-render is
+  // scheduled and there is no loop.
+  const reducerState = useStoreState(reducer);
+  reducerState.set(reducer);
+
   const value = useStoreValue(() =>
     queue.signal.value.reduce(
-      (acc, e) => reducer(acc, e.payload),
+      (acc, e) => reducerState.signal.value(acc, e.payload),
       baseState.signal.value
     )
   );
