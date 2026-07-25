@@ -5,7 +5,11 @@
 // (single-value `.View`, `useData`, `Boundary`). `{ live: true }` is a runtime
 // SSR flag only; it no longer controls the type discriminant. Misusing the wrong
 // form is a compile error.
+//
+// `useData` on a live loader is still `never` after this task; the live
+// `useData(initial, reduce)` arm is added in Task 4.
 import { expectTypeOf } from 'vitest';
+import type { ReadonlySignal } from '@preact/signals';
 import {
   defineLoader,
   type LoaderRef,
@@ -39,12 +43,10 @@ function _liveProbes() {
   // @ts-expect-error the single-value `.View(render)` form is not available on a live loader
   live.View(() => null);
 
-  // A live loader has no single value: `useData` and `Boundary` are `never`.
+  // A live loader has no single-value shape yet: `useData` and `Boundary` are
+  // `never` (the live `useData(initial, reduce)` arm lands in Task 4).
   expectTypeOf(live.useData).toBeNever();
   expectTypeOf(live.Boundary).toBeNever();
-  // Same for the signal read-side: single-value only.
-  expectTypeOf(live.useDataSignal).toBeNever();
-  expectTypeOf(live.useFieldSignal).toBeNever();
 }
 
 // A single-value loader (Promise fn): single-value form only.
@@ -63,8 +65,11 @@ function _staticProbes() {
   // @ts-expect-error the accumulating `{ initial, reduce }` form is not available on a single-value loader
   stat.View(() => null, { initial: [] as number[], reduce: (acc) => acc });
 
-  // The single-value affordances are present; useData() is the discriminated state.
-  expectTypeOf(stat.useData()).toEqualTypeOf<LoaderState<{ at: string }>>();
+  // The single-value affordances are present; useData() returns a reactive
+  // signal of the discriminated state (pattern-match `.value.status`).
+  expectTypeOf(stat.useData()).toEqualTypeOf<
+    ReadonlySignal<LoaderState<{ at: string }>>
+  >();
 }
 
 // A bare `LoaderRef<T>` defaults to the single-value form (Live=false), so its
@@ -77,7 +82,9 @@ function _defaultRefProbes(loader: LoaderRef<{ n: number }>) {
     }
     return null;
   });
-  expectTypeOf(loader.useData()).toEqualTypeOf<LoaderState<{ n: number }>>();
+  expectTypeOf(loader.useData()).toEqualTypeOf<
+    ReadonlySignal<LoaderState<{ n: number }>>
+  >();
 }
 
 void _liveProbes;

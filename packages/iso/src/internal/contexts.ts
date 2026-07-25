@@ -17,8 +17,8 @@ export const LoaderDataContext = createContext<
 
 /**
  * The loader's projected `LoaderState` as a reactive value, provided alongside
- * `LoaderDataContext`. `useDataSignal()` reads it: in signal mode it is the
- * host's phase-cell source (granular); in default mode / on the server it is a
+ * `LoaderDataContext`. `useData()` reads it: in signal mode it is the host's
+ * phase-cell source (granular); in default mode / on the server it is a
  * plain `{ value }` snapshot. Structurally typed so core names no signal. */
 export const LoaderViewSignalContext = createContext<{
   readonly value: unknown;

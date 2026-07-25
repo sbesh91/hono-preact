@@ -11,14 +11,13 @@ import type { RouteHook } from 'preact-iso';
 import type { Serialize } from './internal/serialize.js';
 import { createCache, type LoaderCache } from './cache.js';
 import {
-  LoaderDataContext,
   LoaderErrorContext,
   LoaderViewSignalContext,
 } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
 import type { AccumulateOptions } from './internal/use-loader-runner.js';
-import type { LoaderState, StreamState, StreamStatus } from './loader-state.js';
+import type { LoaderState, StreamState } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
@@ -182,32 +181,22 @@ export interface LoaderRef<T, Live extends boolean = false> {
    */
   readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
   /**
-   * Consume the loader's data as a discriminated `LoaderState<Serialize<T>>`:
-   * pattern-match on `status` (`loading` | `success` | `revalidating` |
-   * `error`). The data-carrying arms expose `Serialize<T>`, the JSON round-trip
-   * of the server-side return `T` (e.g. a `Date` field arrives as a string).
-   * `never` on a streaming loader (it has no single value).
+   * Read the loader's data as a reactive signal. On a single-value loader,
+   * `useData()` returns a `ReadonlySignal<LoaderState<Serialize<T>>>`
+   * (pattern-match `.value.status`). Read `.value` in render; a binding updates
+   * without the loader host re-rendering. Called inside a `<Loader>` / `.View`.
+   * (Live loaders take `useData(initial, reduce)`, added in Task 4.)
    */
-  useData: Live extends true ? never : () => LoaderState<Serialize<T>>;
-  /** The loader's state as a reactive value. Read `.value`. Signal-backed: a
-   * component that binds it updates without the loader host re-rendering it.
-   * `never` on a streaming loader (its status is separate state). */
-  useDataSignal: Live extends true
+  useData: Live extends true
     ? never
     : () => ReadonlySignal<LoaderState<Serialize<T>>>;
-  /** A reactive projection of one field of the loaded data. Read `.value` in
-   * render. `fallback` is returned while loading. `never` on a streaming
-   * loader. */
-  useFieldSignal: Live extends true
-    ? never
-    : <R>(select: (data: Serialize<T>) => R, fallback: R) => ReadonlySignal<R>;
   useError(): Error | null;
   invalidate(): void;
   /**
    * The lower-level state-based boundary (single-value loaders): it renders its
    * children eagerly and provides the loader's state on context, which children
-   * read via `useData()` (pattern-match on `status`). `never` on a streaming
-   * loader: consume it via the accumulating `.View` form instead.
+   * read via `useData()` (pattern-match on `.value.status`). `never` on a
+   * streaming loader: consume it via the accumulating `.View` form instead.
    */
   Boundary: Live extends true
     ? never
@@ -233,7 +222,7 @@ export interface LoaderRef<T, Live extends boolean = false> {
  * loader (invalidate, prefetch) without reading its data shape.
  *
  * Uses `LoaderRef<any>`, not `LoaderRef<unknown>`, deliberately. `LoaderRef<T>`
- * is invariant in `T` (it surfaces `T` through `useData(): LoaderState<Serialize<T>>`),
+ * is invariant in `T` (it surfaces `T` through `useData(): ReadonlySignal<LoaderState<Serialize<T>>>`),
  * so a concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
  * `any` argument erases the data type so any loader is accepted; these call
  * sites never inspect the data with a meaningful type. `boolean` (not the default
@@ -369,34 +358,6 @@ function getSharedCaches(): SharedCacheMap {
     g[SHARED_CACHES_KEY] = map;
   }
   return map;
-}
-
-/**
- * The streaming-only statuses: the part of the streaming vocabulary that never
- * appears on a single-value `LoaderState` (the shared `error` stays on the
- * `LoaderState` side). Derived from the status union via `Exclude`, so the
- * exclusion set has ONE source of truth: adding a `StreamStatus` member forces
- * this map to list it (a missing key is a compile error) and it cannot drift.
- */
-type StreamOnlyStatus = Exclude<StreamStatus, LoaderState<unknown>['status']>;
-const STREAM_ONLY_STATUSES: Record<StreamOnlyStatus, true> = {
-  connecting: true,
-  open: true,
-  closed: true,
-};
-
-/**
- * Narrow `LoaderDataContext`'s union to the single-value `LoaderState` half by
- * excluding the stream-only statuses. A non-streaming loader always carries a
- * `LoaderState` on context, so this lets `useData()` return the context value
- * directly (no re-projection, no cast). The shared `error` status stays on the
- * `LoaderState` side, which is correct: `useData()` is never called on a
- * streaming loader (it throws first).
- */
-function isLoaderState(
-  s: LoaderState<unknown> | StreamState<unknown>
-): s is LoaderState<unknown> {
-  return !(s.status in STREAM_ONLY_STATUSES);
 }
 
 /**
@@ -565,19 +526,19 @@ function makeLoaderRef(
     }
   }
 
-  // Shared body for `useDataSignal` / `useFieldSignal` (the latter derives off
-  // the former's reactive). A plain local fn rather than a `this` call keeps
-  // the object literal's method typing simple and avoids an `as any` on `this`.
+  // Shared body for `useData` (single-value arm). A plain local fn rather than
+  // a `this` call keeps the object literal's method typing simple and avoids
+  // an `as any` on `this`.
   function readDataSignal(): ReadonlySignal<LoaderState<unknown>> {
     if (isStreaming) {
       throw new Error(
-        'This is a streaming loader: useDataSignal() / useFieldSignal() are single-value only; consume it via `loader.View(render, { initial, reduce })`.'
+        'This is a streaming loader: useData() is single-value only; consume it via `loader.View(render, { initial, reduce })`.'
       );
     }
     const ctx = useContext(LoaderViewSignalContext);
     if (!ctx) {
       throw new Error(
-        'loader.useDataSignal() / useFieldSignal() must be called inside a `loader.View` render function or a `<Loader>`.'
+        'loader.useData() must be called inside a `loader.View` render function or a `<Loader>`.'
       );
     }
     // Structural context read: `LoaderViewSignalContext` is typed as an opaque
@@ -622,44 +583,7 @@ function makeLoaderRef(
       Middleware | StreamObserver<unknown, never>
     >,
     useData() {
-      if (isStreaming) {
-        throw new Error(
-          'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.useData()`.'
-        );
-      }
-      const ctx = useContext(LoaderDataContext);
-      if (!ctx) {
-        throw new Error(
-          'loader.useData() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
-        );
-      }
-      // The context carries the already-projected union (built once in
-      // `loader.tsx`); return it BY REFERENCE so consumers see a referentially
-      // stable value across re-renders (review #7) rather than a fresh
-      // projection each call. A non-streaming loader always carries a `LoaderState`
-      // (the runner never projects `toStreamState` for it); `isLoaderState`
-      // narrows to that without a cast, and the throw is unreachable defense.
-      if (!isLoaderState(ctx)) {
-        throw new Error(
-          'loader.useData() read a streaming state on a non-streaming loader; this is an internal invariant violation.'
-        );
-      }
-      return ctx;
-    },
-    useDataSignal() {
       return readDataSignal();
-    },
-    useFieldSignal<R>(select: (data: unknown) => R, fallback: R) {
-      const state = readDataSignal();
-      const ref = useRef<ReadonlySignal<R> | null>(null);
-      const project = (s: LoaderState<unknown>): R =>
-        s.status === 'loading' ? fallback : select(s.data);
-      // Memoize the derived projection so the binding is stable; `select` /
-      // `fallback` are captured once (documented, like `useData`).
-      if (ref.current === null) {
-        ref.current = derive(state, project);
-      }
-      return ref.current;
     },
     useError() {
       return useContext(LoaderErrorContext);

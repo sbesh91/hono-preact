@@ -19,15 +19,19 @@ afterEach(() => {
 });
 
 describe('loader signal under preact-render-to-string', () => {
-  it('renders a useFieldSignal node to the SSR value without throwing', async () => {
+  it('renders a useData node to the SSR value without throwing', async () => {
     env.current = 'server';
     const loader = defineLoader<{ title: string }>(async () => ({
       title: 'server-title',
     }));
 
     function View(): JSX.Element {
-      const t = loader.useFieldSignal((d) => d.title, '(loading)');
-      return <h1>{t.value}</h1>;
+      const state = loader.useData();
+      const t =
+        state.value.status === 'loading'
+          ? '(loading)'
+          : state.value.data.title;
+      return <h1>{t}</h1>;
     }
 
     const html = await renderToStringAsync(

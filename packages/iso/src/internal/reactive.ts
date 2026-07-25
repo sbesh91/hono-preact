@@ -30,7 +30,7 @@ export type RosterStore<S> = {
 /**
  * A settable reactive cell mirroring one loader's projected `LoaderState`. The
  * loader host writes it each render (with the memoized state, so an unchanged
- * value is a no-op); `useDataSignal` reads `source`.
+ * value is a no-op); `useData()` reads `source`.
  */
 export type PhaseCell<T> = {
   set(value: T): void;

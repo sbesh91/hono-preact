@@ -4,7 +4,7 @@ import type { PhaseCell } from './reactive.js';
 
 /**
  * A phase cell mirroring one loader's projected `LoaderState`. The loader host
- * writes it each render (memoized value = no-op); `useDataSignal` reads `source`.
+ * writes it each render (memoized value = no-op); `useData()` reads `source`.
  * The always-on data-layer implementation for loaders.
  */
 export function createPhaseCell<T>(initial: T): PhaseCell<T> {

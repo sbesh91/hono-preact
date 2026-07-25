@@ -241,8 +241,8 @@ export function LoaderHost<T>({
 
   // Signal mirror (always-on). The host writes the memoized `viewState` into a
   // phase cell each render; an unchanged `viewState` is the SAME ref, so the
-  // cell.set is a no-op (the signal skips notify). A `useFieldSignal` child
-  // subscribes to a projection of this and updates alone. Created once per host
+  // cell.set is a no-op (the signal skips notify). A `useData()` consumer
+  // projects this via `useComputed` and updates alone. Created once per host
   // instance. Typed to match `viewState`'s actual shape (a single-value
   // `LoaderState` OR a streaming `StreamState`, same union `LoaderDataContext`
   // already carries), not narrowed to the single-value case.

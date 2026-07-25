@@ -54,7 +54,7 @@ describe('LoaderRef.Boundary', () => {
     // pending window, so `data` is undefined until the loader resolves. There is
     // no separate Suspense fallback element.
     const Probe = () => {
-      const s = ref.useData();
+      const s = ref.useData().value;
       if (!('data' in s)) return <span data-testid="pending">loading</span>;
       return <span data-testid="data">{s.data.value}</span>;
     };
@@ -234,7 +234,7 @@ describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => 
     );
 
     const Probe = () => {
-      const s = ref.useData();
+      const s = ref.useData().value;
       if (!('data' in s)) return null;
       return <span data-testid="path">{s.data.path}</span>;
     };

@@ -143,7 +143,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
       // resolves. Guard with `'data' in s` (the new client contract) rather than
       // assuming a resolved value is always present, as the pre-state Suspense
       // model did.
-      const s = countLoader.useData();
+      const s = countLoader.useData().value;
       const { mutate } = useAction(incrementStub, { invalidate: 'auto' });
       return (
         <div>
