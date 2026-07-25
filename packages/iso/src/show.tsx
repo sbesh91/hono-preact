@@ -1,10 +1,10 @@
 import { Fragment } from 'preact';
 import type { ComponentChildren, VNode } from 'preact';
-import type { ReadonlyReactive } from './internal/reactive.js';
+import type { ReadonlySignal } from '@preact/signals';
 
 export type ShowProps<C> = {
   /** A reactive condition. `<Show>` re-renders when it changes. */
-  when: ReadonlyReactive<C>;
+  when: ReadonlySignal<C>;
   /** Rendered when `when.value` is falsy. Defaults to nothing. */
   fallback?: ComponentChildren;
   /** Rendered when truthy. A function child receives the narrowed truthy value. */

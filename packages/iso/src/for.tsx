@@ -1,11 +1,11 @@
 import { Fragment } from 'preact';
 import type { ComponentChildren, VNode } from 'preact';
 import { useRef } from 'preact/hooks';
-import type { ReadonlyReactive } from './internal/reactive.js';
+import type { ReadonlySignal } from '@preact/signals';
 
 export type ForProps<T> = {
   /** A reactive array. Read as a signal, so `<For>` re-renders when it changes. */
-  each: ReadonlyReactive<readonly T[]>;
+  each: ReadonlySignal<readonly T[]>;
   /** Derive a stable, unique key per item. Defaults to the item itself
    * (identity), which is exact for a `memberIds`-style array of keys. */
   by?: (item: T, index: number) => unknown;

@@ -1,5 +1,6 @@
 import { signal, computed } from '@preact/signals';
-import type { ReadonlyReactive, PhaseCell } from './reactive.js';
+import type { ReadonlySignal } from '@preact/signals';
+import type { PhaseCell } from './reactive.js';
 
 /**
  * A phase cell mirroring one loader's projected `LoaderState`. The loader host
@@ -18,8 +19,8 @@ export function createPhaseCell<T>(initial: T): PhaseCell<T> {
 
 /** A memoized projection off a reactive source (a `computed`). */
 export function derive<T, R>(
-  source: ReadonlyReactive<T>,
+  source: ReadonlySignal<T>,
   select: (v: T) => R
-): ReadonlyReactive<R> {
+): ReadonlySignal<R> {
   return computed(() => select(source.value));
 }

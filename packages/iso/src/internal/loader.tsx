@@ -24,7 +24,8 @@ import {
   type AccumulateOptions,
 } from './use-loader-runner.js';
 import { createPhaseCell } from './loader-signal.js';
-import type { PhaseCell, ReadonlyReactive } from './reactive.js';
+import type { PhaseCell } from './reactive.js';
+import type { ReadonlySignal } from '@preact/signals';
 export { serializeLocationForCache } from './cache-key.js';
 
 // A route-independent loader runs with no location. Its zero-value location is
@@ -255,7 +256,7 @@ export function LoaderHost<T>({
   }
   const viewCell = viewCellRef.current;
   viewCell.set(viewState);
-  const viewSignal: ReadonlyReactive<LoaderState<T> | StreamState<T> | null> =
+  const viewSignal: ReadonlySignal<LoaderState<T> | StreamState<T> | null> =
     viewCell.source;
 
   // A COLD error: a SINGLE-VALUE load that failed before ANY value settled. The

@@ -13,6 +13,25 @@ function reads(rel: string, needle: string): boolean {
   return readFileSync(join(iso, rel), 'utf8').includes(needle);
 }
 
+// A plain `import { ... } from '@preact/signals'` (or `export { ... } from`)
+// pulls the signal factories into the runtime module graph. An `import type`
+// line does not: TS erases it entirely, so it never reaches the bundle. A
+// mixed specifier list (`import { signal, type Signal } from ...`) still
+// counts, since the value part survives erasure. Several modules hold a
+// type-only `ReadonlySignal` import (the public read type), which must NOT
+// count as "entering the graph" for this check to track the real invariant.
+function importsSignalValuesAtRuntime(rel: string): boolean {
+  const src = readFileSync(join(iso, rel), 'utf8');
+  // `[^;]*?` (lazy, spans newlines but never a `;`) handles a wrapped
+  // specifier list, e.g. `index.ts`'s multi-line
+  // `export { signal, ... } from '@preact/signals';`, while staying bounded
+  // to a single statement: excluding `;` stops a match from ever reaching
+  // past an unrelated statement's terminator into a LATER import/export line.
+  return /^(?:import|export)\s+(?!type\b)[^;]*?from\s+'@preact\/signals';/m.test(
+    src
+  );
+}
+
 // Every source module under packages/iso/src, as posix-style paths relative to
 // it (e.g. 'internal/roster-signal.ts'), excluding tests.
 function sourceModules(): string[] {
@@ -41,20 +60,25 @@ describe('signals are the always-on data layer', () => {
   it('@preact/signals enters the graph ONLY through the two factory modules (core stays signals-free)', () => {
     // The always-loaded core reaches @preact/signals only if it imports one of
     // the factory modules, which the size probe (curated CORE_MODULES, ~5,521 B)
-    // then catches. Pinning the factories as the sole importers is the
+    // then catches. Pinning the factories as the sole RUNTIME importers is the
     // unit-level complement: signals cannot leak into any other module (and
-    // thence into core) without tripping this test.
+    // thence into core) without tripping this test. `index.ts` is the barrel's
+    // own first-party re-export (Task 1) and is excluded from CORE_MODULES by
+    // the size probe, so it is a third legitimate value-importer here. A
+    // type-only `ReadonlySignal` import (the public read type, held by several
+    // rendering/data modules) is erased at build and does not count.
     const importers = sourceModules().filter((rel) =>
-      reads(rel, "'@preact/signals'")
+      importsSignalValuesAtRuntime(rel)
     );
     expect(importers.sort()).toEqual([
+      'index.ts',
       'internal/loader-signal.ts',
       'internal/roster-signal.ts',
     ]);
   });
 
-  it('the rendering helpers are pure Preact (no @preact/signals import)', () => {
-    expect(reads('for.tsx', "'@preact/signals'")).toBe(false);
-    expect(reads('show.tsx', "'@preact/signals'")).toBe(false);
+  it('the rendering helpers are pure Preact (no @preact/signals runtime import)', () => {
+    expect(importsSignalValuesAtRuntime('for.tsx')).toBe(false);
+    expect(importsSignalValuesAtRuntime('show.tsx')).toBe(false);
   });
 });

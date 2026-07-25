@@ -1,11 +1,5 @@
+import type { ReadonlySignal } from '@preact/signals';
 import type { PresenceMember } from './room-envelope.js';
-
-/**
- * A value that can be read reactively. A `Signal` satisfies this shape
- * structurally, which is how the data-layer modules stay decoupled from the
- * `@preact/signals` API surface at the type level.
- */
-export type ReadonlyReactive<T> = { readonly value: T };
 
 /**
  * The internal contract for a room's roster, backed by the signal-based
@@ -22,13 +16,13 @@ export type RosterStore<S> = {
   /** Remove one member. */
   leave(id: string): void;
   /** Membership ids; changes on join/leave only. */
-  readonly memberIds: ReadonlyReactive<readonly string[]>;
+  readonly memberIds: ReadonlySignal<readonly string[]>;
   /** The whole roster as one reactive array. Reading it subscribes to every
    * member, so a coarse `members` consumer updates on any change; `useRoom`
    * exposes it as the `members` result field. */
-  readonly members: ReadonlyReactive<ReadonlyArray<PresenceMember<S>>>;
+  readonly members: ReadonlySignal<ReadonlyArray<PresenceMember<S>>>;
   /** One member's entry; changes only when THAT member changes. */
-  member(id: string): ReadonlyReactive<PresenceMember<S> | undefined>;
+  member(id: string): ReadonlySignal<PresenceMember<S> | undefined>;
   /** Release retained reactive state. Called from `useRoom`'s effect cleanup. */
   dispose(): void;
 };
@@ -40,5 +34,5 @@ export type RosterStore<S> = {
  */
 export type PhaseCell<T> = {
   set(value: T): void;
-  readonly source: ReadonlyReactive<T>;
+  readonly source: ReadonlySignal<T>;
 };

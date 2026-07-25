@@ -93,7 +93,7 @@ describe('<Show>', () => {
     const real = signal(true);
     const count = signal(0);
     let showReads = 0;
-    // A custom ReadonlyReactive whose getter counts <Show> renders (it reads
+    // A custom ReadonlySignal-shaped object whose getter counts <Show> renders (it reads
     // `when.value` exactly once per render) and subscribes <Show> to `real`
     // (the real signal is read inside the getter). This is the <Show> analogue
     // of the `by` spy used for <For>: a non-invasive re-render detector through

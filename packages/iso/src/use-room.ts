@@ -17,7 +17,8 @@ import type {
   ReconnectOptions,
 } from './internal/ws-lifecycle.js';
 import { createSignalRoster } from './internal/roster-signal.js';
-import type { ReadonlyReactive, RosterStore } from './internal/reactive.js';
+import type { RosterStore } from './internal/reactive.js';
+import type { ReadonlySignal } from '@preact/signals';
 
 // Re-export the shared lifecycle types so consumers can name them off useRoom.
 export type { SocketStatus, SocketCloseInfo, ReconnectOptions };
@@ -115,7 +116,7 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
   members: ReadonlyArray<PresenceMember<State<R> | undefined>>;
   /** Membership ids as a reactive value; changes on join/leave only. Read
    * `.value`. */
-  memberIds: ReadonlyReactive<readonly string[]>;
+  memberIds: ReadonlySignal<readonly string[]>;
   /** One member's entry as a reactive value. `.value` changes only when THAT
    * member's presence changes, so a row bound to `member(id)` re-renders alone.
    * Read `.value` in render, and only for ids currently in `memberIds`: a
@@ -124,7 +125,7 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
    * `memberIds.value.map(...)` pattern does). */
   member: (
     id: string
-  ) => ReadonlyReactive<PresenceMember<State<R> | undefined> | undefined>;
+  ) => ReadonlySignal<PresenceMember<State<R> | undefined> | undefined>;
   /** This client's own roster entry, derived from the snapshot `self` id. */
   self?: PresenceMember<State<R> | undefined>;
   status: SocketStatus;

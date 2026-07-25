@@ -25,7 +25,7 @@ import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
 import type { ServerCaller } from './server-caller.js';
 import { derive } from './internal/loader-signal.js';
-import type { ReadonlyReactive } from './internal/reactive.js';
+import type { ReadonlySignal } from '@preact/signals';
 export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
 /**
@@ -194,16 +194,13 @@ export interface LoaderRef<T, Live extends boolean = false> {
    * `never` on a streaming loader (its status is separate state). */
   useDataSignal: Live extends true
     ? never
-    : () => ReadonlyReactive<LoaderState<Serialize<T>>>;
+    : () => ReadonlySignal<LoaderState<Serialize<T>>>;
   /** A reactive projection of one field of the loaded data. Read `.value` in
    * render. `fallback` is returned while loading. `never` on a streaming
    * loader. */
   useFieldSignal: Live extends true
     ? never
-    : <R>(
-        select: (data: Serialize<T>) => R,
-        fallback: R
-      ) => ReadonlyReactive<R>;
+    : <R>(select: (data: Serialize<T>) => R, fallback: R) => ReadonlySignal<R>;
   useError(): Error | null;
   invalidate(): void;
   /**
@@ -571,7 +568,7 @@ function makeLoaderRef(
   // Shared body for `useDataSignal` / `useFieldSignal` (the latter derives off
   // the former's reactive). A plain local fn rather than a `this` call keeps
   // the object literal's method typing simple and avoids an `as any` on `this`.
-  function readDataSignal(): ReadonlyReactive<LoaderState<unknown>> {
+  function readDataSignal(): ReadonlySignal<LoaderState<unknown>> {
     if (isStreaming) {
       throw new Error(
         'This is a streaming loader: useDataSignal() / useFieldSignal() are single-value only; consume it via `loader.View(render, { initial, reduce })`.'
@@ -587,12 +584,10 @@ function makeLoaderRef(
     // `{ value: unknown }` so core names no signal shape; at runtime, for a
     // single-value loader, its value is a `LoaderState | null` (null only on a
     // cold error, which never reaches a mounted child). Treat null as loading.
-    const source = ctx as ReadonlyReactive<LoaderState<unknown> | null>;
+    const source = ctx as ReadonlySignal<LoaderState<unknown> | null>;
     // `source` is a single stable signal; memoize the derived reactive so a
     // binding does not resubscribe each render.
-    const stateRef = useRef<ReadonlyReactive<LoaderState<unknown>> | null>(
-      null
-    );
+    const stateRef = useRef<ReadonlySignal<LoaderState<unknown>> | null>(null);
     if (stateRef.current === null) {
       stateRef.current = derive(source, (s) => s ?? { status: 'loading' });
     }
@@ -656,7 +651,7 @@ function makeLoaderRef(
     },
     useFieldSignal<R>(select: (data: unknown) => R, fallback: R) {
       const state = readDataSignal();
-      const ref = useRef<ReadonlyReactive<R> | null>(null);
+      const ref = useRef<ReadonlySignal<R> | null>(null);
       const project = (s: LoaderState<unknown>): R =>
         s.status === 'loading' ? fallback : select(s.data);
       // Memoize the derived projection so the binding is stable; `select` /
