@@ -1,10 +1,10 @@
-import { signal } from '@preact/signals';
+import { signal, useComputed } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 
 /**
  * A settable module-store cell backed by a signal. The store module writes via
- * `set`; consumers read the `readonly` signal (directly, or through a memoized
- * `useComputed` projection). This is the sanctioned `@preact/signals` importer
+ * `set`; consumers read the `readonly` signal (directly, or through a
+ * `useStoreValue` projection). This is the sanctioned `@preact/signals` importer
  * for the action / form / optimistic stores, so those store modules stay free
  * of a direct `@preact/signals` value import (the module-graph guard).
  */
@@ -21,4 +21,16 @@ export function createStoreSignal<T>(initial: T): StoreSignal<T> {
       s.value = value;
     },
   };
+}
+
+/**
+ * A component-scoped reactive projection of store signals: read any store
+ * `.value`s inside `project` and this returns a `ReadonlySignal<R>` that a
+ * binding tracks, so a consumer updates on a store change without the host
+ * re-rendering. Routing store reads through this keeps the consumer hooks
+ * (`useActionResult`, `useFormStatus`, ...) free of a direct `@preact/signals`
+ * value import, so `@preact/signals` stays confined to the factory modules.
+ */
+export function useStoreValue<R>(project: () => R): ReadonlySignal<R> {
+  return useComputed(project);
 }

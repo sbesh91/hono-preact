@@ -1,5 +1,4 @@
 import { useContext } from 'preact/hooks';
-import { useComputed } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 import { ActionResultContext } from './action-result-context.js';
 import {
@@ -7,6 +6,7 @@ import {
   pickLastActionResult,
   type StoredActionResult,
 } from './internal/action-result-store.js';
+import { useStoreValue } from './internal/store-signal.js';
 import { isBrowser } from './is-browser.js';
 import type { ActionRef } from './action.js';
 import type { Serialize } from './internal/serialize.js';
@@ -86,7 +86,7 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   stub?: ActionRef<TPayload, TResult, never>
 ): ReadonlySignal<ActionResult<TPayload, TResult>> {
   const ssr = useContext(ActionResultContext);
-  return useComputed(() => {
+  return useStoreValue(() => {
     const client = isBrowser()
       ? pickLastActionResult(lastActionResultSignal.value, stub)
       : null;
