@@ -57,16 +57,19 @@ describe('signals are the always-on data layer', () => {
     expect(reads('internal/reactive.ts', 'getLoaderReactiveImpl')).toBe(false);
   });
 
-  it('@preact/signals enters the graph ONLY through the two factory modules (core stays signals-free)', () => {
+  it('@preact/signals enters the graph ONLY through the factory modules (core stays signals-free)', () => {
     // The always-loaded core reaches @preact/signals only if it imports one of
     // the factory modules, which the size probe (curated CORE_MODULES, ~5,521 B)
     // then catches. Pinning the factories as the sole RUNTIME importers is the
     // unit-level complement: signals cannot leak into any other module (and
     // thence into core) without tripping this test. `index.ts` is the barrel's
     // own first-party re-export (Task 1) and is excluded from CORE_MODULES by
-    // the size probe, so it is a third legitimate value-importer here. A
+    // the size probe, so it is a legitimate value-importer here too. A
     // type-only `ReadonlySignal` import (the public read type, held by several
     // rendering/data modules) is erased at build and does not count.
+    // `internal/store-signal.ts` is the sanctioned importer for the action /
+    // form / optimistic stores (Phase 3): those store modules read/write
+    // through `createStoreSignal` and never import `@preact/signals` directly.
     const importers = sourceModules().filter((rel) =>
       importsSignalValuesAtRuntime(rel)
     );
@@ -74,6 +77,7 @@ describe('signals are the always-on data layer', () => {
       'index.ts',
       'internal/loader-signal.ts',
       'internal/roster-signal.ts',
+      'internal/store-signal.ts',
     ]);
   });
 
