@@ -45,6 +45,14 @@ export type LoaderStreamValue = {
   chunks: ReadonlySignal<readonly unknown[]>;
   status: ReadonlySignal<StreamStatus>;
   error: ReadonlySignal<Error | null>;
+  /**
+   * Monotonic generation counter, bumped on every fresh subscription (initial
+   * mount or a reload). `useData`'s live arm threads this into `foldStream` so
+   * a fold created before a reset detects the reset and refolds the new
+   * stream from scratch, instead of stale-continuing onto the prior stream's
+   * accumulator.
+   */
+  epoch: ReadonlySignal<number>;
 };
 export const LoaderStreamContext = createContext<LoaderStreamValue | null>(
   null

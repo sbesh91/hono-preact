@@ -196,6 +196,10 @@ export interface LoaderRef<T, Live extends boolean = false> {
    *
    * Either form: read `.value` in render; a binding updates without the
    * loader host re-rendering. Called inside a `<Loader>` / `.View` host.
+   *
+   * The live arm memoizes the FIRST render's `reduce`/`initial` (like the
+   * single-value arm memoizes its derived signal): a fresh inline `reduce` or
+   * `initial` passed on a later render of the same call site is not re-read.
    */
   useData: Live extends true
     ? <Acc>(
@@ -594,6 +598,7 @@ function makeLoaderRef(
         ctx.chunks,
         ctx.status,
         ctx.error,
+        ctx.epoch,
         initial,
         reduce
       );

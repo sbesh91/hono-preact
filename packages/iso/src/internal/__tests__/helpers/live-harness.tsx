@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../../../define-loader.js';
 import { Loader } from '../../loader.js';
+import { useReload } from '../../../reload-context.js';
 
 let harnessCounter = 0;
 
@@ -55,6 +56,16 @@ export function makeLiveLoaderHarness<T>() {
     live: true,
   });
 
+  // Captured from inside the tree so `reload()` below can drive the SAME
+  // `useReload()` a real consumer would call, exercising the real resubscribe
+  // path (`requestReload` -> `runReload` -> `subscribeCollect` ->
+  // `resetCollectSignals`) rather than reaching into internals.
+  let capturedReload: (() => void) | null = null;
+  function ReloadCapture() {
+    capturedReload = useReload().reload;
+    return null;
+  }
+
   function Host({ children }: { children: ComponentChildren }) {
     return (
       <LocationProvider>
@@ -63,6 +74,7 @@ export function makeLiveLoaderHarness<T>() {
           collect
           location={{ path: '/', pathParams: {}, searchParams: {} } as never}
         >
+          <ReloadCapture />
           {children}
         </Loader>
       </LocationProvider>
@@ -88,10 +100,28 @@ export function makeLiveLoaderHarness<T>() {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
+  /**
+   * Drive a reload through the SAME `useReload()` a real consumer under the
+   * host would call (captured via `<ReloadCapture>`, mounted inside `<Host>`).
+   * Runs the real resubscribe path: `requestReload` -> `runReload` ->
+   * `subscribeCollect` -> `resetCollectSignals` -> a fresh `fetch()` call
+   * (so `push` after this lands on the NEW connection, not the old one).
+   */
+  async function reload(): Promise<void> {
+    if (!capturedReload) {
+      throw new Error(
+        'makeLiveLoaderHarness: reload() called before <Host> mounted (no useReload() captured yet).'
+      );
+    }
+    capturedReload();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
   return {
     Host,
     loader,
     push,
+    reload,
     subscriptionCount: () => subscriptions,
   };
 }

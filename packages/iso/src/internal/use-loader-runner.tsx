@@ -55,6 +55,8 @@ export type CollectState = {
   chunks: ReadonlySignal<readonly unknown[]>;
   status: ReadonlySignal<StreamStatus>;
   error: ReadonlySignal<Error | null>;
+  /** See `LoaderStreamValue.epoch` / `CollectSignals.epoch`. */
+  epoch: ReadonlySignal<number>;
 };
 
 export type LoaderRunnerState<T> = {
@@ -173,6 +175,16 @@ export function useLoaderRunner<T>(
   // `staleError` (keeps that value visible, stale-while-error); otherwise it is a
   // cold `error` (no value, routes to the boundary). No `?? session.sync.value`
   // value-presence test.
+  //
+  // This is ALSO how a collect-mode COLD connect error (one that rejects
+  // before the first chunk) reaches the host: `phase` never carries a chunk
+  // value in collect-mode (chunks fold only into the `collect` signals
+  // `useData()` reads, never into `phase`), so this always lands on the cold
+  // `error` tag, and `loader.tsx` routes it exactly like a single-value
+  // loader's cold error (`errorFallback` / an outer boundary), NOT in-view via
+  // `useData()`'s `StreamState`. A MID-stream collect error is different: it
+  // never reaches this function (`subscribeCollect`'s own `onError` calls
+  // `setCollectError` directly), so it stays in-view without touching `phase`.
   const setError = (err: unknown) => {
     const error = toError(err);
     setPhase((p) => {
