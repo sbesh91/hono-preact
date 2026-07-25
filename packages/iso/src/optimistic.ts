@@ -121,12 +121,19 @@ export function useOptimistic<TBase, TPayload>(
     queue.set([...queue.signal.value, { id, payload, status: 'active' }]);
     return {
       settle: () => {
-        const current = queue.signal.value;
-        const entry = current.find((e) => e.id === id);
+        const entry = queue.signal.value.find((e) => e.id === id);
         if (entry && entry.status === 'active') {
           runWithTransition(() => {
+            // Read FRESH inside the mutator (as `revert` does). With
+            // `transition: true` the mutator runs >=1 frame later, so a queue
+            // snapshot taken here at call time would clobber anything enqueued
+            // in between -- and two settles racing in the same frame would each
+            // write the other's entry back to `active`, stranding it forever
+            // (the base-change eviction above only drops `ready` entries).
             queue.set(
-              current.map((e) => (e.id === id ? { ...e, status: 'ready' } : e))
+              queue.signal.value.map((e) =>
+                e.id === id ? { ...e, status: 'ready' } : e
+              )
             );
           });
         }
