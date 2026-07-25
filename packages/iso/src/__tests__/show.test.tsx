@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/preact';
-import { signal } from '@preact/signals';
+import { signal, type ReadonlySignal } from '@preact/signals';
 import { Show } from '../show.js';
 
 afterEach(cleanup);
@@ -93,17 +93,19 @@ describe('<Show>', () => {
     const real = signal(true);
     const count = signal(0);
     let showReads = 0;
-    // A custom ReadonlySignal-shaped object whose getter counts <Show> renders (it reads
-    // `when.value` exactly once per render) and subscribes <Show> to `real`
-    // (the real signal is read inside the getter). This is the <Show> analogue
-    // of the `by` spy used for <For>: a non-invasive re-render detector through
-    // the public `when` prop.
+    // A getter that counts <Show> renders (it reads `when.value` exactly once
+    // per render) and subscribes <Show> to `real` (the real signal is read
+    // inside the getter). This is the <Show> analogue of the `by` spy used for
+    // <For>: a non-invasive re-render detector through the public `when` prop.
+    // Cast to ReadonlySignal because this is a deliberate test instrument: a
+    // real signal's `.value` getter cannot be wrapped to count reads, so we
+    // stand in a minimal read-counting shim (Show only reads `.value`).
     const when = {
       get value() {
         showReads++;
         return real.value;
       },
-    };
+    } as unknown as ReadonlySignal<boolean>;
     render(
       <Show when={when}>
         {() => <span data-testid="c">{count.value}</span>}
