@@ -46,15 +46,17 @@ The returned object is stub-compatible: pass it to `<Form action={addMovie}>` fo
 
 ### Options
 
-| Option       | Type                             | Description                                                                                       |
-| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `base`       | `TBase`                          | The base value (typically loader data) the projection layers over                                 |
-| `apply`      | `(current, payload) => TBase`    | Reducer that produces the next projection                                                         |
-| `invalidate` | `'auto' \| LoaderRef<unknown>[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed (see below).        |
-| `onSuccess`  | `(data) => void`                 | Called after a successful mutation. Snapshot is internal; not exposed here.                       |
-| `onError`    | `(err) => void`                  | Called after a failed mutation. The optimistic entry is reverted automatically before this fires. |
+| Option       | Type                             | Description                                                                                             |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `base`       | `TBase`                          | The base value (typically loader data) the projection layers over. Pass a stable reference (see below). |
+| `apply`      | `(current, payload) => TBase`    | Reducer that produces the next projection                                                               |
+| `invalidate` | `'auto' \| LoaderRef<unknown>[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed (see below).              |
+| `onSuccess`  | `(data) => void`                 | Called after a successful mutation. Snapshot is internal; not exposed here.                             |
+| `onError`    | `(err) => void`                  | Called after a failed mutation. The optimistic entry is reverted automatically before this fires.       |
 
 Other `useAction` options (`onChunk`) pass through.
+
+`base` must be a stable reference across renders (the real data itself). The projection tracks it reactively, so a value built fresh on every render, an inline `?? []` when the loader field is missing, an inline `.filter(...)`, or a spread, re-derives the projection every render and, because your component binds the returned value, re-renders in a loop. Give the loader field a stable empty default, or memoize the expression, before passing it.
 
 ### Why no `invalidate: false`?
 
@@ -80,7 +82,7 @@ const Movies = ({ loaderData }) => {
 
   return (
     <ul>
-      {movies.map((m) => (
+      {movies.value.map((m) => (
         <li key={m.id}>{m.title}</li>
       ))}
     </ul>
@@ -88,7 +90,7 @@ const Movies = ({ loaderData }) => {
 };
 ```
 
-`addOptimistic(payload)` appends a queue entry and returns an `OptimisticHandle`:
+`movies` is a `ReadonlySignal<TBase>`; read `.value` to get the current projection. `addOptimistic(payload)` appends a queue entry and returns an `OptimisticHandle`:
 
 ```ts
 type OptimisticHandle = {

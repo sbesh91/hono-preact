@@ -235,7 +235,7 @@ const CommentsSection: FunctionComponent<{
       return [...current, optimistic];
     },
   });
-  const { pending } = useFormStatus(serverActions.addComment);
+  const { pending } = useFormStatus(serverActions.addComment).value;
 
   // Live draft preview over the route-bound duplex socket. The params are
   // required by the binding and validated at the upgrade; the upgrade also

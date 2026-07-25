@@ -55,7 +55,7 @@ const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [status, setStatus] = useState<TaskStatus>('backlog');
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
-  const { pending } = useFormStatus(serverActions.createTask);
+  const { pending } = useFormStatus(serverActions.createTask).value;
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>

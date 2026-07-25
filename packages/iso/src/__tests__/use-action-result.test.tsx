@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/preact';
+import { render, screen, act, cleanup } from '@testing-library/preact';
 import { ActionResultContext } from '../action-result-context.js';
 import { useActionResult } from '../use-action-result.js';
 import {
@@ -10,7 +10,7 @@ import {
 
 function Reader({ stub }: { stub?: { __module: string; __action: string } }) {
   const r = useActionResult(stub as never);
-  return <pre>{JSON.stringify(r)}</pre>;
+  return <pre>{JSON.stringify(r.value)}</pre>;
 }
 
 afterEach(() => {
@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('useActionResult', () => {
-  it('returns null when no provider', () => {
+  it('returns a ReadonlySignal that is null when no provider', () => {
     const { container } = render(<Reader />);
     expect(container.textContent).toBe('null');
   });
@@ -144,5 +144,40 @@ describe('useActionResult', () => {
     const parsed = JSON.parse(container.textContent!);
     expect(parsed.kind).toBe('success');
     expect(parsed.data).toEqual({ fromClient: true });
+  });
+
+  it('granularity: a binding that reads `.value` updates without the host re-rendering', async () => {
+    const stub = { __module: 'pages/foo.server', __action: 'submit' };
+    const renders = { host: 0, binding: 0 };
+
+    function Binding() {
+      renders.binding++;
+      const result = useActionResult(stub as never);
+      return <pre data-testid="binding">{JSON.stringify(result.value)}</pre>;
+    }
+    function Host() {
+      renders.host++;
+      return <Binding />;
+    }
+
+    render(<Host />);
+    expect(screen.getByTestId('binding').textContent).toBe('null');
+    const hostBefore = renders.host;
+
+    await act(async () => {
+      setLastActionResult('pages/foo.server', 'submit', {
+        kind: 'success',
+        data: { ok: true },
+        submittedPayload: null,
+      });
+    });
+
+    // The binding picked up the fresh value...
+    expect(JSON.parse(screen.getByTestId('binding').textContent)).toMatchObject(
+      { kind: 'success', data: { ok: true } }
+    );
+    // ...but the HOST never re-rendered: only the signal-subscribed leaf did
+    // (Preact's per-component signal tracking, not a top-down re-render).
+    expect(renders.host).toBe(hostBefore);
   });
 });

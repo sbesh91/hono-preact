@@ -60,7 +60,16 @@ export function useOptimisticAction<TPayload, TResult, TBase, TChunk = never>(
 ): UseOptimisticActionResult<TPayload, TResult, TBase> {
   const { base, apply, onSuccess, onError, transition, ...actionOpts } =
     options;
-  const [value, addOptimistic] = useOptimistic(base, apply, { transition });
+  // `useOptimistic` returns a `ReadonlySignal<TBase>` (Phase 3). Reading
+  // `.value` here, during this hook's render, subscribes the calling
+  // component to the signal (Preact's signals integration auto-tracks any
+  // `.value` read in a function component's render), so
+  // `UseOptimisticActionResult.value` stays a plain `TBase` snapshot that
+  // re-renders the host on change, same as before the signal conversion.
+  const [valueSignal, addOptimistic] = useOptimistic(base, apply, {
+    transition,
+  });
+  const value = valueSignal.value;
 
   const action = useAction<TPayload, TResult, TChunk, OptimisticHandle>(stub, {
     ...actionOpts,

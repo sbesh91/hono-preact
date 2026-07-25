@@ -46,17 +46,19 @@
    const action = serverActions.default;
 
    export function SignupForm() {
-     const { pending } = useFormStatus(action);
+     const status = useFormStatus(action);
      const result = useActionResult(action);
      const error =
-       result?.kind === 'deny' || result?.kind === 'error' ? result.message : null;
+       result.value?.kind === 'deny' || result.value?.kind === 'error'
+         ? result.value.message
+         : null;
 
      return (
        <Form action={action}>
          <input name="email" type="email" required />
          {error && <p role="alert">{error}</p>}
-         <button type="submit" disabled={pending}>
-           {pending ? 'Submitting...' : 'Submit'}
+         <button type="submit" disabled={status.value.pending}>
+           {status.value.pending ? 'Submitting...' : 'Submit'}
          </button>
        </Form>
      );

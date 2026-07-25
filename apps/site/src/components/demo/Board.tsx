@@ -96,7 +96,7 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
     doPatch(taskId, { status: to })
   );
 
-  const columns = groupTasks(visibleTasks);
+  const columns = groupTasks(visibleTasks.value);
   const userById = new Map(users.map((u) => [u.id, u] as const));
 
   // FLIP: when the optimistic patch reorders cards, glide each card whose slot
@@ -152,7 +152,7 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
       card.style.transform = '';
     }
     flipUntil.current = performance.now() + 240; // ~transition duration + margin
-  }, [visibleTasks]);
+  }, [visibleTasks.value]);
 
   return (
     <div ref={boardRef} class="grid grid-cols-4 gap-3 overflow-x-auto p-4">

@@ -52,7 +52,8 @@ import { ActiveLoaderIdContext } from '../internal/contexts.js';
 import type { ActionRef, MutateResult } from '../action.js';
 import type { Serialize } from '../internal/serialize.js';
 import { defineLoader } from '../define-loader.js';
-import { subscribe } from '../internal/form-submit-store.js';
+import { effect } from '@preact/signals';
+import { pendingSignal } from '../internal/form-submit-store.js';
 import {
   getLastActionResult,
   clearLastActionResult,
@@ -564,7 +565,10 @@ describe('useAction', () => {
 
   it('toggles the submit store around the fetch', async () => {
     const observed: boolean[] = [];
-    const unsub = subscribe(() => {
+    // `effect` fires once immediately (the initial run) plus once per
+    // `pendingSignal` write; beginSubmit/endSubmit each write a fresh Map.
+    const unsub = effect(() => {
+      pendingSignal.value;
       observed.push(true);
     });
 
