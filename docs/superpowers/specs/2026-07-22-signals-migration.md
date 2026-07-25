@@ -1,11 +1,13 @@
 # Signals migration (umbrella)
 
-Date: 2026-07-22 (Phase 5 recorded 2026-07-24)
-Status: In progress. Phases 0-2 and Phase 5 shipped on this branch. Phase 5
-made signals the always-on data-layer opinion, which re-opens Phase 3 (now
-viable on that foundation) and keeps Phase 4 as the DX follow-on; both stack on
-top of Phase 5, out of order. This branch is the single PR to `main`, held open
-until the owner is comfortable with the whole signals transition.
+Date: 2026-07-22 (Phase 4 recorded 2026-07-24)
+Status: In progress. Phases 0-2, Phase 5, and Phase 4 shipped on this branch.
+Phase 5 made signals the always-on data-layer opinion; Phase 4 added the keyed
+`<For>` / `<Show>` rendering helpers on that foundation. Remaining: Phase 3
+(store conversion, re-opened by Phase 5) and the streaming-loader signals split
+out of Phase 4, both stacking on top, out of order. This branch is the single PR
+to `main`, held open until the owner is comfortable with the whole signals
+transition.
 Branch: `feat/signals-migration`
 
 This is the charter for the signals-first migration. The work ships as **one
@@ -36,7 +38,8 @@ Ordered by payoff-to-risk. Each is a stacked sub-PR into this branch.
 | 1 | Presence roster as keyed signals (`memberIds` / `member(id)` on `useRoom`). Positioning DROPPED (see below). | #343 | shipped (in this PR) |
 | 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | #344 | shipped (in this PR) |
 | 3 | Optimistic queue and the action/form stores; per-field form errors. Delete `use-store-snapshot` / `use-force-update`. | | re-opened by Phase 5 (see below); stacks on top |
-| 4 | Signals DX: primitive rendering helpers (a keyed `<For>`, and other ergonomics), plus streaming-loader signals as the follow-on to Phase 2. | | roadmap; stacks on top of Phase 5 |
+| 4 | Signals DX: keyed `<For>` / `<Show>` rendering helpers (per-row component boundary; atomicity proven). Streaming-loader signals split out (see below). | #346 | shipped (in this PR) |
+| 4b | Streaming-loader signals (was Phase 4 Part B): a signal read channel for live loaders. | | future; needs the accumulator-typing design |
 | 5 | Signals as the always-on data layer: delete the opt-in seam and the `hono-preact/signals` subpath; loaders and rooms are signal-backed with no opt-in import. | #345 | shipped (in this PR) |
 
 **Phase 3 dropped (recorded 2026-07-24).** Assessment before starting it: the
@@ -67,18 +70,27 @@ keep signals off the always-loaded path) rather than paying to keep them. The
 per-field form-error granularity (splitting the single `FieldErrorsMap` context)
 becomes worthwhile on the same foundation. Phase 3 stacks on top of Phase 5.
 
-**Deferred to Phase 4 (recorded 2026-07-24).** Phase 1's granular presence ships
-with the keyed `.map` consumption pattern
-(`memberIds.value.map((id) => <Row sig={member(id)} />)`), which is granular on
-the frequent case (a presence UPDATE re-renders only the moved row) but coarse
-on membership change (a join/leave re-renders the mapping consumer and its rows,
-keyed reconciliation aside). A Solid-style `<For each={memberIds}>` would make
-join/leave granular too by subscribing to the list internally and diffing by key
-without re-rendering the parent. It was shown in an early Phase 1 API option but
-dropped from the shipped design to keep the surface small; that tradeoff is now
-owned, and the helper is deferred to a dedicated DX phase rather than bolted onto
-Phase 1. Phase 4 is also the home for the streaming-loader signals Phase 2
-leaves out (Phase 2 is single-value only).
+**Phase 4: signal rendering helpers (shipped, #346).** Phase 1's granular
+presence shipped with the keyed `.map` consumption pattern
+(`memberIds.value.map((id) => <Row sig={member(id)} />)`), granular on a presence
+update but coarse on membership change (a join/leave re-renders the mapping
+consumer and its rows). Phase 4 adds a Solid-style `<For each={memberIds}>` that
+closes that gap: it caches each row by key so a join/leave reconciles by key
+without re-rendering survivors, and runs each row inside a per-row component
+boundary (the Preact-core `Item` / useRenderer pattern) so a signal read in the
+child (inline or nested) subscribes that row and re-renders it alone. `<Show>` is
+the conditional companion. Both are pure Preact (they read `.value` for ambient
+auto-subscribe and import no `@preact/signals`, so the module-graph guard holds),
+and atomicity is proven (a per-row / child signal re-renders only its own
+component, not `<For>` / `<Show>`). `signal.map()` was dropped (it would need a
+`Signal`-prototype monkey-patch). See `2026-07-24-signals-dx-design.md`.
+
+The streaming-loader signals originally grouped here (a signal read channel for
+live loaders) were **split into Phase 4b**: design review found the accumulator
+type is chosen at the consumption site (the reducer), so a read-side
+`useDataSignal()` cannot statically type it. That is a real API-design question,
+deferred to its own spec rather than shipped as a type lie. The host plumbing
+already exists, so 4b is a type/API problem, not a wiring one.
 
 Positioning (`use-position.ts`), grouped into Phase 1 by the investigation,
 was dropped: verification showed it already writes x/y straight to the DOM in
@@ -116,6 +128,7 @@ adds. Updated as phases land.
 | Phase 0 | 4914 (+3) | loaders +258 B | structural, parameter passing over closure capture |
 | Phase 1 | 5519 unchanged | realtime +~65 B | the signal-mode branch + lazy getters in `useRoom` |
 | Phase 5 | 5521 unchanged | realtime 2261 B, loaders 10215 B (marginal) | seam removed; the `signals` opt-in bucket is gone, its glue folded into the two feature buckets |
+| Phase 4 | 5521 unchanged | signals-dx 307 B (marginal) | pure-Preact `<For>` / `<Show>`; a new tree-shakeable bucket, imports no `@preact/signals` |
 
 (The core number rebased across phases as `origin/main` advanced; what matters
 is that each phase leaves core unchanged.) Through Phase 2 the signal glue was
