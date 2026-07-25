@@ -34,7 +34,7 @@ For byte-level piping (e.g. forwarding a server-sent event feed without parsing)
 
 ### Consumer shape
 
-A streaming loader (its fn is an `async function*`) has the type `LoaderRef<T, true>`, so it is consumed with the accumulating `loader.View(render, { initial, reduce })` form only. `reduce` folds each yielded chunk into an accumulated value seeded by `initial`; the render function receives a `StreamState<Acc>` discriminated union you switch on (`connecting | open | closed | error`). The single-value `.View(render)` form and `loader.useData()` are not available on a streaming loader (it has no single value), so the wrong form is a compile error. `reload` is read via `useReload()`.
+A streaming loader (its fn is an `async function*`) has the type `LoaderRef<T, true>`, so it is consumed with the accumulating `loader.View(render, { initial, reduce })` form, or with `loader.useData(initial, reduce)` (same reducer shape) inside `loader.Boundary` for descendants that fold the stream independently. Both forms fold each yielded chunk into an accumulated value seeded by `initial` and expose a `StreamState<Acc>` discriminated union you switch on (`connecting | open | closed | error`). The single-value `.View(render)` form (no `reduce`) and the argument-free `.useData()` are not available on a streaming loader (it has no single value), so the wrong form is a compile error. `reload` is read via `useReload()`.
 
 For a dashboard that shows the **latest** snapshot, the accumulator is just that snapshot (`reduce` replaces it each chunk):
 

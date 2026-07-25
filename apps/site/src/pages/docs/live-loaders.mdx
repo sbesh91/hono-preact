@@ -115,7 +115,7 @@ Persistent UI is expressed as a child of a layout. A layout stays mounted across
 
 Two pieces of the same loader API drive this pattern:
 
-- `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form. The single-value `.View(render)` form, `.useData()`, and `.Boundary` are not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
+- `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form, or with `loader.useData(initial, reduce)` inside `loader.Boundary` (collect-mode; see [Server Loaders](/docs/loaders#loaderusedata-and-loaderboundary)) for descendants that fold the same stream independently. The single-value `.View(render)` form (no `reduce`) is not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
 - `loader.View(render, { initial, reduce })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state, and the render function receives a `StreamState<Acc>` discriminated union to match on `status`. `status === 'connecting'` on SSR and before the first chunk arrives (this arm carries no data); after the first chunk `status` is `'open'`, with the accumulator on `data`. Switch on `status` inside the render function to show a connecting affordance.
 
 ## On Cloudflare
@@ -220,6 +220,35 @@ The `connecting` arm declares `data?: never`, so `data` is readable on the un-na
 | `'open'`       | At least one chunk has arrived; the stream is active.         |
 | `'closed'`     | The generator returned normally; no more chunks are expected. |
 | `'error'`      | The stream errored. `error` holds the cause.                  |
+
+### `loader.useData(initial, reduce)` and `loader.Boundary` (collect-mode)
+
+`loader.Boundary` on a live loader hosts the stream in collect-mode: it renders its children eagerly and puts the raw chunk stream on context. Each descendant calls `loader.useData(initial, reduce)` with its own `reduce`, folding the same underlying subscription independently:
+
+```tsx
+function EventCount() {
+  const count = activityLoader.useData(0, (n) => n + 1);
+  return (
+    <span>{count.value.status === 'connecting' ? '-' : count.value.data}</span>
+  );
+}
+
+function LatestActor() {
+  const latest = activityLoader.useData('', (_prev, e) => e.actor);
+  return <span>{latest.value.data ?? 'waiting...'}</span>;
+}
+
+function ActivityHeader() {
+  return (
+    <activityLoader.Boundary>
+      <EventCount />
+      <LatestActor />
+    </activityLoader.Boundary>
+  );
+}
+```
+
+`useData(initial, reduce)` returns a `ReadonlySignal<StreamState<Acc>>`, the same discriminated union `.View`'s render function receives; read `.value` and switch on `.value.status`. A component that mounts after chunks have already arrived still folds the full retained log, so a late mount never misses earlier chunks. This is the same `.Boundary` + `useData` pattern the single-value form uses; see [Server Loaders](/docs/loaders#loaderusedata-and-loaderboundary).
 
 ### Type exports
 

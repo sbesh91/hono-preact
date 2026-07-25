@@ -82,6 +82,22 @@ const ALLOWLIST: Record<string, string> = {
     'ref-callback hook form; the demo uses the ViewTransitionName component (Board.tsx), whose groupClass prop is built on it',
   ViewTransitionGroup:
     'class-only wrapper is inert without a view-transition-name; the demo pairs names with groupClass via ViewTransitionName instead (#282 finding)',
+  signal:
+    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+  computed:
+    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+  effect:
+    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+  batch:
+    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+  untracked:
+    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+  useSignal:
+    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+  useComputed:
+    "@preact/signals primitive re-exported first-party (Phase 4); the docs show it projecting loader.useData(), but the demo's own components do not yet author a useComputed projection, deferred to site adoption at the umbrella release",
+  useSignalEffect:
+    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
 };
 
 function collectFiles(root: string): string[] {

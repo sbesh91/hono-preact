@@ -28,9 +28,7 @@ describe('loader signal under preact-render-to-string', () => {
     function View(): JSX.Element {
       const state = loader.useData();
       const t =
-        state.value.status === 'loading'
-          ? '(loading)'
-          : state.value.data.title;
+        state.value.status === 'loading' ? '(loading)' : state.value.data.title;
       return <h1>{t}</h1>;
     }
 

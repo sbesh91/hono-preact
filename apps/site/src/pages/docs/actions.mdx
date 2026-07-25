@@ -339,7 +339,7 @@ import { serverLoaders, serverActions } from './movies.server.js';
 const moviesLoader = serverLoaders.default;
 
 const Movies = () => {
-  const { data } = moviesLoader.useData();
+  const { data } = moviesLoader.useData().value;
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
     invalidate: 'auto',
     onSuccess: (result) => console.log('added', result),
@@ -458,7 +458,7 @@ Pass no argument to track any in-flight form submission on the page. Pass a spec
 Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
 
 ```tsx
-const { data } = moviesLoader.useData();
+const { data } = moviesLoader.useData().value;
 const initialMovies = data ? data.movies.results : [];
 const [items, setItems] = useState(initialMovies);
 
