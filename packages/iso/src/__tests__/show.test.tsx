@@ -88,4 +88,43 @@ describe('<Show>', () => {
     // Only the component that read `count` re-rendered.
     expect(renders).toEqual({ reader: 2, sibling: 1 });
   });
+
+  it('atomic render: a child-internal signal does NOT re-render <Show> itself', async () => {
+    const real = signal(true);
+    const count = signal(0);
+    let showReads = 0;
+    // A custom ReadonlyReactive whose getter counts <Show> renders (it reads
+    // `when.value` exactly once per render) and subscribes <Show> to `real`
+    // (the real signal is read inside the getter). This is the <Show> analogue
+    // of the `by` spy used for <For>: a non-invasive re-render detector through
+    // the public `when` prop.
+    const when = {
+      get value() {
+        showReads++;
+        return real.value;
+      },
+    };
+    render(
+      <Show when={when}>
+        {() => <span data-testid="c">{count.value}</span>}
+      </Show>
+    );
+    const afterMount = showReads;
+    expect(screen.getByTestId('c').textContent).toBe('0');
+
+    // A child-internal (inline) signal changes: the DOM updates, but <Show>
+    // must NOT re-render (the child runs inside its own ShowItem boundary).
+    await act(async () => {
+      count.value = 5;
+    });
+    expect(screen.getByTestId('c').textContent).toBe('5');
+    expect(showReads).toBe(afterMount);
+
+    // Positive control: toggling the condition DOES re-render <Show>, so the
+    // detector is real (a flat count above is meaningful, not vacuous).
+    await act(async () => {
+      real.value = false;
+    });
+    expect(showReads).toBeGreaterThan(afterMount);
+  });
 });
