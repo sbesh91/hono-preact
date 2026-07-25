@@ -18,7 +18,10 @@ import {
 } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
-import type { AccumulateOptions } from './internal/use-loader-runner.js';
+import {
+  resolveLoaderMode,
+  type AccumulateOptions,
+} from './internal/loader-mode.js';
 import { isLoaderState } from './loader-state.js';
 import type { LoaderState, StreamState } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
@@ -701,21 +704,17 @@ function makeLoaderRef(
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
     Boundary: (props) => {
-      // A streaming loader hosted WITHOUT `accumulate` runs in collect-mode:
-      // the host provides the raw chunk-log context and children fold it via
-      // `useData(initial, reduce)`. A streaming loader WITH `accumulate` is the
-      // fold-mode path `View` delegates here (it always passes the reducer).
-      // A single-value loader ignores both and provides its `LoaderState`.
-      const collect = isStreaming && !props.accumulate;
-      // Non-streaming + accumulate is valid on the server: `DataReader` keys the
-      // SSR projection on the consumption form (accumulate), so an accumulating
-      // consumer renders the `connecting` StreamState on the server, matching the
-      // client's first render (it reconnects on mount).
+      // The ONE place a host's mode is decided. `resolveLoaderMode` owns the
+      // three-way (and the order it tests in, which is load-bearing): with
+      // `accumulate` this is the fold-mode path `View` delegates here (it always
+      // passes the reducer) AND the non-streaming accumulating host, which is
+      // supported; without it, a streaming loader collects (the host provides
+      // the raw chunk-log context and children fold it via `useData(initial,
+      // reduce)`) and a single-value loader provides its `LoaderState`.
       return h(LoaderHost<unknown>, {
         loader: ref,
         errorFallback: props.errorFallback,
-        accumulate: props.accumulate,
-        collect,
+        mode: resolveLoaderMode(props.accumulate, isStreaming),
         children: props.children,
       });
     },
@@ -750,10 +749,10 @@ function makeLoaderRef(
           'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`.'
         );
       }
-      // Non-streaming + accumulate is valid on the server: `DataReader` keys the
-      // SSR projection on the consumption form (accumulate), so an accumulating
-      // consumer renders the `connecting` StreamState on the server, matching the
-      // client's first render (it reconnects on mount).
+      // `accumulate` is built ONCE per `View(...)` call, not per render, so its
+      // `initial`/`reduce` identities are fixed for the life of the returned
+      // component. That is what lets the runner's `useStableLoaderMode` hold the
+      // resolved fold mode stable across renders.
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
           errorFallback: viewOpts?.errorFallback,

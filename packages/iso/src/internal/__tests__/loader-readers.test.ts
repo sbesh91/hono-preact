@@ -24,8 +24,8 @@ function spyOps<T>(): LoaderPhaseOps<T> & { readonly log: string[] } {
     setStatus: (s) => log.push(`setStatus:${s}`),
     setError: () => log.push('setError'),
     applyChunk: () => log.push('applyChunk'),
-    subscribeAccumulate: () => {
-      log.push('subscribeAccumulate');
+    subscribeStream: () => {
+      log.push('subscribeStream');
       return new Promise<T>(() => {});
     },
   };
@@ -66,6 +66,7 @@ describe('buildLoaderReader: mode dispatch', () => {
       location: LOC,
       locKey: 'k',
       id: 'L1',
+      mode: { kind: 'single' },
     });
 
     expect(session.denyConsumed).toBe(true);
@@ -93,6 +94,7 @@ describe('buildLoaderReader: mode dispatch', () => {
       location: LOC,
       locKey: 'k2',
       id: 'L2',
+      mode: { kind: 'single' },
     });
 
     expect(session.preloadConsumed).toBe(true);
@@ -117,6 +119,7 @@ describe('buildLoaderReader: mode dispatch', () => {
       location: LOC,
       locKey: 'k3',
       id: 'L3',
+      mode: { kind: 'single' },
     });
 
     expect(session.sync).toEqual({ present: true, value: null });
@@ -139,6 +142,7 @@ describe('buildLoaderReader: mode dispatch', () => {
       location: LOC,
       locKey: 'k4',
       id: 'L4',
+      mode: { kind: 'single' },
     });
 
     expect(session.sync).toEqual({ present: true, value: { n: 42 } });
@@ -165,6 +169,7 @@ describe('buildLoaderReader: mode dispatch', () => {
       location: LOC,
       locKey: 'k5',
       id: 'L5',
+      mode: { kind: 'single' },
     });
 
     expect(session.inFlight).toBe(true);
@@ -189,10 +194,10 @@ describe('buildLoaderReader: mode dispatch', () => {
       location: LOC,
       locKey: 'k6',
       id: 'L6',
-      accumulate: { initial: { n: 0 }, reduce: (_a, c) => c },
+      mode: { kind: 'fold', initial: { n: 0 }, reduce: (_a, c) => c },
     });
 
-    expect(ops.log).toContain('subscribeAccumulate');
+    expect(ops.log).toContain('subscribeStream');
     expect(session.inFlight).toBe(true);
   });
 
@@ -217,6 +222,7 @@ describe('buildLoaderReader: mode dispatch', () => {
       location: LOC,
       locKey: 'k7',
       id: 'L7',
+      mode: { kind: 'single' },
     });
 
     expect(session.bakedDeny?.message).toBe('denied');

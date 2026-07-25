@@ -31,7 +31,7 @@ describe('useData (always-on signal cell)', () => {
     }
 
     render(
-      <Loader loader={loader} location={loc}>
+      <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
         <View />
       </Loader>
     );

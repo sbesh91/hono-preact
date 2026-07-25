@@ -35,7 +35,7 @@ describe('loader signal under preact-render-to-string', () => {
     }
 
     const html = await renderToStringAsync(
-      <Loader loader={loader} location={loc}>
+      <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
         <View />
       </Loader>
     );
@@ -59,7 +59,7 @@ describe('loader signal under preact-render-to-string', () => {
     }
 
     const html = await renderToStringAsync(
-      <Loader loader={loader} location={loc}>
+      <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
         <Peeker />
       </Loader>
     );

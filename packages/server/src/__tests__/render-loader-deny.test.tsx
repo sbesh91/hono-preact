@@ -151,7 +151,7 @@ describe('SSR loader deny boundary matrix', () => {
       <html>
         <body>
           <DenyingView />
-          <Loader loader={streaming} location={loc}>
+          <Loader mode={{ kind: 'single' }} loader={streaming} location={loc}>
             <p>streaming</p>
           </Loader>
         </body>

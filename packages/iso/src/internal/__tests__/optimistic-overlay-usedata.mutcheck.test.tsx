@@ -64,7 +64,7 @@ describe('P0-1 <OptimisticOverlay> projection reaches loader.useData()', () => {
     todoLoaderRef.current = loader;
 
     render(
-      <Loader loader={loader} location={loc}>
+      <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
         <OptimisticOverlay
           loader={loader}
           reducer={reducer}
@@ -89,7 +89,7 @@ describe('P0-1 <OptimisticOverlay> projection reaches loader.useData()', () => {
     todoLoaderRef.current = loader;
 
     render(
-      <Loader loader={loader} location={loc}>
+      <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
         <OptimisticOverlay
           loader={loader}
           reducer={reducer}
@@ -128,7 +128,7 @@ describe('P0-1 <OptimisticOverlay> projection reaches loader.useData()', () => {
     }
 
     render(
-      <Loader loader={loader} location={loc}>
+      <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
         <OptimisticOverlay
           loader={loader}
           reducer={reducer}

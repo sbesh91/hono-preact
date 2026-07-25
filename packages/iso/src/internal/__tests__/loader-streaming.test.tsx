@@ -69,6 +69,7 @@ describe('streaming loader: client-driven', () => {
     render(
       <LocationProvider>
         <Loader
+          mode={{ kind: 'single' }}
           loader={ref}
           location={{ path: '/', pathParams: {}, searchParams: {} } as never}
         >
@@ -202,6 +203,7 @@ describe('streaming loader: client-driven', () => {
     render(
       <LocationProvider>
         <Loader
+          mode={{ kind: 'single' }}
           loader={ref}
           location={{ path: '/', pathParams: {}, searchParams: {} } as never}
         >

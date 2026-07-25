@@ -34,7 +34,7 @@ describe('LoaderDataContext provision', () => {
     }
 
     render(
-      <Loader loader={loader} location={loc}>
+      <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
         <Probe />
       </Loader>
     );

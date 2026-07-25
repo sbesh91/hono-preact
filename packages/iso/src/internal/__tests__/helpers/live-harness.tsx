@@ -71,7 +71,7 @@ export function makeLiveLoaderHarness<T>() {
       <LocationProvider>
         <Loader
           loader={loader}
-          collect
+          mode={{ kind: 'collect' }}
           location={{ path: '/', pathParams: {}, searchParams: {} } as never}
         >
           <ReloadCapture />
