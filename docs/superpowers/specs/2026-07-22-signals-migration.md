@@ -1,13 +1,17 @@
 # Signals migration (umbrella)
 
-Date: 2026-07-22 (Phase 4b recorded 2026-07-25)
-Status: In progress. Phases 0-2, 5, 4, and 4b shipped on this branch. Phase 5
+Date: 2026-07-22 (Phase 3 recorded 2026-07-25)
+Status: **Feature-complete.** Every planned phase shipped on this branch: Phase 5
 made signals the always-on data-layer opinion; Phase 4 added the keyed `<For>` /
 `<Show>` rendering helpers; Phase 4b unified the loader read into one adaptive
-`useData` (single-value + live), re-exported `@preact/signals` first-party, and
-retired `ReadonlyReactive`. Remaining: **Phase 3** (store conversion, re-opened
-by Phase 5). This branch is the single PR to `main`, held open until the owner is
-comfortable with the whole signals transition.
+`useData`, re-exported `@preact/signals` first-party, and retired
+`ReadonlyReactive`; Phase 3 (the last) converted the action / form / optimistic /
+field-error stores to signals (the read hooks return signals; per-field errors
+are granular) and deleted the `use-store-snapshot` / `use-force-update` bridges.
+The result: every consumer-facing reactive read returns a signal (one rule, no
+`-Signal` suffix), `@preact/signals` is first-party and confined to the factory
+modules, and core stays signals-free. This branch is the single PR to `main`,
+held open until the owner is comfortable with the whole signals transition.
 Branch: `feat/signals-migration`
 
 This is the charter for the signals-first migration. The work ships as **one
@@ -37,7 +41,7 @@ Ordered by payoff-to-risk. Each is a stacked sub-PR into this branch.
 | 0 | Decompose the loader runner (session / readers / reload). No signals, no behaviour change. | #341 | shipped (in this PR) |
 | 1 | Presence roster as keyed signals (`memberIds` / `member(id)` on `useRoom`). Positioning DROPPED (see below). | #343 | shipped (in this PR) |
 | 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | #344 | shipped (in this PR) |
-| 3 | Optimistic queue and the action/form stores; per-field form errors. Delete `use-store-snapshot` / `use-force-update`. | | re-opened by Phase 5 (see below); stacks on top |
+| 3 | Signal-backed stores: action-result / form-submit / optimistic to signals (the read hooks `useActionResult` / `useFormStatus` / `useOptimistic` return signals); per-field form-error signals; delete the `use-store-snapshot` / `use-force-update` bridges. | #348 | shipped (in this PR) |
 | 4 | Signals DX: keyed `<For>` / `<Show>` rendering helpers (per-row component boundary; atomicity proven). Streaming-loader signals split out (see below). | #346 | shipped (in this PR) |
 | 4b | Unified reactive read API: one adaptive `useData` (single-value `()` + live `(initial, reduce)`), both returning signals; removes `useDataSignal` / `useFieldSignal`; re-exports `@preact/signals` first-party; retires `ReadonlyReactive` for `ReadonlySignal`; live `.Boundary` collect-mode host. Absorbs the split-out streaming signals. | #347 | shipped (in this PR) |
 | 5 | Signals as the always-on data layer: delete the opt-in seam and the `hono-preact/signals` subpath; loaders and rooms are signal-backed with no opt-in import. | #345 | shipped (in this PR) |
@@ -108,6 +112,23 @@ fold-mode is untouched. Review caught two `foldStream` correctness bugs (reload
 corruption, cold-error fabrication), both fixed and mutation-checked. See
 `2026-07-24-unified-reactive-read-api-design.md`.
 
+**Phase 3: signal-backed stores (shipped, #348), the last phase.** Converts the
+action-result / form-submit / optimistic / field-error stores to signals, so the
+read hooks `useActionResult` / `useFormStatus` / `useOptimistic` return signals
+(consistent with `useData`), and per-field form errors go granular (a
+`<FieldError name="x">` re-renders only on field `x`, the roster `member(id)`
+pattern). A new `internal/store-signal.ts` is the sole sanctioned importer, so the
+store modules and consumer hooks stay `@preact/signals`-decoupled. The
+`use-store-snapshot` / `use-force-update` bridges (built to keep signals off the
+opt-in path) are deleted; `page-middleware-host`, which is in always-loaded core,
+keeps a plain `useState` force-render so core stays signals-free. `useFieldErrors`
+stays value-returning by design (a per-field leaf read; the `fieldError(name)`
+accessor is the escape hatch for threading the signal). Review caught a Critical
+(the optimistic value folded a closure-captured `base`, not a tracked signal) and
+a core-signals-free regression (a signal in `page-middleware-host` pulled
+`@preact/signals` into core, the size probe caught what the guard could not), both
+fixed. See `2026-07-25-signal-stores-design.md`.
+
 Positioning (`use-position.ts`), grouped into Phase 1 by the investigation,
 was dropped: verification showed it already writes x/y straight to the DOM in
 the `autoUpdate` callback and only `setState`s on a side/align/arrow change, so
@@ -146,6 +167,7 @@ adds. Updated as phases land.
 | Phase 5 | 5521 unchanged | realtime 2261 B, loaders 10215 B (marginal) | seam removed; the `signals` opt-in bucket is gone, its glue folded into the two feature buckets |
 | Phase 4 | 5521 unchanged | signals-dx 307 B (marginal) | pure-Preact `<For>` / `<Show>`; a new tree-shakeable bucket, imports no `@preact/signals` |
 | Phase 4b | 5524 (+3 noise) | loaders 10545 B, realtime 2261 B | one adaptive `useData` + collect-mode streaming; `@preact/signals` re-export stays tree-shaken out of core |
+| Phase 3 | 5498 (signals-free) | actions 7396 B | stores to signals; the store factory keeps `@preact/signals` off `page-middleware-host` (core), so core stays signals-free |
 
 (The core number rebased across phases as `origin/main` advanced; what matters
 is that each phase leaves core unchanged.) Through Phase 2 the signal glue was
