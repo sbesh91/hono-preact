@@ -11,8 +11,8 @@ import { DEMO_AUTHED_KEY } from '../../demo/guard.js';
 
 const LoginPage: FunctionComponent = () => {
   useTitle('Sign in');
-  const { pending } = useFormStatus(serverActions.login);
-  const result = useActionResult(serverActions.login);
+  const { pending } = useFormStatus(serverActions.login).value;
+  const result = useActionResult(serverActions.login).value;
   const error =
     result?.kind === 'deny' || result?.kind === 'error' ? result.message : null;
 

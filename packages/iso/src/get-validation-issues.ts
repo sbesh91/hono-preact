@@ -11,8 +11,8 @@ import { LoaderValidationError } from './loader-validation-error.js';
  * render identically:
  *
  * ```tsx
- * // action
- * const issues = getValidationIssues(useActionResult(create));
+ * // action (useActionResult returns a ReadonlySignal; read `.value`)
+ * const issues = getValidationIssues(useActionResult(create).value);
  * // loader (inside an error boundary)
  * const issues = getValidationIssues(error);
  * ```

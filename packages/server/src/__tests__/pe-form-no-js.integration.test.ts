@@ -8,7 +8,7 @@ import { makePageActionResolvers } from '../page-action-resolvers.js';
 import { deny, useActionResult, type ServerRoute } from '@hono-preact/iso';
 
 function Page() {
-  const r = useActionResult();
+  const r = useActionResult().value;
   return h(
     'main',
     { 'data-test': 'page' },

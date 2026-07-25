@@ -70,6 +70,12 @@ describe('signals are the always-on data layer', () => {
     // `internal/store-signal.ts` is the sanctioned importer for the action /
     // form / optimistic stores (Phase 3): those store modules read/write
     // through `createStoreSignal` and never import `@preact/signals` directly.
+    // `use-action-result.ts` / `use-form-status.ts` are the reactive READ
+    // hooks over those stores: each projects its store's signal through a
+    // `useComputed`, so they import `@preact/signals` directly (a leaf,
+    // feature-scoped consumer, not the core: both live in the `actions`
+    // FEATURE_MODULES group in `scripts/size-probe-config.mjs`, never the
+    // always-loaded core bundle).
     const importers = sourceModules().filter((rel) =>
       importsSignalValuesAtRuntime(rel)
     );
@@ -78,6 +84,8 @@ describe('signals are the always-on data layer', () => {
       'internal/loader-signal.ts',
       'internal/roster-signal.ts',
       'internal/store-signal.ts',
+      'use-action-result.ts',
+      'use-form-status.ts',
     ]);
   });
 

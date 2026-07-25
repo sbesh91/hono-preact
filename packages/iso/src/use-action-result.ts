@@ -1,9 +1,10 @@
 import { useContext } from 'preact/hooks';
-import { useStoreSnapshot } from './internal/use-store-snapshot.js';
+import { useComputed } from '@preact/signals';
+import type { ReadonlySignal } from '@preact/signals';
 import { ActionResultContext } from './action-result-context.js';
 import {
-  getLastActionResult,
-  subscribeLastActionResult,
+  lastActionResultSignal,
+  pickLastActionResult,
   type StoredActionResult,
 } from './internal/action-result-store.js';
 import { isBrowser } from './is-browser.js';
@@ -72,23 +73,33 @@ function projectActionResult<TPayload, TResult>(
   };
 }
 
+/**
+ * Reactive read: `useComputed` tracks `lastActionResultSignal`, so a binding
+ * that reads `.value` updates on a fresh action result without the host
+ * component re-rendering. `stub`/the SSR context value are captured in the
+ * closure at the render that created this computed (`useComputed` refreshes
+ * the closure each render but only re-evaluates when a tracked signal
+ * changes); both are stable for the life of a call site in normal usage
+ * (a fixed action stub, an SSR context set once per page render).
+ */
 export function useActionResult<TPayload = unknown, TResult = unknown>(
   stub?: ActionRef<TPayload, TResult, never>
-): ActionResult<TPayload, TResult> {
+): ReadonlySignal<ActionResult<TPayload, TResult>> {
   const ssr = useContext(ActionResultContext);
-  const client = useStoreSnapshot(subscribeLastActionResult, () =>
-    isBrowser() ? getLastActionResult(stub) : null
-  );
-
-  // Client store wins when populated: a JS-on submit has produced a result.
-  // SSR context is the fallback for the PE deny re-render path (no JS state).
-  const source = client ?? ssr;
-  if (!source) return null;
-  if (
-    stub &&
-    (source.module !== stub.__module || source.action !== stub.__action)
-  ) {
-    return null;
-  }
-  return projectActionResult<TPayload, TResult>(source);
+  return useComputed(() => {
+    const client = isBrowser()
+      ? pickLastActionResult(lastActionResultSignal.value, stub)
+      : null;
+    // Client store wins when populated: a JS-on submit has produced a result.
+    // SSR context is the fallback for the PE deny re-render path (no JS state).
+    const source = client ?? ssr;
+    if (!source) return null;
+    if (
+      stub &&
+      (source.module !== stub.__module || source.action !== stub.__action)
+    ) {
+      return null;
+    }
+    return projectActionResult<TPayload, TResult>(source);
+  });
 }

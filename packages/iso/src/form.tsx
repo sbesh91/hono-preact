@@ -203,16 +203,19 @@ export function Form<TPayload, TResult>({
   // Split into two memos: server errors only recompute when the server result
   // changes; fieldErrors recomputes on keystroke (when clientErrors updates).
   //
-  // useActionResult reads both the browser-global action-result store (via
-  // useSyncExternalStore, restoring the subscription) AND the request-scoped
-  // ActionResultContext (the SSR / no-JS deny re-render path). Keying the memo
-  // on the deny result's underlying data object keeps it stable across unrelated
-  // re-renders: useActionResult re-wraps into a new object each render, but for
-  // a deny its .data points at the same stable store/context object until a
-  // fresh result arrives. For non-deny results the key is null (no issues).
+  // useActionResult returns a `ReadonlySignal` projecting both the
+  // browser-global action-result store AND the request-scoped
+  // ActionResultContext (the SSR / no-JS deny re-render path). Reading
+  // `.value` during render subscribes this component (Preact's signals
+  // integration auto-tracks any `.value` read in a function component's
+  // render). Keying the memo on the deny result's underlying data object
+  // keeps it stable across unrelated re-renders: useActionResult re-wraps
+  // into a new object each recompute, but for a deny its `.data` points at
+  // the same stable store/context object until a fresh result arrives. For
+  // non-deny results the key is null (no issues).
   const serverResult = useActionResult(
     action as ActionRef<TPayload, TResult, never>
-  );
+  ).value;
   const serverErrors = useMemo<FieldErrorsMap>(
     () => mapIssuesToFields(getValidationIssues(serverResult)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
