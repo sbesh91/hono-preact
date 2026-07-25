@@ -41,14 +41,19 @@ export function useStoreValue<R>(project: () => R): ReadonlySignal<R> {
  * the per-call-site counterpart to `createStoreSignal`'s module-level store,
  * for hooks that need a mutable signal cell scoped to one hook call (e.g.
  * `useOptimistic`'s queue) without importing `@preact/signals` directly.
+ *
+ * The field is named `signal` (matching `StoreSignal.signal`), not `value`,
+ * so a caller reading the underlying signal's own value writes
+ * `state.signal.value`, not the `state.value.value` stutter a `value` field
+ * would produce.
  */
 export function useStoreState<T>(initial: T): {
-  readonly value: ReadonlySignal<T>;
+  readonly signal: ReadonlySignal<T>;
   set(next: T): void;
 } {
   const s = useSignal(initial);
   return {
-    value: s,
+    signal: s,
     set(next: T) {
       s.value = next;
     },

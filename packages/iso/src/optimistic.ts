@@ -26,6 +26,14 @@ export function useOptimistic<TBase, TPayload>(
   options?: UseOptimisticOptions
 ): [ReadonlySignal<TBase>, (payload: TPayload) => OptimisticHandle] {
   const queue = useStoreState<Entry<TPayload>[]>([]);
+  // Holds `base` as a tracked signal, not just the plain closure capture
+  // below, so the value computed (which reads `baseState.signal.value`)
+  // re-derives when `base` changes even while the queue is idle. Written
+  // every render (see below); @preact/signals dedupes a same-reference
+  // write, so an unchanged `base` is a no-op and a changed `base` notifies
+  // exactly once.
+  const baseState = useStoreState<TBase>(base);
+  baseState.set(base);
   const lastBaseRef = useRef(base);
   const idRef = useRef(0);
   const transitionRef = useRef(options?.transition === true);
@@ -39,7 +47,7 @@ export function useOptimistic<TBase, TPayload>(
     // be a fresh reference each time (e.g. an inline literal) even with an
     // empty queue, which is a synchronous render loop: write -> subscribed
     // component re-renders -> `base` is a new reference again -> write ...
-    const current = queue.value.value;
+    const current = queue.signal.value;
     const filtered = current.filter((e) => e.status !== 'ready');
     if (filtered.length !== current.length) {
       queue.set(filtered);
@@ -48,7 +56,10 @@ export function useOptimistic<TBase, TPayload>(
   }
 
   const value = useStoreValue(() =>
-    queue.value.value.reduce((acc, e) => reducer(acc, e.payload), base)
+    queue.signal.value.reduce(
+      (acc, e) => reducer(acc, e.payload),
+      baseState.signal.value
+    )
   );
 
   // Reads `transitionRef.current` at invocation time, not capture time, so it
@@ -95,10 +106,10 @@ export function useOptimistic<TBase, TPayload>(
 
   const addOptimistic = useCallback((payload: TPayload): OptimisticHandle => {
     const id = ++idRef.current;
-    queue.set([...queue.value.value, { id, payload, status: 'active' }]);
+    queue.set([...queue.signal.value, { id, payload, status: 'active' }]);
     return {
       settle: () => {
-        const current = queue.value.value;
+        const current = queue.signal.value;
         const entry = current.find((e) => e.id === id);
         if (entry && entry.status === 'active') {
           runWithTransition(() => {
@@ -110,7 +121,7 @@ export function useOptimistic<TBase, TPayload>(
       },
       revert: () => {
         runWithTransition(() => {
-          queue.set(queue.value.value.filter((e) => e.id !== id));
+          queue.set(queue.signal.value.filter((e) => e.id !== id));
         });
       },
     };

@@ -110,6 +110,23 @@ describe('useOptimistic', () => {
     expect(result.current[0].value).toEqual([1, 2, 3, 4]);
   });
 
+  it('base change with an IDLE queue still re-derives the value (no staleness)', () => {
+    const { result, rerender } = renderHook(
+      ({ base }: { base: number[] }) =>
+        useOptimistic(base, (current: number[], p: number) => [...current, p]),
+      { initialProps: { base: [1, 2] } }
+    );
+    // Force an initial computation/caching of the derived value BEFORE base
+    // changes, with an empty (idle) queue: no dispatch, no ready entries.
+    expect(result.current[0].value).toEqual([1, 2]);
+
+    // base advances while the queue is idle. The reconciliation effect has
+    // nothing to drop (queue is already empty), so it is a no-op; only the
+    // value fold should react to the base change.
+    rerender({ base: [1, 2, 3] });
+    expect(result.current[0].value).toEqual([1, 2, 3]);
+  });
+
   it('base ref change with no ready entries leaves queue intact', () => {
     const { result, rerender } = renderHook(
       ({ base }: { base: number[] }) =>
