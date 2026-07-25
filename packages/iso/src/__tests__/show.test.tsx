@@ -56,4 +56,36 @@ describe('<Show>', () => {
     });
     expect(screen.getByTestId('c').textContent).toBe('2');
   });
+
+  it('atomic render: a child-internal signal re-renders only the reading component, not a sibling', async () => {
+    const when = signal(true);
+    const count = signal(0);
+    const renders = { reader: 0, sibling: 0 };
+    function Reader() {
+      renders.reader++;
+      return <span data-testid="reader">{count.value}</span>;
+    }
+    function Sibling() {
+      renders.sibling++;
+      return <span data-testid="sib">x</span>;
+    }
+    render(
+      <Show when={when}>
+        {() => (
+          <>
+            <Reader />
+            <Sibling />
+          </>
+        )}
+      </Show>
+    );
+    expect(renders).toEqual({ reader: 1, sibling: 1 });
+
+    await act(async () => {
+      count.value = 5;
+    });
+    expect(screen.getByTestId('reader').textContent).toBe('5');
+    // Only the component that read `count` re-rendered.
+    expect(renders).toEqual({ reader: 2, sibling: 1 });
+  });
 });

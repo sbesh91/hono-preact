@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/preact';
 import { signal } from '@preact/signals';
 import { For } from '../for.js';
@@ -95,5 +95,35 @@ describe('<For>', () => {
       count.value = 6;
     });
     expect(screen.getByTestId('r-a').textContent).toBe('6');
+  });
+
+  it('atomic render: a per-row signal re-renders ONLY that row; <For> itself does not re-render', async () => {
+    const sigs = { a: signal(0), b: signal(0), c: signal(0) };
+    const rowRenders: Record<string, number> = { a: 0, b: 0, c: 0 };
+    const each = signal<readonly ('a' | 'b' | 'c')[]>(['a', 'b', 'c']);
+    // `by` runs once per item inside <For>'s render body, so a spy on it
+    // detects whether <For> itself re-rendered.
+    const by = vi.fn((id: 'a' | 'b' | 'c') => id);
+    function Row({ id }: { id: 'a' | 'b' | 'c' }) {
+      rowRenders[id]++;
+      return <li data-testid={`r-${id}`}>{sigs[id].value}</li>;
+    }
+    render(
+      <For each={each} by={by}>
+        {(id) => <Row id={id} />}
+      </For>
+    );
+    expect(rowRenders).toEqual({ a: 1, b: 1, c: 1 });
+    const byCallsAfterMount = by.mock.calls.length;
+
+    await act(async () => {
+      sigs.a.value = 9;
+    });
+
+    // Only row 'a' re-rendered; its siblings are untouched.
+    expect(rowRenders).toEqual({ a: 2, b: 1, c: 1 });
+    expect(screen.getByTestId('r-a').textContent).toBe('9');
+    // <For> did not re-render: its body (and `by`) never ran again.
+    expect(by.mock.calls.length).toBe(byCallsAfterMount);
   });
 });
