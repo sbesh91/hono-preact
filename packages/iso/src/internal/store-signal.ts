@@ -125,7 +125,13 @@ export function createFieldErrorStore(): FieldErrorStore {
 
   return {
     setAll(map) {
-      const nextNames = Object.keys(map);
+      // Only fields that actually carry an error are "present": an empty array
+      // is treated as absent, so `all` means "every field that currently has an
+      // error" (a field passed as `{ a: [] }` is cleared by the drop loop below,
+      // not surfaced in `all`).
+      const nextNames = Object.keys(map).filter(
+        (name) => map[name]!.length > 0
+      );
       const nextNameSet = new Set(nextNames);
 
       for (const name of nextNames) {

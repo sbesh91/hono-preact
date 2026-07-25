@@ -151,11 +151,11 @@ function HostConsumer({
   // resolve, mirroring preact-iso `lazy`'s self-update. Re-subscribe whenever
   // the wrapped result changes (a new path produces a fresh wrapPromise).
   //
-  // The self-heal uses a plain `useReducer` force-render (NOT a signal): this
+  // The self-heal uses a plain `useState` force-render (NOT a signal): this
   // module is in the always-loaded core graph, so pulling `@preact/signals` in
   // here through a signal would put it in core and break the core-signals-free
-  // invariant (the size probe measures it). `force()` in the settlement callback
-  // re-renders this component with no signal machinery.
+  // invariant (the size probe measures it). Bumping the counter in the
+  // settlement callback re-renders this component with no signal machinery.
   const [, force] = useState(0);
   const subscribedTo = useRef<WrappedResult | null>(null);
   // Browser-only: on the server the prerender drives suspension resume by

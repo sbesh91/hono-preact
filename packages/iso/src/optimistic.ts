@@ -20,6 +20,18 @@ export type UseOptimisticOptions = {
   transition?: boolean;
 };
 
+/**
+ * Optimistic UI: fold a queue of pending payloads over `base` and expose the
+ * result as a `ReadonlySignal<TBase>`, plus a `dispatch` that enqueues one
+ * optimistic update (returning a handle to `settle` or `revert` it).
+ *
+ * `base` MUST be a stable reference across renders (the real data, e.g. a
+ * loader value): the hook tracks it reactively, so passing a NEW reference on
+ * every render (a fresh `?? []`, an inline `.filter(...)` or spread) makes the
+ * value re-derive every render and, because a consumer binds the returned
+ * signal, re-render in a loop. Memoize such an expression (or keep the fallback
+ * stable) before passing it as `base`.
+ */
 export function useOptimistic<TBase, TPayload>(
   base: TBase,
   reducer: (current: TBase, payload: TPayload) => TBase,
