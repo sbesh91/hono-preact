@@ -12,7 +12,6 @@ import { dispatchServer, dispatchClient } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
 import type { UseEntry } from './use-entry.js';
 import wrapPromise from './wrap-promise.js';
-import { useStoreState } from './store-signal.js';
 import { hasClientNavigated } from './history-shim.js';
 import { HonoRequestContext } from './contexts.js';
 
@@ -152,12 +151,12 @@ function HostConsumer({
   // resolve, mirroring preact-iso `lazy`'s self-update. Re-subscribe whenever
   // the wrapped result changes (a new path produces a fresh wrapPromise).
   //
-  // The tick is a signal (via the store-signal factory, not a value import of
-  // @preact/signals -- that keeps this module out of the module-graph guard's
-  // importer allowlist). Reading `tick.signal.value` below subscribes this
-  // component to it; the settlement callback bumps it with `.peek()` (an
-  // untracked read) so the bump itself doesn't re-run inside a tracked scope.
-  const tick = useStoreState(0);
+  // The self-heal uses a plain `useReducer` force-render (NOT a signal): this
+  // module is in the always-loaded core graph, so pulling `@preact/signals` in
+  // here through a signal would put it in core and break the core-signals-free
+  // invariant (the size probe measures it). `force()` in the settlement callback
+  // re-renders this component with no signal machinery.
+  const [, force] = useState(0);
   const subscribedTo = useRef<WrappedResult | null>(null);
   // Browser-only: on the server the prerender drives suspension resume by
   // awaiting the thrown promise and re-rendering, so subscribing here would be
@@ -178,17 +177,14 @@ function HostConsumer({
       const dispatchedAt = currentPathname();
       pending.settled.then(() => {
         if (currentPathname() !== dispatchedAt) return;
-        // If this consumer unmounted before the chain settled, bumping the
-        // tick is a harmless no-op (nothing is subscribed to render it); the
-        // closure (only `tick` + `dispatchedAt`) is retained until the chain
-        // settles, which is bounded by the request.
-        tick.set(tick.signal.peek() + 1);
+        // If this consumer unmounted before the chain settled, `force()` is a
+        // harmless no-op on an unmounted component; the closure (only `force` +
+        // `dispatchedAt`) is retained until the chain settles, which is bounded
+        // by the request.
+        force((n) => n + 1);
       });
     }
   }
-  // Subscribes this component to the tick: read for its reactive side effect
-  // only (the self-heal re-render), the count itself is never used.
-  void tick.signal.value;
   const { outcome } = wrapped ? wrapped.read() : { outcome: undefined };
   const { route } = useLocation();
 
