@@ -8,9 +8,9 @@ export const LoaderIdContext = createContext<string | null>(null);
 
 // Carries the PROJECTED public union, computed once in `loader.tsx` (and on the
 // server in `DataReader`). A non-live loader provides a `LoaderState`; a live
-// loader provides a `StreamState`. `ViewRenderer` and `useData()` read this
-// directly rather than re-projecting (which dropped the discriminant, review
-// #1/#6/#7).
+// loader provides a `StreamState`. `ViewRenderer` reads this directly rather
+// than re-projecting (which dropped the discriminant, review #1/#6/#7).
+// `useData()` reads the sibling `LoaderViewSignalContext` (a signal), not this.
 export const LoaderDataContext = createContext<
   LoaderState<unknown> | StreamState<unknown> | null
 >(null);
