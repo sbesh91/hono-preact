@@ -22,8 +22,15 @@ async function runReader(runtime: RealtimeRuntime): Promise<unknown> {
 // define replacement produces a plain object here, not a frozen one); each
 // PROD-gating test restores it so the default (false, matching `vite dev`)
 // doesn't leak across tests.
+//
+// `ImportMetaEnv` (src/types.d.ts) declares the flags `readonly` because
+// production code only ever reads them. Binding one mutable view here is what
+// lets the tests flip the gate without a cast at each write site; `readonly`
+// does not affect assignability, so this needs no cast at all.
+const env: { PROD: boolean } = import.meta.env;
+
 afterEach(() => {
-  import.meta.env.PROD = false;
+  env.PROD = false;
 });
 
 describe('makeAssetsPreloadReader', () => {
@@ -77,7 +84,7 @@ describe('makeAssetsPreloadReader', () => {
 
   describe('absence observability (the reader itself warns; transport failures are warned by resolvePreloadManifest instead)', () => {
     it('stays silent in dev (import.meta.env.PROD false, matching wrangler dev)', async () => {
-      import.meta.env.PROD = false;
+      env.PROD = false;
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const runtime = runtimeWith(undefined);
@@ -89,7 +96,7 @@ describe('makeAssetsPreloadReader', () => {
     });
 
     it('warns once per failure mode in prod: no binding', async () => {
-      import.meta.env.PROD = true;
+      env.PROD = true;
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         await runReader(runtimeWith(undefined));
@@ -101,7 +108,7 @@ describe('makeAssetsPreloadReader', () => {
     });
 
     it('warns once in prod: a 404 (no manifest)', async () => {
-      import.meta.env.PROD = true;
+      env.PROD = true;
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         await runReader(
@@ -117,7 +124,7 @@ describe('makeAssetsPreloadReader', () => {
     });
 
     it('does not warn in prod on a successful read', async () => {
-      import.meta.env.PROD = true;
+      env.PROD = true;
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         await runReader(
@@ -130,7 +137,7 @@ describe('makeAssetsPreloadReader', () => {
     });
 
     it('does not warn locally on a transport failure; the reader only throws', async () => {
-      import.meta.env.PROD = true;
+      env.PROD = true;
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         await expect(

@@ -375,7 +375,10 @@ describe('renderPage: streaming SSR', () => {
 
   it('aborts cleanly on client cancel: no synthetic error chunks, no enqueue-after-close throws', async () => {
     // Loader that yields one chunk then awaits forever; cancel mid-stream.
-    let releaseSecondYield: (() => void) | null = null;
+    // Declared without an initializer: it is only ever assigned from inside the
+    // Promise executor below, which TypeScript's control-flow analysis cannot
+    // see, so a `= null` seed would narrow the outer read to `null`.
+    let releaseSecondYield: (() => void) | undefined;
     const loader = defineLoader<{ count: number }>(async function* () {
       yield { count: 1 };
       await new Promise<void>((resolve) => {

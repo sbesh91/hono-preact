@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import {
   makeCfRoomTransport,
   type DOConnState,
@@ -9,10 +9,15 @@ import {
 // Fake DOConnState
 // ---------------------------------------------------------------------------
 
+type SendMock = Mock<(data: string) => void>;
+
 interface FakeConn {
   id: string;
   attachment: RoomConnAttachment;
-  send: ReturnType<typeof vi.fn>;
+  // Typed as the fake WebSocket send it stands in for. `ReturnType<typeof
+  // vi.fn>` resolves to the un-parameterised `Mock<Procedure | Constructable>`,
+  // which is not callable.
+  send: SendMock;
 }
 
 function makeFakeConn(
@@ -58,10 +63,8 @@ function makeFakeStore(conns: FakeConn[]): DOConnState {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseSent(mock: ReturnType<typeof vi.fn>): unknown[] {
-  return mock.mock.calls.map((args: unknown[]) =>
-    JSON.parse(args[0] as string)
-  );
+function parseSent(mock: SendMock): unknown[] {
+  return mock.mock.calls.map(([data]) => JSON.parse(data) as unknown);
 }
 
 // ---------------------------------------------------------------------------

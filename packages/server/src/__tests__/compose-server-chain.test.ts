@@ -19,7 +19,9 @@ const baseArgs = {
 
 describe('composeServerChain', () => {
   it('composes [app, page, unit] server middleware in outer->inner order', async () => {
-    const app = defineServerMiddleware<'action'>(async (_c, n) => {
+    // The app tier is typed page-scope (`AppConfig['use']` is `AppUseElement`);
+    // the page and unit tiers here carry the action scope under test.
+    const app = defineServerMiddleware<'page'>(async (_c, n) => {
       await n();
     });
     const page = defineServerMiddleware<'action'>(async (_c, n) => {
@@ -108,7 +110,7 @@ describe('composeServerChain', () => {
   });
 
   it("names the unit layer, indexed within the unit's own use", async () => {
-    const ok = defineServerMiddleware<'action'>(async (_c, n) => {
+    const ok = defineServerMiddleware<'page'>(async (_c, n) => {
       await n();
     });
     await expect(
@@ -126,7 +128,7 @@ describe('composeServerChain', () => {
   });
 
   it('keeps [app, page, unit] order when every layer is partitioned separately', async () => {
-    const appMw = defineServerMiddleware<'action'>(async (_c, n) => {
+    const appMw = defineServerMiddleware<'page'>(async (_c, n) => {
       await n();
     });
     const appObs = defineStreamObserver({ onStart: () => {} });

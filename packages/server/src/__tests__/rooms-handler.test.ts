@@ -71,7 +71,11 @@ function makeFakeUpgrader(): {
         received: () =>
           ws.sends.map((s) => JSON.parse(s) as RoomEnvelope<unknown, unknown>),
       });
-      return c.text('101', 101);
+      // Sentinel for the upgrade response. The real handshake answers 101, but
+      // the WHATWG Response constructor rejects that status outside workerd, so
+      // the body carries the marker and the status stays a plain 200. No test
+      // reads this response; they drive the captured events directly.
+      return c.text('101');
     };
   };
   return { upgrader, conns: () => captured };
@@ -121,7 +125,7 @@ function makeAppWithRouteNodeUse(
 }
 
 // Connect with an explicit JSON-encoded `r` (room key) param value.
-function connectWithRawR(app: Hono, rawR: string): Promise<Response> {
+async function connectWithRawR(app: Hono, rawR: string): Promise<Response> {
   return app.request(
     `http://localhost${SOCKETS_RPC_PATH}` +
       `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
@@ -134,7 +138,7 @@ function connectWithRawR(app: Hono, rawR: string): Promise<Response> {
 // interpolates the topic server-side from these params.
 const ROOM_PARAMS = JSON.stringify({ roomId: 'demo' });
 
-function connect(app: Hono): Promise<Response> {
+async function connect(app: Hono): Promise<Response> {
   return app.request(
     `http://localhost${SOCKETS_RPC_PATH}` +
       `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(MODULE_KEY)}` +
@@ -494,7 +498,7 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
         use: [
           defineServerMiddleware(async () => {
             const { deny } = await import('@hono-preact/iso');
-            throw deny('forbidden', 403);
+            throw deny(403, 'forbidden');
           }),
         ],
         onJoin: onJoinSpy,
@@ -653,11 +657,11 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
 
     const onJoinSpy = vi.fn();
     // A route-node guard that denies unless pathParams.roomId is present.
-    const requireRoomId = defineServerMiddleware(async (ctx, next) => {
+    const requireRoomId = defineServerMiddleware<'page'>(async (ctx, next) => {
       const roomId = ctx.location.pathParams.roomId;
       if (!roomId) {
         const { deny } = await import('@hono-preact/iso');
-        throw deny('forbidden', 403);
+        throw deny(403, 'forbidden');
       }
       await next();
     });
@@ -687,13 +691,13 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
 
     const onJoinSpy = vi.fn();
     let seenRoomIdInGuard: string | undefined;
-    const requireRoomId = defineServerMiddleware(async (ctx, next) => {
+    const requireRoomId = defineServerMiddleware<'page'>(async (ctx, next) => {
       // This is the load-bearing assertion: the room-key param reached the
       // guard chain via ctx.location.pathParams (it was {} before the fix).
       seenRoomIdInGuard = ctx.location.pathParams.roomId;
       if (!seenRoomIdInGuard) {
         const { deny } = await import('@hono-preact/iso');
-        throw deny('forbidden', 403);
+        throw deny(403, 'forbidden');
       }
       await next();
     });

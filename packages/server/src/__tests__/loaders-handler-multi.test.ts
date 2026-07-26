@@ -3,15 +3,22 @@ import { Hono } from 'hono';
 import { loadersHandler } from '../loaders-handler.js';
 import { defineLoader } from '@hono-preact/iso';
 
+// The handler hands a route-bound loader ctx; these fixtures are plain
+// functions rather than `defineLoader` refs, so they name the one field they
+// read instead of inferring it.
+type LooseLoaderCtx = {
+  location: { pathParams: Record<string, string> };
+};
+
 describe('loadersHandler: serverLoaders dispatch', () => {
   const fakeModule = {
     __moduleKey: 'pages/movie',
     serverLoaders: {
-      summary: async ({ location }: any) => ({
+      summary: async ({ location }: LooseLoaderCtx) => ({
         kind: 'summary',
         id: location.pathParams.id,
       }),
-      cast: async ({ location }: any) => ({
+      cast: async ({ location }: LooseLoaderCtx) => ({
         kind: 'cast',
         id: location.pathParams.id,
       }),
@@ -24,7 +31,7 @@ describe('loadersHandler: serverLoaders dispatch', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler(glob as any, { resolvePageUse: async () => [] })
+      loadersHandler(glob, { resolvePageUse: async () => [] })
     );
 
     const res = await app.request('/__loaders', {
@@ -50,7 +57,7 @@ describe('loadersHandler: serverLoaders dispatch', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler(glob as any, { resolvePageUse: async () => [] })
+      loadersHandler(glob, { resolvePageUse: async () => [] })
     );
 
     const res = await app.request('/__loaders', {
@@ -76,7 +83,7 @@ describe('loadersHandler: serverLoaders dispatch', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler(glob as any, { resolvePageUse: async () => [] })
+      loadersHandler(glob, { resolvePageUse: async () => [] })
     );
 
     const res = await app.request('/__loaders', {
@@ -100,7 +107,7 @@ describe('loadersHandler: serverLoaders dispatch', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler(glob as any, { resolvePageUse: async () => [] })
+      loadersHandler(glob, { resolvePageUse: async () => [] })
     );
 
     const res = await app.request('/__loaders', {
@@ -136,9 +143,12 @@ describe('loadersHandler: serverLoaders dispatch', () => {
     const app = new Hono();
     app.post(
       '/__loaders',
-      loadersHandler({ './pages/watched.server.ts': module } as any, {
-        resolvePageUse: async () => [],
-      })
+      loadersHandler(
+        { './pages/watched.server.ts': module },
+        {
+          resolvePageUse: async () => [],
+        }
+      )
     );
 
     const res = await app.request('/__loaders', {

@@ -139,16 +139,17 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
     function CountView() {
       // State-based loaders render the children eagerly during the cold-load
       // window, so `useData()` returns the `loading` arm of the LoaderState
-      // union (never undefined); `data` is absent until the first fetch
-      // resolves. Guard with `'data' in s` (the new client contract) rather than
-      // assuming a resolved value is always present, as the pre-state Suspense
-      // model did.
+      // union (never undefined); `data` carries no value until the first fetch
+      // resolves. Pattern-match on `status` rather than assuming a resolved
+      // value is always present, as the pre-state Suspense model did. (`'data'
+      // in s` does NOT narrow: the cold arm declares `data?: never`, so the key
+      // is present on every arm of the union.)
       const s = countLoader.useData();
       const { mutate } = useAction(incrementStub, { invalidate: 'auto' });
       return (
         <div>
           <span data-testid="count">
-            count: {'data' in s ? s.data.count : '…'}
+            count: {s.status === 'loading' ? '…' : s.data.count}
           </span>
           <button onClick={() => mutate(undefined as void)}>bump</button>
         </div>

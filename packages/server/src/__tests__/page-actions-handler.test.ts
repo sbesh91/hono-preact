@@ -10,7 +10,7 @@ import {
   defineServerMiddleware,
   type AppConfig,
 } from '@hono-preact/iso';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
+import type { StandardSchemaV1 } from '@hono-preact/iso';
 import { VALIDATION_ISSUES_KEY } from '@hono-preact/iso/internal/runtime';
 
 const failing: StandardSchemaV1<unknown, unknown> = {
@@ -34,13 +34,29 @@ type PageUseResolver = (
   path: string
 ) => ReadonlyArray<unknown> | Promise<ReadonlyArray<unknown>>;
 
+/** The JSON envelope the action handler answers with on its deny/error paths. */
+type ActionErrorBody = {
+  __outcome?: string;
+  message: string;
+  data?: Record<string, unknown>;
+};
+
+/**
+ * Read a deny/error response body. `Response.json()` is typed `unknown` (it is
+ * an untrusted-JSON boundary); asserting the wire shape once here keeps the
+ * per-test assertions readable and single-sources what they may index into.
+ */
+async function readErrorBody(res: Response): Promise<ActionErrorBody> {
+  return (await res.json()) as ActionErrorBody;
+}
+
 function buildHandler(
   actions: Record<
     string,
     | ((ctx: unknown, payload: unknown) => Promise<unknown>)
     | {
         fn: (ctx: unknown, payload: unknown) => Promise<unknown>;
-        input?: import('@standard-schema/spec').StandardSchemaV1;
+        input?: StandardSchemaV1;
         use?: ReadonlyArray<unknown>;
         routeId?: string;
       }
@@ -532,9 +548,10 @@ describe('pageActionsHandler', () => {
       }),
     });
     expect(res.status).toBe(422);
-    const body = await res.json();
+    const body = await readErrorBody(res);
     expect(body.__outcome).toBe('deny');
-    expect(body.data[VALIDATION_ISSUES_KEY]).toEqual([
+    expect(body.data).toBeDefined();
+    expect(body.data?.[VALIDATION_ISSUES_KEY]).toEqual([
       { path: ['title'], message: 'Required' },
     ]);
     expect(fn).not.toHaveBeenCalled(); // handler never ran
@@ -713,14 +730,14 @@ describe('pageActionsHandler', () => {
       };
       const prodRes = await postSubmit(buildHandler(routeBound, { byPattern }));
       expect(prodRes.status).toBe(500);
-      const prodBody = await prodRes.json();
+      const prodBody = await readErrorBody(prodRes);
       expect(prodBody.message).toBe(
         "Route-bound action '/foo/:id' could not compose its middleware chain"
       );
       const devRes = await postSubmit(
         buildHandler(routeBound, { byPattern }, { dev: true })
       );
-      const devBody = await devRes.json();
+      const devBody = await readErrorBody(devRes);
       expect(devBody.message).toContain(
         'resolver boom: internal path /srv/gates.ts'
       );
@@ -751,7 +768,7 @@ describe('pageActionsHandler', () => {
 
       expect(res.status).toBe(500);
       expect(actionFn).not.toHaveBeenCalled();
-      const body = await res.json();
+      const body = await readErrorBody(res);
       // Named as the bare action it is, not as a page-use resolver failure.
       expect(body.message).toContain(
         "Action 'pages/test.server.submit' could not compose its middleware chain"
@@ -804,7 +821,7 @@ describe('pageActionsHandler', () => {
     );
     const res = await postAction(handler, '/projects/p1');
     expect(res.status).toBe(400);
-    const loc = JSON.parse((await res.json()).message);
+    const loc = JSON.parse((await readErrorBody(res)).message);
     expect(loc.path).toBe('/projects/p1');
     expect(loc.pathParams).toEqual({ projectId: 'p1' });
   });
@@ -815,7 +832,7 @@ describe('pageActionsHandler', () => {
     });
     const res = await postAction(handler, '/projects/p1');
     expect(res.status).toBe(400);
-    expect(JSON.parse((await res.json()).message)).toBeNull();
+    expect(JSON.parse((await readErrorBody(res)).message)).toBeNull();
   });
 
   it('denies a route-bound action whose URL does not match its pattern (403)', async () => {
@@ -880,7 +897,10 @@ function buildTimedApp(
       timeoutMs?: number | false;
     };
     map.set('create', {
-      fn: action as (ctx: unknown, payload: unknown) => Promise<unknown>,
+      fn: action as unknown as (
+        ctx: unknown,
+        payload: unknown
+      ) => Promise<unknown>,
       use: metadata.use ?? [],
       timeoutMs: metadata.timeoutMs,
       moduleKey: 'pages/timed',
