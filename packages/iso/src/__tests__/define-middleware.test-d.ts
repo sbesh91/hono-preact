@@ -13,6 +13,7 @@ import {
   type Scope,
 } from '../define-middleware.js';
 import type { AppUseElement } from '../define-app.js';
+import type { RouteDef } from '../define-routes.js';
 
 // `ServerCtx<Scope>` is the union of the three scope contexts: what an
 // all-scope middleware has to accept.
@@ -65,3 +66,33 @@ expectTypeOf(returned).toEqualTypeOf<ServerMiddleware<Scope>>();
 // An un-annotated `defineServerMiddleware(...)` infers the all-scope form, so
 // the default spelling is the one that fits an app-level `use`.
 expectTypeOf(awaited).toExtend<AppUseElement>();
+
+// The SAME contract at the route tier. `composeServerChain` folds
+// `resolvePageUse(path)` into the loader and action chains as well as the page
+// render, so a route node's `use` is dispatched in all three scopes exactly as
+// the app tier is.
+//
+// Pinned on `RouteDef` rather than through a `defineRoutes([...])` call. That
+// route looks more end-to-end and is worse: `defineRoutes` takes
+// `const T extends readonly RouteDef[]`, and in a hand-built route literal any
+// OTHER mismatch (a layout fixture, a missing child) also lands on the same
+// line, so a `@ts-expect-error` there stays "used" whether or not `use` is
+// rejected. That pin passed identically with `PageUse` reshaped and reverted,
+// i.e. it asserted nothing. This one was mutation-checked: reverting
+// `PageUse` to `ServerMiddleware<'page'>` makes all three directives unused.
+declare const routeUseAll: RouteDef;
+void ({ ...routeUseAll, path: '/ok', use: [allMw] } satisfies RouteDef);
+
+// @ts-expect-error page-only middleware cannot sit on a route node: that tier
+// is dispatched with a loader ctx and an action ctx too.
+const badRoutePage: RouteDef['use'] = [pageMw];
+void badRoutePage;
+
+// @ts-expect-error loader-only middleware cannot sit on a route node: the page
+// render would hand it a ServerPageCtx.
+const badRouteLoader: RouteDef['use'] = [loaderMw];
+void badRouteLoader;
+
+// @ts-expect-error action-only middleware cannot sit on a route node.
+const badRouteAction: RouteDef['use'] = [actionMw];
+void badRouteAction;
