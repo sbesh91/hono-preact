@@ -8,16 +8,12 @@ import * as routeChange from '../internal/route-change.js';
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
-type DocWithVt = Document & {
-  startViewTransition?: (cb: () => void | Promise<void>) => unknown;
-};
-
 afterEach(() => {
   cleanup();
   // Some tests below install the nav-transition scheduler and a fake
   // startViewTransition on the real document; reset both.
   routeChange.__resetTransitionStateForTesting();
-  delete (document as DocWithVt).startViewTransition;
+  Reflect.deleteProperty(document, 'startViewTransition');
   history.replaceState(null, '', '/');
   // The transition-arming tests below vi.spyOn the same module export in each
   // test; without restoring, an earlier test's spy stays wrapped around the
@@ -341,17 +337,19 @@ describe('NavLink', () => {
 
     // Scheduler-level continuation: the keyed arm expires instead of
     // suppressing the next navigation's transition.
-    const startViewTransition = vi.fn((cb: () => void | Promise<void>) => {
-      void Promise.resolve().then(() => cb());
-      return {
-        ready: Promise.resolve(),
-        updateCallbackDone: Promise.resolve(),
-        finished: Promise.resolve(),
-        types: { add: () => {} },
-        skipTransition: () => {},
-      };
-    });
-    (document as DocWithVt).startViewTransition = startViewTransition;
+    const startViewTransition = vi.fn(
+      (cb: () => void | Promise<void>): ViewTransition => {
+        void Promise.resolve().then(() => cb());
+        return {
+          ready: Promise.resolve(),
+          updateCallbackDone: Promise.resolve(),
+          finished: Promise.resolve(),
+          types: new Set<string>(),
+          skipTransition: () => {},
+        };
+      }
+    );
+    document.startViewTransition = startViewTransition;
     routeChange.installNavTransitionScheduler();
     history.pushState(null, '', '/other');
     options.debounceRendering!(() => {});
