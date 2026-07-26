@@ -62,7 +62,7 @@ describe('streaming loader: client-driven', () => {
     // connecting window, so `data` is undefined until the first chunk lands.
     function Page() {
       const s = ref.useData();
-      if (!('data' in s)) return <p data-testid="count">pending</p>;
+      if (s.status === 'loading') return <p data-testid="count">pending</p>;
       return <p data-testid="count">{s.data.count}</p>;
     }
 
@@ -70,7 +70,7 @@ describe('streaming loader: client-driven', () => {
       <LocationProvider>
         <Loader
           loader={ref}
-          location={{ path: '/', pathParams: {}, searchParams: {} } as never}
+          location={{ path: '/', pathParams: {}, searchParams: {} }}
         >
           <Page />
         </Loader>
@@ -105,10 +105,12 @@ describe('streaming loader: client-driven', () => {
     );
 
     const MODULE_KEY = 'test-stream-cold-err';
-    const ref = defineLoader<{ count: number }>(async () => ({ count: 0 }), {
-      __moduleKey: MODULE_KEY,
-      live: true,
-    });
+    const ref = defineLoader<{ count: number }>(
+      async function* () {
+        yield { count: 0 };
+      },
+      { __moduleKey: MODULE_KEY, live: true }
+    );
 
     // Records whether an OUTER boundary caught a throw. A cold STREAM error must
     // never reach it (only single-value cold errors route to the boundary).
@@ -117,7 +119,7 @@ describe('streaming loader: client-driven', () => {
       { children: ComponentChildren },
       { err: Error | null }
     > {
-      state = { err: null };
+      state: { err: Error | null } = { err: null };
       static getDerivedStateFromError(err: Error) {
         boundaryCaught = err;
         return { err };
@@ -194,7 +196,7 @@ describe('streaming loader: client-driven', () => {
     let lastError: Error | null = null;
     function Page() {
       const s = ref.useData();
-      if ('data' in s) lastData = s.data;
+      if (s.status !== 'loading') lastData = s.data;
       lastError = ref.useError();
       return null;
     }
@@ -203,7 +205,7 @@ describe('streaming loader: client-driven', () => {
       <LocationProvider>
         <Loader
           loader={ref}
-          location={{ path: '/', pathParams: {}, searchParams: {} } as never}
+          location={{ path: '/', pathParams: {}, searchParams: {} }}
         >
           <Page />
         </Loader>
@@ -254,10 +256,12 @@ describe('streaming loader: undefined accumulator (re-review #192 deep fix)', ()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res));
 
     const MODULE_KEY = 'test-stream-open-undef';
-    const ref = defineLoader<{ count: number }>(async () => ({ count: 0 }), {
-      __moduleKey: MODULE_KEY,
-      live: true,
-    });
+    const ref = defineLoader<{ count: number }>(
+      async function* () {
+        yield { count: 0 };
+      },
+      { __moduleKey: MODULE_KEY, live: true }
+    );
 
     const LiveView = ref.View(
       (s) => {
@@ -304,10 +308,12 @@ describe('streaming loader: undefined accumulator (re-review #192 deep fix)', ()
     );
 
     const MODULE_KEY = 'test-stream-closed-undef';
-    const ref = defineLoader<{ count: number }>(async () => ({ count: 0 }), {
-      __moduleKey: MODULE_KEY,
-      live: true,
-    });
+    const ref = defineLoader<{ count: number }>(
+      async function* () {
+        yield { count: 0 };
+      },
+      { __moduleKey: MODULE_KEY, live: true }
+    );
 
     const LiveView = ref.View(
       (s) => {

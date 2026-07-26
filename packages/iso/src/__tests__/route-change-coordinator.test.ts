@@ -15,27 +15,39 @@ import { resetHistoryShimForTesting } from '../internal/history-shim.js';
 // fake below does too).
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
+// `ViewTransition.types` is a `ViewTransitionTypeSet` (a `Set<string>`), so the
+// fakes below use a real Set rather than an `{ add }` stub; that keeps them
+// assignable to `document.startViewTransition`. The subclass also records add
+// ORDER, which the Set itself does not expose as an array.
+class RecordingTypeSet extends Set<string> {
+  constructor(private readonly log: string[]) {
+    super();
+  }
+  override add(value: string): this {
+    this.log.push(value);
+    return super.add(value);
+  }
+}
+
 function installFakeVt() {
   const typeAdds: string[] = [];
   let resolveFinished!: () => void;
   const finished = new Promise<void>((r) => (resolveFinished = r));
-  const startViewTransition = vi.fn((cb: () => void | Promise<void>) => {
-    void Promise.resolve().then(() => cb());
-    return {
-      ready: Promise.resolve(),
-      updateCallbackDone: Promise.resolve(),
-      finished,
-      types: { add: (t: string) => typeAdds.push(t) },
-      skipTransition: () => {},
-    };
-  });
+  const startViewTransition = vi.fn(
+    (cb: () => void | Promise<void>): ViewTransition => {
+      void Promise.resolve().then(() => cb());
+      return {
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+        finished,
+        types: new RecordingTypeSet(typeAdds),
+        skipTransition: () => {},
+      };
+    }
+  );
   vi.stubGlobal('document', { startViewTransition });
   return { startViewTransition, typeAdds, resolveFinished };
 }
-
-type DocWithVt = Document & {
-  startViewTransition?: (cb: () => void | Promise<void>) => unknown;
-};
 
 // Like installFakeVt but augments the REAL happy-dom document instead of
 // replacing it, so the scheduler's `view-transition-name` DOM scans (collectVt
@@ -45,17 +57,19 @@ function installFakeVtOnDoc() {
   const typeAdds: string[] = [];
   let resolveFinished!: () => void;
   const finished = new Promise<void>((r) => (resolveFinished = r));
-  const startViewTransition = vi.fn((cb: () => void | Promise<void>) => {
-    void Promise.resolve().then(() => cb());
-    return {
-      ready: Promise.resolve(),
-      updateCallbackDone: Promise.resolve(),
-      finished,
-      types: { add: (t: string) => typeAdds.push(t) },
-      skipTransition: () => {},
-    };
-  });
-  (document as DocWithVt).startViewTransition = startViewTransition;
+  const startViewTransition = vi.fn(
+    (cb: () => void | Promise<void>): ViewTransition => {
+      void Promise.resolve().then(() => cb());
+      return {
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+        finished,
+        types: new RecordingTypeSet(typeAdds),
+        skipTransition: () => {},
+      };
+    }
+  );
+  document.startViewTransition = startViewTransition;
   return { startViewTransition, typeAdds, resolveFinished };
 }
 
@@ -90,7 +104,7 @@ describe('debounceRendering view-transition scheduler', () => {
     // Undo installFakeVtOnDoc's direct augmentation of the real document and
     // clear any morph endpoints it painted (vi.unstubAllGlobals doesn't, since
     // these aren't stubs).
-    delete (document as DocWithVt).startViewTransition;
+    Reflect.deleteProperty(document, 'startViewTransition');
     document.body.innerHTML = '';
   });
 
@@ -128,7 +142,11 @@ describe('debounceRendering view-transition scheduler', () => {
         'afterSwap',
         'afterTransition',
       ] as const
-    ).map((p) => __subscribePhase(p, () => phases.push(p)));
+    ).map((p) =>
+      __subscribePhase(p, () => {
+        phases.push(p);
+      })
+    );
 
     navigateTo('/b');
     flushRender(() => {});
@@ -185,7 +203,9 @@ describe('debounceRendering view-transition scheduler', () => {
     installNavTransitionScheduler();
     const router = makeRouterLoadTracker();
     const phases: string[] = [];
-    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+    const u = __subscribePhase('afterSwap', () => {
+      phases.push('afterSwap');
+    });
 
     navigateTo('/b');
     flushRender(() => {
@@ -219,7 +239,9 @@ describe('debounceRendering view-transition scheduler', () => {
     const outer = makeRouterLoadTracker(); // top-level layout Router
     const inner = makeRouterLoadTracker(); // nested leaf Router (same url)
     const phases: string[] = [];
-    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+    const u = __subscribePhase('afterSwap', () => {
+      phases.push('afterSwap');
+    });
 
     navigateTo('/b');
     flushRender(() => {
@@ -262,7 +284,9 @@ describe('debounceRendering view-transition scheduler', () => {
     installFakeVt();
     installNavTransitionScheduler();
     const phases: string[] = [];
-    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+    const u = __subscribePhase('afterSwap', () => {
+      phases.push('afterSwap');
+    });
 
     // Simulate a leaked load: a prior route's Router suspended (onLoadStart) but
     // unmounted before committing, so its onLoadEnd never fired and its token
@@ -287,7 +311,9 @@ describe('debounceRendering view-transition scheduler', () => {
     const { startViewTransition } = installFakeVtOnDoc();
     installNavTransitionScheduler();
     const phases: string[] = [];
-    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+    const u = __subscribePhase('afterSwap', () => {
+      phases.push('afterSwap');
+    });
 
     // Navigate. The destination shell renders without the `hero` partner — its
     // data is still loading behind inner Suspense, which doesn't move
@@ -319,7 +345,9 @@ describe('debounceRendering view-transition scheduler', () => {
     const { startViewTransition } = installFakeVtOnDoc();
     installNavTransitionScheduler();
     const phases: string[] = [];
-    const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+    const u = __subscribePhase('afterSwap', () => {
+      phases.push('afterSwap');
+    });
 
     navigateTo('/b');
     // Shell commits: `hero` leaves, the persistent `layout-title` stays. The
@@ -349,7 +377,9 @@ describe('debounceRendering view-transition scheduler', () => {
       installFakeVtOnDoc();
       installNavTransitionScheduler();
       const phases: string[] = [];
-      const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+      const u = __subscribePhase('afterSwap', () => {
+        phases.push('afterSwap');
+      });
 
       navigateTo('/b');
       flushRender(() => oldHero.remove());
@@ -377,7 +407,9 @@ describe('debounceRendering view-transition scheduler', () => {
       installFakeVt();
       installNavTransitionScheduler();
       const phases: string[] = [];
-      const u = __subscribePhase('afterSwap', () => phases.push('afterSwap'));
+      const u = __subscribePhase('afterSwap', () => {
+        phases.push('afterSwap');
+      });
 
       // The route suspends during the nav render (so the in-flight Router is
       // tracked inside the transition, after the navigation's reset) and never

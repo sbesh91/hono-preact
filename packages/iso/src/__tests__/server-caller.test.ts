@@ -37,7 +37,7 @@ describe('createCaller', () => {
 
   it('validates loader params and short-circuits to a deny outcome', async () => {
     const c = await ctx();
-    const loader = defineLoader(async () => 1, {
+    const loader = serverRoute('/n').loader(async () => 1, {
       searchSchema: z.object({ n: z.coerce.number() }),
     });
     const r = await createCaller(c).call(loader, {
@@ -49,7 +49,7 @@ describe('createCaller', () => {
 
   it('coerces valid loader params and returns the value (success path)', async () => {
     const c = await ctx();
-    const loader = defineLoader(
+    const loader = serverRoute('/n').loader(
       async (lc) => ({ n: lc.location.searchParams.n }),
       { searchSchema: z.object({ n: z.coerce.number() }) }
     );

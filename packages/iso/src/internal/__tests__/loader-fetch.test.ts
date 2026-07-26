@@ -136,6 +136,8 @@ describe('fetchLoaderData: deny outcome envelope', () => {
     ).first.catch((e) => e);
 
     expect(err).toBeInstanceOf(LoaderValidationError);
+    // `expect` does not narrow; re-check so the reads below are typed.
+    if (!(err instanceof LoaderValidationError)) throw err;
     expect(err.status).toBe(400);
     expect(err.message).toBe('Invalid search parameters');
     expect(err.issues).toEqual(issues);
@@ -188,6 +190,7 @@ describe('fetchLoaderData: deny outcome envelope', () => {
 
     expect(err).toBeInstanceOf(Error);
     expect(err).not.toBeInstanceOf(LoaderValidationError);
+    if (!(err instanceof Error)) throw err;
     expect(err.message).toBe('Forbidden');
     expect(getValidationIssues(err)).toBeNull();
   });

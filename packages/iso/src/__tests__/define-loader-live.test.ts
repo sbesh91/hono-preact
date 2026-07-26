@@ -32,12 +32,19 @@ describe('defineLoader({ live })', () => {
     // enforce the accumulating form.
     const ref = defineLoader<number>(gen, { live: true });
     // The single-value View form throws; a streaming loader has no single value.
-    expect(() => ref.View(() => null)).toThrow(/initial, reduce/);
+    expect(() =>
+      // @ts-expect-error deliberately the wrong consumption form: a streaming
+      // LoaderRef's `.View` is the accumulating form only. This asserts the
+      // RUNTIME guard rejects it as well as the type.
+      ref.View(() => null)
+    ).toThrow(/initial, reduce/);
     // The accumulating form hosts it.
     expect(() =>
       ref.View(() => null, { initial: [] as number[], reduce: (acc) => acc })
     ).not.toThrow();
     // useData has no single value for a streaming loader either.
+    // @ts-expect-error deliberately calling `useData` on a streaming ref (typed
+    // `never`); this asserts the runtime guard throws too.
     expect(() => ref.useData()).toThrow(/useData/);
   });
 
@@ -47,6 +54,8 @@ describe('defineLoader({ live })', () => {
     // it throws instead (runtime defense-in-depth; the type makes `.Boundary`
     // `never` on a streaming ref). View's own delegation passes `accumulate`, so
     // it is unaffected.
+    // @ts-expect-error deliberately using `.Boundary` on a streaming ref (typed
+    // `never`); this asserts the runtime guard throws too.
     expect(() => ref.Boundary({ children: null })).toThrow(/View/);
   });
 

@@ -119,9 +119,12 @@ type Presence = { name: string; color: string };
 // RoomRef<Incoming, Outgoing, State, Params>.
 type TestRoomRef = RoomRef<ChatMsg, ChatMsg, Presence, { roomId: string }>;
 
+// `.useRoom` mirrors what the client stub attaches (see roomStubSource in the
+// Vite plugin); without it this is not a complete RoomRef.
 const roomRef: TestRoomRef = {
   [FORM_MODULE_FIELD]: 'pages/board.server',
   [FORM_ROOM_FIELD]: 'board',
+  useRoom: (...args) => useRoom(roomRef, ...args),
 };
 
 // Envelope/frame aliases for assertions.

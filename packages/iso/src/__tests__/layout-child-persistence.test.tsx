@@ -85,58 +85,67 @@ const manifest = defineRoutes([
   { path: '/other', view: () => Promise.resolve({ default: OtherView }) },
 ]);
 
+// `@testing-library/preact` types `container` (and `querySelector`) as `Element`,
+// while the DOM queries below need an `HTMLElement`. Narrow with a real
+// `instanceof` check so a wrong assumption fails loudly here rather than at a
+// later property read.
+function asHtml(el: Element | null): HTMLElement {
+  if (!(el instanceof HTMLElement)) {
+    throw new Error(`expected an HTMLElement, got ${el?.nodeName ?? 'null'}`);
+  }
+  return el;
+}
+
 describe('layout-child persistence', () => {
   it('persists across intra-scope nav, tears down on exit, remounts on re-entry', async () => {
     history.replaceState(null, '', '/app');
     const { container } = render(
       h(LocationProvider, null, h(Routes, { routes: manifest }))
     );
+    const host = asHtml(container);
 
-    await findByTestId(container, 'bar');
+    await findByTestId(host, 'bar');
     expect(barMounts).toBe(1);
     await waitFor(() => expect(liveConnections).toBe(1));
 
-    fireEvent.click(await findByTestId(container, 'bar-inc'));
-    fireEvent.click(await findByTestId(container, 'bar-inc'));
+    fireEvent.click(await findByTestId(host, 'bar-inc'));
+    fireEvent.click(await findByTestId(host, 'bar-inc'));
     await waitFor(() =>
       expect(
-        (container.querySelector('[data-testid=bar-count]') as HTMLElement)
-          .textContent
+        asHtml(container.querySelector('[data-testid=bar-count]')).textContent
       ).toBe('2')
     );
 
     // Intra-scope nav: no remount, state preserved.
-    fireEvent.click(await findByTestId(container, 'to-detail'));
-    await findByTestId(container, 'to-index');
+    fireEvent.click(await findByTestId(host, 'to-detail'));
+    await findByTestId(host, 'to-index');
     expect(barMounts).toBe(1);
     expect(liveConnections).toBe(1);
     expect(
-      (container.querySelector('[data-testid=bar]') as HTMLElement).dataset.seq
+      asHtml(container.querySelector('[data-testid=bar]')).dataset.seq
     ).toBe('1');
     expect(
-      (container.querySelector('[data-testid=bar-count]') as HTMLElement)
-        .textContent
+      asHtml(container.querySelector('[data-testid=bar-count]')).textContent
     ).toBe('2');
 
     // Leave the scope: bar gone, connection torn down (a transient remount on
     // the way out is preact-iso rendering the outgoing route during the swap;
     // assert the end state).
     const mountsBeforeExit = barMounts;
-    fireEvent.click(await findByTestId(container, 'to-other'));
-    await findByTestId(container, 'to-app');
+    fireEvent.click(await findByTestId(host, 'to-other'));
+    await findByTestId(host, 'to-app');
     expect(container.querySelector('[data-testid=bar]')).toBeNull();
     await waitFor(() => expect(liveConnections).toBe(0));
     expect(barMounts).toBeGreaterThan(mountsBeforeExit);
 
     // Re-enter: fresh instance, one connection, reset state.
     const mountsBeforeReentry = barMounts;
-    fireEvent.click(await findByTestId(container, 'to-app'));
-    await findByTestId(container, 'bar');
+    fireEvent.click(await findByTestId(host, 'to-app'));
+    await findByTestId(host, 'bar');
     expect(barMounts).toBeGreaterThan(mountsBeforeReentry);
     await waitFor(() => expect(liveConnections).toBe(1));
     expect(
-      (container.querySelector('[data-testid=bar-count]') as HTMLElement)
-        .textContent
+      asHtml(container.querySelector('[data-testid=bar-count]')).textContent
     ).toBe('0');
   });
 });

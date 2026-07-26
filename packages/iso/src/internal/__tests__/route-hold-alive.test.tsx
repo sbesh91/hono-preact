@@ -9,7 +9,13 @@ import {
   waitFor,
   act,
 } from '@testing-library/preact';
-import { LocationProvider, Router, Route, useLocation } from 'preact-iso';
+import {
+  LocationProvider,
+  Router,
+  Route,
+  useLocation,
+  type RouteHook,
+} from 'preact-iso';
 import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { defineClientMiddleware } from '../../define-middleware.js';
@@ -25,6 +31,21 @@ afterEach(() => {
   vi.restoreAllMocks();
   resetHistoryShimForTesting();
   if (typeof window !== 'undefined') window.history.replaceState({}, '', '/');
+});
+
+// The props preact-iso hands a matched route component. `PageMiddlewareHost`
+// wants a `RouteHook`, so project one explicitly instead of forwarding the raw
+// match props (which carry `query`/`params`, not `searchParams`/`pathParams`).
+type MatchedRouteProps = {
+  path: string;
+  query: Record<string, string>;
+  params: Record<string, string>;
+};
+
+const asRouteHook = (p: MatchedRouteProps): RouteHook => ({
+  path: p.path,
+  searchParams: p.query,
+  pathParams: p.params,
 });
 
 function NavOnce({ to }: { to: string }) {
@@ -51,33 +72,32 @@ describe('guarded route hold-alive', () => {
       });
       await next();
     });
-    const A = (loc: never) =>
-      h(
-        PageMiddlewareHost,
-        { use: [fastMw], location: loc },
-        h('div', { 'data-testid': 'route-A' }, 'route-A')
-      );
-    const B = (loc: never) =>
-      h(
-        PageMiddlewareHost,
-        { use: [gatedMw], location: loc },
-        h('div', { 'data-testid': 'route-B' }, 'route-B')
-      );
+    const A = (p: MatchedRouteProps) =>
+      h(PageMiddlewareHost, {
+        use: [fastMw],
+        location: asRouteHook(p),
+        children: h('div', { 'data-testid': 'route-A' }, 'route-A'),
+      });
+    const B = (p: MatchedRouteProps) =>
+      h(PageMiddlewareHost, {
+        use: [gatedMw],
+        location: asRouteHook(p),
+        children: h('div', { 'data-testid': 'route-B' }, 'route-B'),
+      });
     const onLoadStart = vi.fn();
 
     window.history.replaceState({}, '', '/a');
+    // JSX rather than `h(...)` for the Router subtree: preact-iso types
+    // `Router.children` as `NestedArray<VNode>`, which `h`'s `ComponentChildren`
+    // rest parameter does not satisfy.
     const { container } = rtlRender(
-      h(
-        LocationProvider,
-        null,
-        h(NavOnce, { to: '/b' }),
-        h(
-          Router,
-          { onLoadStart },
-          h(Route, { path: '/a', component: A as never }),
-          h(Route, { path: '/b', component: B as never })
-        )
-      )
+      <LocationProvider>
+        <NavOnce to="/b" />
+        <Router onLoadStart={onLoadStart}>
+          <Route path="/a" component={A} />
+          <Route path="/b" component={B} />
+        </Router>
+      </LocationProvider>
     );
 
     await waitFor(() =>
@@ -115,32 +135,28 @@ describe('guarded route hold-alive', () => {
       await next();
     });
     const { Capture, nav } = createRouteCapture();
-    const A = (loc: never) =>
-      h(
-        PageMiddlewareHost,
-        { use: [], location: loc },
-        h('div', { 'data-testid': 'route-A' }, 'route-A')
-      );
-    const B = (loc: never) =>
-      h(
-        PageMiddlewareHost,
-        { use: [gatedMw], location: loc },
-        h('div', { 'data-testid': 'route-B' }, 'route-B')
-      );
+    const A = (p: MatchedRouteProps) =>
+      h(PageMiddlewareHost, {
+        use: [],
+        location: asRouteHook(p),
+        children: h('div', { 'data-testid': 'route-A' }, 'route-A'),
+      });
+    const B = (p: MatchedRouteProps) =>
+      h(PageMiddlewareHost, {
+        use: [gatedMw],
+        location: asRouteHook(p),
+        children: h('div', { 'data-testid': 'route-B' }, 'route-B'),
+      });
 
     window.history.replaceState({}, '', '/a');
     const { container } = rtlRender(
-      h(
-        LocationProvider,
-        null,
-        h(Capture, null),
-        h(
-          Router,
-          null,
-          h(Route, { path: '/a', component: A as never }),
-          h(Route, { path: '/b', component: B as never })
-        )
-      )
+      <LocationProvider>
+        <Capture />
+        <Router>
+          <Route path="/a" component={A} />
+          <Route path="/b" component={B} />
+        </Router>
+      </LocationProvider>
     );
 
     await waitFor(() =>

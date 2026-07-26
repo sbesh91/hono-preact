@@ -1211,8 +1211,9 @@ describe('useAction client pre-validation (schema)', () => {
   });
 
   it('sends the original payload when the schema passes', async () => {
+    // Declare fetch's parameters so `mock.calls[0][1]` is the RequestInit.
     const fetchSpy = vi.fn(
-      async () =>
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
         new Response(
           JSON.stringify({ __outcome: 'success', data: { ok: true } }),
           {
@@ -1229,9 +1230,9 @@ describe('useAction client pre-validation (schema)', () => {
       await result.current.mutate({ title: 'Dune' });
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(
-      (fetchSpy.mock.calls[0][1] as RequestInit).body as string
-    );
+    const sent = fetchSpy.mock.calls[0][1]?.body;
+    if (typeof sent !== 'string') throw new Error('expected a JSON body');
+    const body = JSON.parse(sent);
     expect(body.payload).toEqual({ title: 'Dune' });
   });
 

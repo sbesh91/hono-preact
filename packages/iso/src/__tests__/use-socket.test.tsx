@@ -108,9 +108,12 @@ afterEach(() => {
 type ChatMsg = { text: string };
 type ServerMsg = { reply: string };
 
+// `.useSocket` mirrors what the client stub attaches (see socketStubSource in
+// the Vite plugin); without it these are not complete SocketRefs.
 const chatRef: SocketRef<ChatMsg, ServerMsg> = {
   [FORM_MODULE_FIELD]: 'pages/chat.server',
   [FORM_SOCKET_FIELD]: 'chat',
+  useSocket: (...args) => useSocket(chatRef, ...args),
 };
 
 // A route-bound ref (e.g. serverRoute('/board/:id').socket(...)) carrying
@@ -118,6 +121,7 @@ const chatRef: SocketRef<ChatMsg, ServerMsg> = {
 const boardRef: SocketRef<ChatMsg, ServerMsg, { id: string }> = {
   [FORM_MODULE_FIELD]: 'pages/board.server',
   [FORM_SOCKET_FIELD]: 'board',
+  useSocket: (...args) => useSocket(boardRef, ...args),
 };
 
 // ---------------------------------------------------------------------------

@@ -3,17 +3,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/preact';
 import { defineAction, TimeoutError, useAction } from '../action.js';
 
-const originalFetch = global.fetch;
+const originalFetch = globalThis.fetch;
 
 describe('useAction timeout handling', () => {
   beforeEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
   });
 
   it('surfaces a timeout envelope (504 with __outcome: timeout) as a TimeoutError', async () => {
     const stub = defineAction(async () => 1, { __module: 'm', __action: 'a' });
 
-    global.fetch = vi
+    globalThis.fetch = vi
       .fn()
       .mockResolvedValue(
         new Response(
@@ -43,7 +43,7 @@ describe('useAction timeout handling', () => {
     const body =
       'event: message\ndata: "tick"\n\n' +
       'event: timeout\ndata: {"timeoutMs":75}\n\n';
-    global.fetch = vi.fn().mockResolvedValue(
+    globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(body, {
         status: 200,
         headers: { 'Content-Type': 'text/event-stream' },

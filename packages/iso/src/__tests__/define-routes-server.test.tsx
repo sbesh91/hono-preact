@@ -15,8 +15,12 @@ const noopLayout = () =>
   });
 const noopServer = () => Promise.resolve({});
 
-const a = defineServerMiddleware(async (_c, next) => next());
-const b = defineServerMiddleware(async (_c, next) => next());
+const a = defineServerMiddleware(async (_c, next) => {
+  await next();
+});
+const b = defineServerMiddleware(async (_c, next) => {
+  await next();
+});
 
 describe('defineRoutes: per-route location plumbing', () => {
   it('installs RouteLocationsProvider for a page-level server module', async () => {
@@ -47,7 +51,9 @@ describe('defineRoutes: per-route location plumbing', () => {
 
 describe('routeUse', () => {
   it('a server-bearing leaf under a guarded grouping is gated with no pageUse export', () => {
-    const gate = defineServerMiddleware(async (_c, next) => next());
+    const gate = defineServerMiddleware(async (_c, next) => {
+      await next();
+    });
     const m = defineRoutes([
       {
         path: '/admin',

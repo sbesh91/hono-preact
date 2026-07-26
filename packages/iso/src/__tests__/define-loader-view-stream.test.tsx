@@ -72,7 +72,7 @@ describe('loader.View (accumulating / streaming form)', () => {
     const Feed = ref.View<number[]>(
       (s) => (
         <p data-testid="out">
-          {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
+          {(s.data ?? []).join(',')}|{s.status}
         </p>
       ),
       {
@@ -118,7 +118,7 @@ describe('loader.View (accumulating / streaming form)', () => {
     const Feed = ref.View<number[]>(
       (s) => {
         const { reload } = useReload();
-        const data = s.status === 'connecting' ? [] : s.data;
+        const data = s.data ?? [];
         return (
           <div>
             <p data-testid="out">
@@ -195,7 +195,7 @@ describe('loader.View (accumulating / streaming form)', () => {
     const Feed = ref.View<number[]>(
       (s) => {
         const { reload } = useReload();
-        const data = s.status === 'connecting' ? [] : s.data;
+        const data = s.data ?? [];
         return (
           <div>
             <p data-testid="out">
@@ -291,7 +291,7 @@ describe('loader.View (accumulating / streaming form)', () => {
     const Feed = ref.View<number[]>(
       (s) => (
         <p data-testid="out">
-          {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
+          {(s.data ?? []).join(',')}|{s.status}
           {s.status === 'connecting' ? <ConnectingReloader /> : null}
         </p>
       ),

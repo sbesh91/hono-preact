@@ -100,10 +100,7 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     });
 
     await screen.findByText('ready');
-    expect(captured?.status).toBe('success');
-    expect(captured && 'data' in captured ? captured.data : undefined).toEqual({
-      msg: 'ready',
-    });
+    expect(captured).toEqual({ status: 'success', data: { msg: 'ready' } });
   });
 
   it('renders a defined-but-falsy resolved value (no undefined-precedence ambiguity)', async () => {
@@ -425,9 +422,10 @@ describe('v3 <Loader> stability', () => {
 describe('Loader: parametric loader cache should key on location', () => {
   it('does not serve stale cached data when navigating to a different path param', async () => {
     const calls: string[] = [];
-    const ref = defineLoader<{ id: string; title: string }>(
+    const ref = _defineRouteLoader<{ id: string; title: string }>(
+      '/movies/:id',
       async ({ location }) => {
-        const id = (location.pathParams as Record<string, string>).id;
+        const id = location.pathParams.id;
         calls.push(id);
         return { id, title: `Movie ${id}` };
       }
@@ -816,9 +814,7 @@ describe('stale-while-error for preloaded loaders on stream error (R1R2 review)'
       else if (s.status === 'revalidating')
         body = `reval:${JSON.stringify(s.data)}`;
       else if (s.status === 'error') body = `error:${JSON.stringify(s.data)}`;
-      else if (s.status === 'success')
-        body = `success:${JSON.stringify(s.data)}`;
-      else body = `other:${s.status}`;
+      else body = `success:${JSON.stringify(s.data)}`;
       return <span data-testid="out">{body}</span>;
     }
 
@@ -873,7 +869,7 @@ describe('undefined/null loader values (re-review #192 deep fix)', () => {
     let resolveInitial!: (v: string | undefined) => void;
     let rejectReload!: (e: Error) => void;
     const fn = vi
-      .fn()
+      .fn<() => Promise<string | undefined>>()
       .mockImplementationOnce(
         () =>
           new Promise<string | undefined>((r) => {
@@ -948,7 +944,7 @@ describe('undefined/null loader values (re-review #192 deep fix)', () => {
   it('enters revalidating (not cold loading) on reload over a settled-undefined value', async () => {
     let resolveInitial!: (v: string | undefined) => void;
     const fn = vi
-      .fn()
+      .fn<() => Promise<string | undefined>>()
       .mockImplementationOnce(
         () =>
           new Promise<string | undefined>((r) => {

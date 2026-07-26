@@ -1,19 +1,19 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach } from 'vitest';
-import { Fragment, h } from 'preact';
+import { Fragment, h, type ComponentChildren } from 'preact';
 import { useLocation } from 'preact-iso';
 import { act, render, cleanup } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineRoutes, Routes } from '../define-routes.js';
 import { contentRoutes } from '../content-routes.js';
 
-const page = (text: string) => (): Promise<unknown> =>
+const page = (text: string) => () =>
   Promise.resolve({ default: () => h('p', null, text) });
 
 const layout = () =>
   Promise.resolve({
-    default: ({ children }: { children: unknown }) =>
-      h('main', { 'data-docs': '' }, children as never),
+    default: ({ children }: { children?: ComponentChildren }) =>
+      h('main', { 'data-docs': '' }, children),
   });
 
 const modules = {
@@ -71,7 +71,7 @@ describe('contentRoutes integration', () => {
       h(
         LocationProvider,
         null,
-        h(Fragment, null, h(Grab), h(Routes, { routes }))
+        h(Fragment, null, h(Grab, null), h(Routes, { routes }))
       )
     );
     await findByText('DOCS HOME');
