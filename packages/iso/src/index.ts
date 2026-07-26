@@ -47,7 +47,7 @@ export type {
   LoaderRef,
   AnyLoaderRef,
   LoaderCtx,
-  Loader as LoaderFn,
+  LoaderFn,
   StreamStatus,
   LoaderState,
   StreamState,
