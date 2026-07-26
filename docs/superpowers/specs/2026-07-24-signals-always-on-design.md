@@ -104,8 +104,14 @@ Remove every trace of `hono-preact/signals`:
 - `vitest.config.ts` - remove the two `hono-preact/signals` / `@hono-preact/iso/signals`
   aliases.
 - `scripts/size-probe-config.mjs` - remove the `signals: ['signals.js']` bucket.
-  Keep `@preact/signals` in `EXTERNAL` (it stays a peer the app installs; the
-  probe measures framework glue, not the library, consistent with `preact`).
+  Do NOT add `@preact/signals` to `EXTERNAL`. That list is peers only, and
+  signals is a `dependency` (see the note at the end of this section), so the
+  app does not already have it: its bytes are the framework's bytes, exactly
+  like the bundled `@floating-ui/dom` in `packages/ui`. Excluding it prices the
+  entire always-on decision at zero. Measured with it counted: `loaders`
+  marginal 8,169 -> 11,037 B gzip, `actions` 6,596 -> 9,432, `realtime`
+  1,890 -> 4,743, and a whole realistic app bundle 19,792 -> 23,967 B (+21.1%)
+  against the pre-migration merge base.
 - `packages/create-hono-preact/templates/agents/AGENTS.md` - remove the
   `hono-preact/signals` public-entry bullet (regenerate the corpus after).
 - `packages/create-hono-preact/__tests__/agents-appendix.test.ts` - remove the
