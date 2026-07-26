@@ -3,8 +3,22 @@ name: CI
 on:
   push:
     branches: [main]
+  # No `branches:` filter on pull_request, deliberately. That filter matches the
+  # PR's BASE, so `[main]` silently excluded every stacked PR: a PR targeting
+  # another feature branch got no CI at all, and `gh pr checks` reported "no
+  # checks reported" rather than anything that looks like a failure. This repo
+  # develops in stacks (the signals migration landed as seven sub-PRs into an
+  # umbrella branch), so that was most of the review surface running unverified.
+  #
+  # Retargeting a PR does not rescue it either: a base change fires `edited`,
+  # which is not in the default type set (opened/synchronize/reopened), so the
+  # run only starts on the next push.
+  #
+  # Nothing below assumes the base is `main`. The PR-only jobs gate on
+  # `github.event_name == 'pull_request'`, and the size job diffs against
+  # `github.event.pull_request.base.ref`, so a stacked PR measures its own
+  # marginal delta over its parent rather than over `main`.
   pull_request:
-    branches: [main]
 
 # Collapse superseded runs per ref. Cancel-in-progress only for PRs: a fast
 # series of pushes to a PR branch should drop stale runs (and the stale size
