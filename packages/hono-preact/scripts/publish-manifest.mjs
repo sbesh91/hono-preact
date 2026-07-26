@@ -41,6 +41,11 @@ const UNPUBLISHED_DEV_DEPS = [
  * object it holds.
  *
  * @param {Record<string, unknown>} manifest
+ * @returns {Record<string, unknown>} the same shape as `manifest`. Declared
+ *   rather than inferred: the two return statements otherwise widen to a union
+ *   whose second arm carries only `devDependencies`, so a caller reading any
+ *   other field (`name`, `version`) fails to typecheck even though both arms
+ *   spread the whole manifest.
  */
 export function stripUnpublishedDevDeps(manifest) {
   if (!manifest.devDependencies) return { ...manifest };
