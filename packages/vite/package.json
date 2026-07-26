@@ -43,7 +43,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepublishOnly": "tsc"
+    "prepublishOnly": "tsc",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@babel/parser": "^8.0.0",

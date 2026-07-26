@@ -32,6 +32,7 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
     });
     expect(src).toContain(
       `import { createServerEntry } from 'hono-preact/server/internal/runtime';`
@@ -46,6 +47,7 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
     });
     expect(src).toContain(`import Layout from '/proj/src/Layout.tsx';`);
     expect(src).toContain(`import routes from '/proj/src/routes.ts';`);
@@ -103,6 +105,7 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: '/p/src/api.ts',
       appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
     });
     expect(src).toContain(`import userApp from '/p/src/api.ts';`);
     expect(src).toContain('api: userApp,');
@@ -114,6 +117,7 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
     });
     expect(src).not.toContain('api.ts');
     expect(src).not.toContain('userApp');
@@ -126,6 +130,7 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: '/p/src/app-config.ts',
+      serverRegistryGlob: undefined,
     });
     expect(src).toContain(`import appConfig from '/p/src/app-config.ts';`);
     expect(src).not.toContain('const appConfig = { use: [] };');
@@ -138,6 +143,7 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/p/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
     });
     expect(src).not.toContain('app-config');
     expect(src).toContain('const appConfig = { use: [] };');
@@ -150,6 +156,7 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
       devGlobalCssUrl: '/src/styles/root.css',
     });
     expect(src).toContain(
@@ -164,6 +171,7 @@ describe('generateCoreAppModule', () => {
       routesAbsPath: '/proj/src/routes.ts',
       apiAbsPath: undefined,
       appConfigAbsPath: undefined,
+      serverRegistryGlob: undefined,
     });
     expect(src).not.toContain('installDevGlobalCss');
   });
