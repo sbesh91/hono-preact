@@ -150,7 +150,7 @@ describe('renderPage', () => {
     );
     const appConfig = defineApp({
       use: [
-        defineServerMiddleware<'page'>(async () => {
+        defineServerMiddleware(async () => {
           // Intentional misuse: render outcomes belong at page scope.
           throw renderOutcome(Alt);
         }),
@@ -177,15 +177,22 @@ describe('renderPage', () => {
     const seen: Record<string, unknown> = {};
     const appConfig = defineApp({
       use: [
-        defineServerMiddleware<'page'>(async (ctx) => {
-          const sp = ctx.location.searchParams;
-          // `.hasOwnProperty` must not throw (it did when these were
-          // null-prototype): the regression this test guards against.
-          seen.hasToken = sp.hasOwnProperty('token');
-          seen.hasConstructor = Object.hasOwn(sp, 'constructor');
-          seen.keys = Object.keys(sp);
-          seen.pathKeys = Object.keys(ctx.location.pathParams);
-          seen.realQuery = sp.token;
+        defineServerMiddleware(async (ctx) => {
+          // App-level `use` is dispatched in all three scopes, so an entry
+          // that reads `ctx.location` narrows first. Narrow positively: an
+          // early `return` would be the dispatcher's "returned without
+          // calling next()" contract violation, not a skip. This test drives
+          // the page path.
+          if (ctx.scope === 'page') {
+            const sp = ctx.location.searchParams;
+            // `.hasOwnProperty` must not throw (it did when these were
+            // null-prototype): the regression this test guards against.
+            seen.hasToken = sp.hasOwnProperty('token');
+            seen.hasConstructor = Object.hasOwn(sp, 'constructor');
+            seen.keys = Object.keys(sp);
+            seen.pathKeys = Object.keys(ctx.location.pathParams);
+            seen.realQuery = sp.token;
+          }
         }),
       ],
     });

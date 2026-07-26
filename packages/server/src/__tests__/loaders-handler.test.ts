@@ -964,7 +964,7 @@ describe('subtree-bound loader chain (real manifest)', () => {
     gateImpl: (calls: string[]) => Parameters<typeof defineServerMiddleware>[0],
     calls: string[]
   ) => {
-    const gate = defineServerMiddleware<'page'>(gateImpl(calls));
+    const gate = defineServerMiddleware(gateImpl(calls));
     const m = defineRoutes([
       {
         path: '/shop',
@@ -1052,7 +1052,7 @@ describe('root-layout bound loader chain (real manifest)', () => {
 
   it("a serverRoute('/x') loader under a root layout runs the root gate", async () => {
     const calls: string[] = [];
-    const gate = defineServerMiddleware<'page'>(async (_ctx, next) => {
+    const gate = defineServerMiddleware(async (_ctx, next) => {
       calls.push('gate');
       await next();
     });

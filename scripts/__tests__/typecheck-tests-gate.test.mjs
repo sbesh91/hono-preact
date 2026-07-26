@@ -23,15 +23,20 @@ import ts from 'typescript';
 
 const ROOT = resolve(import.meta.dirname, '../..');
 
-// Test sources whose typechecking this gate is responsible for. Two kinds are
-// deliberately out of scope:
-//   * `*.test-d.ts(x)` are type-level tests run by `pnpm test:types`
-//     (vitest's typecheck mode) against the built `dist/`, using vitest type
-//     assertion helpers that want that environment.
-//   * `__tests__/fixtures/**` are standalone mini-apps compiled by a CHILD
-//     Vite process, not part of the enclosing package's program at all. They
-//     resolve imports through their own `resolve.alias`, which tsc has no
-//     equivalent of.
+// Test sources whose typechecking this gate is responsible for. One kind is
+// deliberately out of scope: `*.test-d.ts(x)`, the type-level tests
+// `pnpm test:types` runs (vitest's typecheck mode) against the built `dist/`,
+// using vitest type assertion helpers that want that environment.
+//
+// `__tests__/fixtures/**` is deliberately IN scope. Those are standalone
+// mini-apps compiled by a CHILD Vite process, and they were exempt here for as
+// long as the framework imports they make (aliased into the child process by
+// each fixture's `resolve.alias`) had no tsc equivalent. `compilerOptions.paths`
+// is that equivalent, so a fixture belongs in some program like any other test
+// source. The exemption was not free: `packages/vite`'s params fixture was the
+// only thing exercising a real `defineLoader`/`StandaloneOpts` mismatch, and
+// nothing could report it while the fixture sat outside every program.
+//
 // Both layouts are covered on purpose. Most packages keep tests under
 // `src/**/__tests__/`, but `packages/hono-preact` keeps them at the package
 // ROOT (`__tests__/`), outside the `include: ["src/**/*.ts"]` its build config
@@ -46,7 +51,6 @@ const TEST_SOURCES = [
   '__tests__/**/*.tsx',
 ];
 const TYPE_LEVEL_TEST = /\.test-d\.tsx?$/;
-const CHILD_BUILD_FIXTURE = /(^|\/)__tests__\/fixtures\//;
 
 /** The `packages:` globs from pnpm-workspace.yaml, as written. */
 function workspaceGlobs() {
@@ -89,7 +93,7 @@ function pkgJson(dir) {
 function ownedTestFiles(dir) {
   return TEST_SOURCES.flatMap((g) => globSync(g, { cwd: join(ROOT, dir) }))
     .map((f) => `${dir}/${posix(f)}`)
-    .filter((f) => !TYPE_LEVEL_TEST.test(f) && !CHILD_BUILD_FIXTURE.test(f))
+    .filter((f) => !TYPE_LEVEL_TEST.test(f))
     .sort();
 }
 

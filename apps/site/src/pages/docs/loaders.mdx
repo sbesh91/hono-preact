@@ -456,6 +456,23 @@ defineLoader(async ({ c, signal }) => {
 
 By convention, loaders read; actions write. Setting cookies or headers from a loader is allowed but discouraged. On the SSR path, `setCookie(ctx.c, …)` from a non-streaming loader survives to the response. A streaming loader can set cookies only before its first `yield`; anything written after is dropped because the response headers are already committed.
 
+### Typing a loader written out of line
+
+A function written inline in `defineLoader(...)` or `route.loader(...)` needs no annotation: the constructor types its context for you. When the function lives on its own, as a named `const` or a helper two loaders share, `LoaderFn` is that type:
+
+```ts
+import { defineLoader, type LoaderFn } from 'hono-preact';
+
+const listMovies: LoaderFn<{ movies: MovieList }> = async ({ c, signal }) =>
+  getMovies({ token: getCookie(c, 'session'), signal });
+
+export const serverLoaders = {
+  default: defineLoader(listMovies),
+};
+```
+
+`LoaderFn<T>` is the route-independent single-value form, and its generics mirror the `LoaderRef<T>` the constructor hands back. The second one is the streaming discriminant: `LoaderFn<T, true>` is an `async function*` yielding `T`. The third supplies path params for a function that reads `ctx.location`, as in `LoaderFn<Movie, false, RouteParams<'/movies/:id'>>`; pass it only when you need it, since a route-independent `LoaderFn` asks less of its context and so composes with `route.loader` as well.
+
 ## Search-param dependencies (`params`)
 
 By default, a loader's cache key includes only the path and path params. Declare search-param dependencies per loader with the `params` option:

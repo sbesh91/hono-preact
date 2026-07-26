@@ -6,7 +6,7 @@ type Outgoing = { kind: 'echo'; text: string; who: string };
 // A guard that always denies (the canonical auth-deny shape). On Cloudflare the
 // worker must close 4403 via the connector deny WITHOUT contacting the DO.
 const denyAll = defineServerMiddleware(async () => {
-  throw deny('forbidden', 403);
+  throw deny('FORBIDDEN');
 });
 
 export const serverSockets = {

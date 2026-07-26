@@ -24,6 +24,35 @@ const requestId = defineServerMiddleware(async (ctx, next) => {
 export default defineApp({ use: [requestId] });
 ```
 
+App-level entries are dispatched in **all three scopes**, so `defineApp({ use })`
+accepts only middleware that handles all three: write
+`defineServerMiddleware(...)` with no scope argument (the default), and narrow on
+`ctx.scope` before touching anything scope-specific. A
+`defineServerMiddleware<'page'>(...)` is a type error there, because the loader
+and action dispatches would hand it a context it never signed up for.
+
+The context field that catches people out is `location`. Page and loader scope
+always carry one; action scope carries one only for a route-bound action
+(`serverRoute(r).action`). Absent is not "unrestricted":
+
+```ts
+import { defineServerMiddleware, deny } from 'hono-preact';
+
+const requireOrgMember = defineServerMiddleware(async (ctx, next) => {
+  // A bare `defineAction` POST is route-independent and carries no location,
+  // so there is no org to check against. Fail closed rather than skipping.
+  if (!ctx.location) throw deny(403, 'Not route-bound');
+  if (!(await mayAccess(ctx.c, ctx.location.pathParams.orgId))) {
+    throw deny(403, 'Not a member of this org');
+  }
+  await next();
+});
+```
+
+A `render(Component)` outcome is page-scope only, so an app-level entry that
+throws one narrows first (`if (ctx.scope === 'page') throw render(...)`);
+throwing it on a loader or action request is a 500.
+
 ```ts
 // src/routes.ts
 import { defineRoutes } from 'hono-preact';
@@ -148,6 +177,19 @@ alike. Two cases carry no location: a bare `defineAction` (route-independent, so
 bind it with `serverRoute(r)` or give it a unit-level `use` to gate it), and the
 in-process `call()` path (server-to-server, which runs no route-node middleware).
 
+The scope argument to `defineServerMiddleware` picks which of those contexts the
+entry receives, and where it may be attached. `<'loader'>` gets a
+`ServerLoaderCtx` (with `module` and `loader`) and fits a loader's own `use`;
+`<'action'>` gets a `ServerActionCtx` (with `module`, `action`, `payload`);
+`<'page'>` gets a `ServerPageCtx`. Omit it and the entry accepts all three.
+
+Omitting it is required for both of the outer tiers. An app-level `use` and a
+route node's `use` are each folded into that route's loader and action chains
+as well as its page render, so an entry in either one is dispatched with all
+three context shapes and must handle all three. Reach for the scope argument
+only on a unit's own `use` (a single loader's or a single action's), where
+exactly one shape can arrive.
+
 `defineClientMiddleware` runs only on the browser side, when the user navigates intra-app. It receives a minimal context with `scope: 'page'` and `location`; there's no Hono context because there's no server request.
 
 During a client navigation between routes that have page-layer middleware (`use`), the previous route stays visible while the next route's middleware chain resolves. The navigation commits and the new route mounts only after the chain completes, so the user never sees a blank interval between routes. This matches the behavior for plain lazy routes, where the router holds the outgoing content visible until the incoming route is ready. For apps that mount the page-middleware host directly (via `hono-preact/internal`), a `Router` ancestor is required as the suspense boundary; the `Routes` component in the generated client entry provides this automatically.
@@ -198,10 +240,16 @@ A middleware short-circuits by throwing one of three outcomes:
 ```ts
 import { redirect, deny, render } from 'hono-preact/page';
 
-const adminOnly = defineServerMiddleware<'page'>(async (ctx, next) => {
+// A route guard is dispatched at page, loader AND action scope, so it takes
+// the default all-scope spelling. `render` only means anything during a page
+// render, so narrow before throwing it; the redirect applies to every scope.
+const adminOnly = defineServerMiddleware(async (ctx, next) => {
   const user = await currentUser(ctx.c);
   if (!user) throw redirect('/login');
-  if (!user.isAdmin) throw render(NotAuthorizedPage);
+  if (!user.isAdmin) {
+    if (ctx.scope === 'page') throw render(NotAuthorizedPage);
+    throw deny('FORBIDDEN');
+  }
   await next();
 });
 
@@ -352,19 +400,23 @@ export const auditChunks = defineStreamObserver({
 
 ```ts
 // hono-preact/page is the page-scope-only subpath where `render` lives.
-import { defineServerMiddleware, redirect } from 'hono-preact';
+import { defineServerMiddleware, deny } from 'hono-preact';
 import { render } from 'hono-preact/page';
 import { LoginModal } from './LoginModal.js';
 import { currentUser } from './session.js';
 
-export const showLoginModal = defineServerMiddleware<'page'>(
-  async (ctx, next) => {
-    if (!(await currentUser(ctx.c))) {
+export const showLoginModal = defineServerMiddleware(async (ctx, next) => {
+  if (!(await currentUser(ctx.c))) {
+    // `render` is page-scope only, and a route node's `use` is dispatched at
+    // loader and action scope too, so narrow first. On the RPC paths the
+    // client surfaces the deny as a thrown Error rather than a modal.
+    if (ctx.scope === 'page') {
       // Render an alternative component in place of the matched page.
       // The page tree is replaced; the user keeps the current URL.
       throw render(LoginModal);
     }
-    await next();
+    throw deny('UNAUTHORIZED');
   }
-);
+  await next();
+});
 ```

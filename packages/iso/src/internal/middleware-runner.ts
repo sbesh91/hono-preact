@@ -33,8 +33,9 @@ type DispatchArgs<Ctx, T> = {
  * short-circuit by throwing/returning an Outcome. Outer middleware runs first
  * on the way in and last on the way out (the Hono/Express/Koa convention). A
  * thrown Outcome anywhere unwinds to `{ kind: 'outcome' }`; any other throw
- * propagates. The inner value is threaded back out through the chain so
- * `next()` returns it to each middleware and the top-level result carries it.
+ * propagates. The inner value is threaded back out through the chain so the
+ * top-level result carries it; `next()` itself resolves with no value (see
+ * `Next`), which is what makes `return next()` a legal middleware body.
  *
  * `dispatchServer` / `dispatchClient` are thin scope-typed facades over this;
  * keeping one engine means the chain semantics are written and tested once.
@@ -92,7 +93,6 @@ export async function dispatch<Ctx, T>(
         );
       }
       downstream = { value: await runChain(index + 1) };
-      return downstream.value;
     };
     const ret = await mw.fn(ctx, next);
     if (isOutcome(ret)) throw ret;
