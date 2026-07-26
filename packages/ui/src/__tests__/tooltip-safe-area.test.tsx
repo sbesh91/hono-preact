@@ -48,7 +48,9 @@ function Example() {
 function openAndStub() {
   const utils = render(<Example />);
   fireEvent.pointerEnter(utils.getByText('Help'), { pointerType: 'mouse' });
-  act(() => vi.advanceTimersByTime(100)); // open after delay
+  act(() => {
+    vi.advanceTimersByTime(100);
+  }); // open after delay
   const popup = utils.getByRole('tooltip');
   const positioner = popup.parentElement;
   if (!positioner) throw new Error('positioner not found');
@@ -76,7 +78,9 @@ describe('Tooltip safe area', () => {
   it('stays open while the pointer dwells inside the corridor', () => {
     const { queryByRole } = openAndStub();
     move(150, 25); // park inside the corridor
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(queryByRole('tooltip')).not.toBeNull();
   });
 
@@ -84,7 +88,9 @@ describe('Tooltip safe area', () => {
     const { queryByRole } = openAndStub();
     move(150, 130); // gap, below the corridor -> arms grace
     expect(queryByRole('tooltip')).not.toBeNull();
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(queryByRole('tooltip')).toBeNull();
   });
 
@@ -92,7 +98,9 @@ describe('Tooltip safe area', () => {
     const { queryByRole } = openAndStub();
     move(150, 130); // leave the corridor -> arms grace
     move(250, 75); // reach the popup -> clears grace
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(queryByRole('tooltip')).not.toBeNull();
   });
 });

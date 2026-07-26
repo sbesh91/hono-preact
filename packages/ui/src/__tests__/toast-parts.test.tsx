@@ -58,7 +58,9 @@ describe('Toast parts', () => {
     act(() => {
       toast('Bye');
     });
-    act(() => fireEvent.click(getByText('x')));
+    act(() => {
+      fireEvent.click(getByText('x'));
+    });
     expect(toastStore.toasts).toHaveLength(0);
   });
 
@@ -71,7 +73,9 @@ describe('Toast parts', () => {
         action: { label: 'Undo', onClick: () => (clicked += 1) },
       });
     });
-    act(() => fireEvent.click(getByText('Undo')));
+    act(() => {
+      fireEvent.click(getByText('Undo'));
+    });
     expect(clicked).toBe(1);
     expect(toastStore.toasts).toHaveLength(0);
   });

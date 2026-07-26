@@ -57,7 +57,7 @@ describe('hono-preact-ui exports', () => {
 describe('Toast exports', () => {
   it('exposes the imperative toast fn with its variants', () => {
     expect(typeof ui.toast).toBe('function');
-    for (const k of [
+    const variants = [
       'success',
       'error',
       'info',
@@ -66,8 +66,9 @@ describe('Toast exports', () => {
       'custom',
       'promise',
       'dismiss',
-    ]) {
-      expect(typeof (ui.toast as Record<string, unknown>)[k]).toBe('function');
+    ] as const satisfies readonly (keyof typeof ui.toast)[];
+    for (const k of variants) {
+      expect(typeof ui.toast[k]).toBe('function');
     }
   });
 

@@ -36,10 +36,15 @@ describe('Menu exit animation', () => {
     const anim = makeAnimation();
     restore = installGetAnimations([anim]);
     const { getByText, queryByTestId } = render(<Setup />);
-    await act(async () => fireEvent.click(getByText('open')));
+    await act(async () => {
+      fireEvent.click(getByText('open'));
+    });
     expect(queryByTestId('menu')).not.toBeNull();
 
-    await act(async () => fireEvent.click(getByText('open'))); // toggle closed
+    // toggle closed
+    await act(async () => {
+      fireEvent.click(getByText('open'));
+    });
     expect(queryByTestId('menu')).not.toBeNull();
     expect(queryByTestId('menu')!.getAttribute('data-state')).toBe('closed');
 

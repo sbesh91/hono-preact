@@ -34,10 +34,14 @@ describe('Tooltip exit animation', () => {
     const anim = makeAnimation();
     restore = installGetAnimations([anim]);
     const { getByText, queryByTestId } = render(<Setup />);
-    await act(async () => fireEvent.focus(getByText('hover')));
+    await act(async () => {
+      fireEvent.focus(getByText('hover'));
+    });
     expect(queryByTestId('tip')).not.toBeNull();
 
-    await act(async () => fireEvent.blur(getByText('hover')));
+    await act(async () => {
+      fireEvent.blur(getByText('hover'));
+    });
     expect(queryByTestId('tip')).not.toBeNull();
     expect(queryByTestId('tip')!.getAttribute('data-state')).toBe('closed');
 

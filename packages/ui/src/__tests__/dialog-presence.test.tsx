@@ -35,11 +35,15 @@ describe('Dialog exit animation', () => {
     const anim = makeAnimation();
     restore = installGetAnimations([anim]);
     const { getByText, getByTestId } = render(<Setup />);
-    await act(async () => fireEvent.click(getByText('open')));
+    await act(async () => {
+      fireEvent.click(getByText('open'));
+    });
     const dlg = getByTestId('dlg') as HTMLDialogElement;
     expect(dlg.open).toBe(true);
 
-    await act(async () => fireEvent.click(getByText('close')));
+    await act(async () => {
+      fireEvent.click(getByText('close'));
+    });
     // Still open (deferred), marked closed for the exit CSS.
     expect(dlg.open).toBe(true);
     expect(dlg.getAttribute('data-state')).toBe('closed');
