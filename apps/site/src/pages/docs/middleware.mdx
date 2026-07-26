@@ -240,10 +240,16 @@ A middleware short-circuits by throwing one of three outcomes:
 ```ts
 import { redirect, deny, render } from 'hono-preact/page';
 
-const adminOnly = defineServerMiddleware<'page'>(async (ctx, next) => {
+// A route guard is dispatched at page, loader AND action scope, so it takes
+// the default all-scope spelling. `render` only means anything during a page
+// render, so narrow before throwing it; the redirect applies to every scope.
+const adminOnly = defineServerMiddleware(async (ctx, next) => {
   const user = await currentUser(ctx.c);
   if (!user) throw redirect('/login');
-  if (!user.isAdmin) throw render(NotAuthorizedPage);
+  if (!user.isAdmin) {
+    if (ctx.scope === 'page') throw render(NotAuthorizedPage);
+    throw deny('FORBIDDEN');
+  }
   await next();
 });
 
@@ -394,19 +400,23 @@ export const auditChunks = defineStreamObserver({
 
 ```ts
 // hono-preact/page is the page-scope-only subpath where `render` lives.
-import { defineServerMiddleware, redirect } from 'hono-preact';
+import { defineServerMiddleware, deny } from 'hono-preact';
 import { render } from 'hono-preact/page';
 import { LoginModal } from './LoginModal.js';
 import { currentUser } from './session.js';
 
-export const showLoginModal = defineServerMiddleware<'page'>(
-  async (ctx, next) => {
-    if (!(await currentUser(ctx.c))) {
+export const showLoginModal = defineServerMiddleware(async (ctx, next) => {
+  if (!(await currentUser(ctx.c))) {
+    // `render` is page-scope only, and a route node's `use` is dispatched at
+    // loader and action scope too, so narrow first. On the RPC paths the
+    // client surfaces the deny as a thrown Error rather than a modal.
+    if (ctx.scope === 'page') {
       // Render an alternative component in place of the matched page.
       // The page tree is replaced; the user keeps the current URL.
       throw render(LoginModal);
     }
-    await next();
+    throw deny('UNAUTHORIZED');
   }
-);
+  await next();
+});
 ```

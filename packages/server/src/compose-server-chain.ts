@@ -102,13 +102,12 @@ export async function composeServerChain<S extends Scope = Scope>(
   ];
   const observers = [...root.observers, ...page.observers, ...unit.observers];
   // `runs === 'server'` is the only half of this the runtime can decide; the
-  // scope half is the authoring seam's guarantee. Two of the three tiers make
-  // it: `AppConfig['use']` admits only all-scope middleware (this function
-  // dispatches it in all three), and a unit's own `use` is typed for that
-  // unit's own scope. The page tier does NOT yet: `PageUse` spells its server
-  // entries `ServerMiddleware<'page'>` even though a route node's `use` also
-  // wraps that route's bound loaders and actions, so a page-tier entry reading
-  // page-only ctx fields is a mis-scope this narrowing cannot catch.
+  // scope half is the authoring seam's guarantee, and all three tiers now make
+  // it. `AppConfig['use']` and `PageUse` both admit only all-scope middleware,
+  // because this function dispatches BOTH of those tiers in all three scopes
+  // (a route node's `use` wraps that route's bound loaders and actions, not
+  // just its page render). A unit's own `use` is typed for that unit's own
+  // scope, which is the one tier where exactly one ctx shape can arrive.
   //
   // The intersection keeps the runtime check instead of replacing it with a
   // cast: a classified entry, read at the scope this chain is composed for.
