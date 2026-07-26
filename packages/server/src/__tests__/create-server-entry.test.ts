@@ -40,7 +40,7 @@ const Layout = ({ children }: { children?: ComponentChildren }) =>
 describe('createServerEntry', () => {
   it('threads the manifest routeUse page guard onto the loader RPC path (issue #122 parity)', async () => {
     const calls: string[] = [];
-    const pageGuard = defineServerMiddleware<'page'>(async (_c, next) => {
+    const pageGuard = defineServerMiddleware(async (_c, next) => {
       calls.push('page:before');
       await next();
       calls.push('page:after');
@@ -87,7 +87,7 @@ describe('createServerEntry', () => {
 
   it('mounts the api app ahead of the reserved /__loaders path', async () => {
     let loadersRan = false;
-    const blocked = defineServerMiddleware<'page'>(async () => {});
+    const blocked = defineServerMiddleware(async () => {});
 
     const api = new Hono();
     api.use('*', async (c, next) => {
@@ -233,7 +233,7 @@ describe('createServerEntry', () => {
   it('wires the bare-loader guarded-route dev warning (dev: true)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const pageGuard = defineServerMiddleware<'page'>(async (_c, next) => {
+      const pageGuard = defineServerMiddleware(async (_c, next) => {
         await next();
       });
       const app = createServerEntry({
@@ -338,7 +338,7 @@ describe('createServerEntry', () => {
     // no longer fails the boot at all -- see the '#274 asymmetry fix'
     // describe block below -- so this is pinned against an explicitly bound
     // room, the one case that still throws.)
-    const appGuard = defineServerMiddleware<'page'>(async (_c, next) => {
+    const appGuard = defineServerMiddleware(async (_c, next) => {
       await next();
     });
     // A route-BOUND room (serverRoute(r).room): its declared route is
@@ -391,10 +391,10 @@ describe('colocated advisories fire in prod (#274 asymmetry fix)', () => {
   // a purely-informational fixture (an aliased exact-path loader binding) at
   // once, and prove the prod build treats them differently.
   const buildApp = (dev: boolean) => {
-    const layoutGate = defineServerMiddleware<'page'>(async (_c, next) => {
+    const layoutGate = defineServerMiddleware(async (_c, next) => {
       await next();
     });
-    const indexGate = defineServerMiddleware<'page'>(async (_c, next) => {
+    const indexGate = defineServerMiddleware(async (_c, next) => {
       await next();
     });
     const loader = _defineRouteLoader('/x', async () => 'ok', {
@@ -404,7 +404,7 @@ describe('colocated advisories fire in prod (#274 asymmetry fix)', () => {
     });
     const modX = { __moduleKey: 'test/x', serverLoaders: { l: loader } };
 
-    const appGuard = defineServerMiddleware<'page'>(async (_c, next) => {
+    const appGuard = defineServerMiddleware(async (_c, next) => {
       await next();
     });
     // A colocated room (no serverRoute binding): channel is route-independent
@@ -488,10 +488,10 @@ describe('colocated advisories fire in prod (#274 asymmetry fix)', () => {
 
 describe('aliased exact layout binding dev warning', () => {
   const buildApp = (dev: boolean) => {
-    const layoutGate = defineServerMiddleware<'page'>(async (_c, next) => {
+    const layoutGate = defineServerMiddleware(async (_c, next) => {
       await next();
     });
-    const indexGate = defineServerMiddleware<'page'>(async (_c, next) => {
+    const indexGate = defineServerMiddleware(async (_c, next) => {
       await next();
     });
     const loader = _defineRouteLoader('/x', async () => 'ok', {

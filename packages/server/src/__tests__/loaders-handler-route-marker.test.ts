@@ -20,11 +20,11 @@ import { _defineRouteLoader } from '@hono-preact/iso/internal';
 import { loadersHandler } from '../loaders-handler.js';
 
 // The scope is a parameter because the three tiers this file composes do not
-// share one TYPE: `AppConfig['use']` only admits `ServerMiddleware<'page'>`,
-// while a loader's own `use` is loader-scoped. At RUNTIME every tier is
-// dispatched with the same loader ctx (`ctx.scope === 'loader'`), so the app
-// tier's page typing is a declared/dispatched mismatch, not a real scope split.
-// None of these middleware read ctx, so the tag is inert here.
+// share one TYPE: `AppConfig['use']` admits only all-scope middleware, since it
+// is dispatched in all three scopes, while a loader's own `use` is
+// loader-scoped. At RUNTIME every tier here is dispatched with the same loader
+// ctx (`ctx.scope === 'loader'`). None of these middleware read ctx, so the tag
+// is inert here.
 function mw<S extends Scope = 'loader'>(name: string, calls: string[]) {
   return defineServerMiddleware<S>(async (_c, next) => {
     calls.push(name);
@@ -43,7 +43,7 @@ function post(app: Hono, body: unknown) {
 describe('loadersHandler: route-marker chain composition', () => {
   it('route-independent loader composes [app, unit] — page resolver is NOT called', async () => {
     const calls: string[] = [];
-    const appMw = mw<'page'>('app', calls);
+    const appMw = mw<Scope>('app', calls);
     const unitMw = mw('unit', calls);
     const pageMw = mw('page', calls);
 
@@ -88,7 +88,7 @@ describe('loadersHandler: route-marker chain composition', () => {
 
   it('route-bound loader composes [app, page, unit] from its declared route', async () => {
     const calls: string[] = [];
-    const appMw = mw<'page'>('app', calls);
+    const appMw = mw<Scope>('app', calls);
     const unitMw = mw('unit', calls);
     const pageMw = mw('page', calls);
 

@@ -16,23 +16,28 @@ export type Use<
   | (Streaming extends true ? StreamObserver<T, R> : never)
 >;
 
-// Page-level `use` arrays accept only page-scope server middleware. Writing
-// the type out non-distributively (rather than `Use<Scope, true>`) is
-// deliberate: when `S` is the full `Scope` union, `Use<S, ...>` distributes
-// over `S` and would expand to `ServerMiddleware<'page'> | ServerMiddleware<
-// 'loader'> | ServerMiddleware<'action'> | ...`, accepting an
-// explicitly-tagged loader or action middleware where a page middleware is
-// required. At runtime the page host casts to `ServerMiddleware<'page'>`,
-// so a mis-scoped middleware reading `ctx.module` / `ctx.loader` would see
-// undefined. Keep this list explicit.
+// A route node's `use` must handle EVERY scope, for the same reason
+// `AppUseElement` must: `composeServerChain` folds the page tier
+// (`resolvePageUse(path)`) into the loader chain and the action chain as well
+// as the page render, and those handlers dispatch it with a `ServerLoaderCtx`
+// / `ServerActionCtx`. A route guard is a route guard in all three.
+//
+// This previously read `ServerMiddleware<'page'>`, on the stated grounds that
+// naming the whole `Scope` union would distribute and let an
+// explicitly-tagged loader or action middleware in. Two things were wrong with
+// that. The distribution concern is real but is handled by
+// `ServerMiddleware<S>` being CONTRAVARIANT in `S` (see `ServerCtx`'s indexed
+// access in define-middleware.ts): an all-scope slot rejects every
+// single-scope form, including `<'page'>`. And the promise `<'page'>` made was
+// the unsound one: a `<'page'>` entry here is handed a loader ctx at runtime,
+// so `throw render(...)` from a route guard surfaces as a 500 on that route's
+// loader RPC rather than as a page render.
+//
+// Non-distributive spelling is still deliberate, so the union stays exactly
+// these three arms.
 export type PageUse = ReadonlyArray<
-  ServerMiddleware<'page'> | ClientMiddleware | StreamObserver<unknown, never>
+  ServerMiddleware<Scope> | ClientMiddleware | StreamObserver<unknown, never>
 >;
-
-// `AppUse` is structurally identical to `PageUse`: `render.tsx` dispatches
-// app-level middleware with `scope: 'page'`, so the same restriction
-// applies. Aliased so changes to the page shape ripple here automatically.
-export type AppUse = PageUse;
 
 export type LoaderUse<T, Streaming extends boolean> = Use<
   'loader',

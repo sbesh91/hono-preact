@@ -15,13 +15,11 @@ describe('loaders-handler dispatches the full chain (root -> page -> unit)', () 
   it('runs middleware in outer->inner order with appConfig + resolvePageUse + per-unit use', async () => {
     const calls: string[] = [];
 
-    // Typed page-scope because `AppConfig['use']` (AppUseElement) only admits
-    // `ServerMiddleware<'page'>`. Note the TYPE is not the runtime: composeServerChain
-    // folds the app tier into the same chain the loader RPC dispatches, so this
-    // middleware is actually invoked with `ctx.scope === 'loader'`. The type
-    // says page, the dispatcher says loader; that asymmetry is a real source bug,
-    // not something this test relies on (it never reads ctx).
-    const root = defineServerMiddleware<'page'>(async (_c, next) => {
+    // Typed all-scope, which is all `AppConfig['use']` (AppUseElement) admits:
+    // composeServerChain folds the app tier into the same chain the loader RPC
+    // dispatches, so this middleware is invoked with `ctx.scope === 'loader'`.
+    // `app-use-scope.test.tsx` pins that observation directly.
+    const root = defineServerMiddleware(async (_c, next) => {
       calls.push('root:before');
       await next();
       calls.push('root:after');
@@ -315,10 +313,10 @@ describe('pageActionsHandler dispatches the full chain (root -> page -> action)'
   it('runs root -> page -> action in correct order with all three layers', async () => {
     const order: string[] = [];
 
-    // Page-scope because that is all `AppConfig['use']` admits; at runtime the
+    // All-scope because that is all `AppConfig['use']` admits; at runtime the
     // action dispatcher calls it with `ctx.scope === 'action'` (see the note on
     // the loader twin above). Neither middleware here reads ctx.
-    const rootMw = defineServerMiddleware<'page'>(async (_ctx, next) => {
+    const rootMw = defineServerMiddleware(async (_ctx, next) => {
       order.push('root-in');
       await next();
       order.push('root-out');
