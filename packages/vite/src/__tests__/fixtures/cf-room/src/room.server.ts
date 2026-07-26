@@ -20,7 +20,7 @@ const deniedChannel = defineChannel('denied/:id')<RoomMsg>();
 // A third channel for the factory-less probe room (distinct topic space).
 type ProbeReply =
   | { dataIsUndefined: boolean }
-  | { paramsProtoIsNull: boolean };
+  | { paramsProtoIsObject: boolean };
 const probeChannel = defineChannel('probe/:id')<ProbeReply>();
 
 // A guard that ALWAYS denies. This is the canonical auth-deny shape (the same
@@ -28,7 +28,7 @@ const probeChannel = defineChannel('probe/:id')<ProbeReply>();
 // close the connection WS_DENY_CODE (4403) WITHOUT contacting the Durable
 // Object, NOT crash with a 500 (the bug this fixture's denied room guards).
 const denyAll = defineServerMiddleware(async () => {
-  throw deny('forbidden', 403);
+  throw deny('FORBIDDEN');
 });
 
 // `serverRooms` is discovered by buildRoomRegistry via this module's
