@@ -3,8 +3,13 @@ import { useRouteActive } from './route-active.js';
 import type { RoutePattern } from './internal/typed-routes.js';
 import { skipNextNavTransition } from './internal/route-change.js';
 
+// Anchor-specific, not the generic element attributes: `target`, `rel`,
+// `download`, `ping`, and `referrerpolicy` live only on AnchorHTMLAttributes,
+// and `willSoftNavigate` below reads `target` and `download` off the rendered
+// anchor. Typing the props as the narrower HTMLAttributes made props the
+// runtime already depends on unspellable by a caller.
 export type NavLinkProps = Omit<
-  JSX.HTMLAttributes<HTMLAnchorElement>,
+  JSX.AnchorHTMLAttributes<HTMLAnchorElement>,
   'class' | 'className'
 > & {
   href: string;

@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, act, cleanup, waitFor } from '@testing-library/preact';
 import type { RouteHook } from 'preact-iso';
-import { defineLoader } from '../../define-loader.js';
+import { defineLoader, type LoaderRef } from '../../define-loader.js';
 import { useLoaderRunner } from '../use-loader-runner.js';
 import * as preload from '../preload.js';
 import { env } from '../../is-browser.js';
@@ -43,12 +43,15 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
   } as unknown as RouteHook;
 
   type Data = { msg: string };
-  type Captured = ReturnType<typeof useLoaderRunner<Data>>;
+  // Widest value type: `LoaderRunnerState<T>` is covariant in `T`, so one probe
+  // can capture a run over any loader value type (including one that resolves
+  // to `undefined`, below).
+  type Captured = ReturnType<typeof useLoaderRunner<unknown>>;
   let captured: Captured;
 
   // Read the settled value off the rendered union (the `data`-bearing arms),
   // mirroring the old `runner.data`. Cold-error / loading carry none.
-  const viewData = (c: Captured): Data | undefined =>
+  const viewData = (c: Captured): unknown =>
     c.view.kind === 'render' && 'data' in c.view.state
       ? c.view.state.data
       : undefined;
@@ -69,14 +72,14 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
 
   // `loaderRef` (not `ref`): `ref` is a Preact-reserved prop and is intercepted
   // by the renderer rather than passed through to the component.
-  function Probe({
+  function Probe<T>({
     loaderRef,
     location = stateLoc,
   }: {
-    loaderRef: Parameters<typeof useLoaderRunner<Data>>[0];
+    loaderRef: LoaderRef<T, boolean>;
     location?: RouteHook;
   }) {
-    captured = useLoaderRunner<Data>(loaderRef, location, 'probe-id');
+    captured = useLoaderRunner<T>(loaderRef, location, 'probe-id');
     return null;
   }
 
@@ -189,11 +192,11 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
     let resolve!: (v: Data | undefined) => void;
     const fn = vi.fn(
       () =>
-        new Promise<Data>((r) => {
-          resolve = r as (v: Data) => void;
+        new Promise<Data | undefined>((r) => {
+          resolve = r;
         })
     );
-    const ref = defineLoader<Data>(fn);
+    const ref = defineLoader<Data | undefined>(fn);
     render(<Probe loaderRef={ref} />);
     await waitFor(() => expect(fn).toHaveBeenCalledTimes(1));
     await act(async () => {

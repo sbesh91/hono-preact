@@ -5,7 +5,7 @@ import {
   takeServerStreamingLoaders,
 } from '../streaming-ssr.js';
 
-async function* emptyGen(): AsyncGenerator<unknown, unknown, unknown> {}
+async function* emptyGen(): AsyncGenerator<unknown, void, unknown> {}
 
 describe('streaming-ssr registry', () => {
   it('registers per-request, takes once in order, then clears', async () => {

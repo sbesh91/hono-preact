@@ -3,7 +3,8 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Context } from 'hono';
 import { runRequestScope, getRequestHonoContext } from '../cache.js';
 import { runLoader } from '../internal/loader-runner.js';
-import { defineLoader } from '../define-loader.js';
+import { defineLoader, type LoaderRef } from '../define-loader.js';
+import { serverRoute } from '../server-route.js';
 import { isOutcome } from '../outcomes.js';
 import type { RouteHook } from 'preact-iso';
 
@@ -111,11 +112,11 @@ const rejectSchema: StandardSchemaV1<unknown, never> = {
 };
 
 function runDirect<T>(
-  ref: Parameters<typeof runLoader>[0],
+  ref: LoaderRef<T, boolean>,
   location: RouteHook
 ): Promise<T> {
-  return runLoader(
-    ref as Parameters<typeof runLoader>[0],
+  return runLoader<T>(
+    ref,
     location,
     'id-schema',
     new AbortController().signal,
@@ -124,13 +125,13 @@ function runDirect<T>(
       onError: () => {},
       onEnd: () => {},
     }
-  ) as Promise<T>;
+  );
 }
 
 describe('runLoader SSR path: no-schema loaders (unified coercion path)', () => {
   it('passes location unchanged to a loader with no schemas', async () => {
     let receivedLocation: unknown;
-    const ref = defineLoader(async (ctx) => {
+    const ref = serverRoute('/items').loader(async (ctx) => {
       receivedLocation = ctx.location;
       return { ok: true };
     });
@@ -158,7 +159,7 @@ describe('runLoader SSR path: searchSchema coercion', () => {
 
   it('passes coerced searchParams to the loader fn', async () => {
     let receivedSearch: unknown;
-    const ref = defineLoader(
+    const ref = serverRoute('/x').loader(
       async (ctx) => {
         receivedSearch = ctx.location.searchParams;
         return { ok: true };
@@ -189,7 +190,7 @@ describe('runLoader SSR path: searchSchema coercion', () => {
         }),
       },
     };
-    const ref = defineLoader(
+    const ref = serverRoute('/x').loader(
       async (ctx) => {
         receivedSearch = ctx.location.searchParams;
         return { ok: true };
@@ -201,7 +202,7 @@ describe('runLoader SSR path: searchSchema coercion', () => {
   });
 
   it('throws deny(400) on invalid searchParams', async () => {
-    const ref = defineLoader(async (_ctx) => ({ ok: true }), {
+    const ref = serverRoute('/x').loader(async (_ctx) => ({ ok: true }), {
       searchSchema: rejectSchema,
     });
     const err = await runDirect(ref, locWithSearch).catch((e) => e);
@@ -232,7 +233,7 @@ describe('runLoader SSR path: paramsSchema coercion', () => {
         }),
       },
     };
-    const ref = defineLoader(
+    const ref = serverRoute('/x/:id').loader(
       async (ctx) => {
         receivedParams = ctx.location.pathParams;
         return { ok: true };
@@ -244,7 +245,7 @@ describe('runLoader SSR path: paramsSchema coercion', () => {
   });
 
   it('throws deny(404) on invalid pathParams', async () => {
-    const ref = defineLoader(async (_ctx) => ({ ok: true }), {
+    const ref = serverRoute('/x/:id').loader(async (_ctx) => ({ ok: true }), {
       paramsSchema: rejectSchema,
     });
     const err = await runDirect(ref, locWithParams).catch((e) => e);

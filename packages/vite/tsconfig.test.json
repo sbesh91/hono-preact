@@ -1,0 +1,24 @@
+{
+  // Typechecks the test files `tsconfig.json` excludes from the BUILD (that
+  // exclusion is load-bearing: without it, tests would be emitted into `dist`
+  // and published). `noEmit` makes this config incapable of writing to `dist`.
+  //
+  // `*.test-d.ts(x)` stays out: `pnpm test:types` already runs those
+  // through vitest's typecheck mode against the built `dist`.
+  //
+  // `src/__tests__/fixtures/**` stays out: those are standalone mini-apps that
+  // are compiled by a CHILD Vite process (see each fixture's `vite.config.ts`),
+  // not part of this package's program. They import the `hono-preact` umbrella,
+  // which is deliberately unreachable from `packages/vite` (it would be a
+  // circular workspace dependency) and is supplied only by the fixture's own
+  // `resolve.alias`. TypeScript has no such alias, so these files can never
+  // resolve here.
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": [
+    "src/**/*.test-d.ts",
+    "src/**/*.test-d.tsx",
+    "src/__tests__/fixtures/**"
+  ]
+}

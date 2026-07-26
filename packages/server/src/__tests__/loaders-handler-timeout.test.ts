@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Hono } from 'hono';
 import { loadersHandler } from '../loaders-handler.js';
 import { defineLoader, isTimeout } from '@hono-preact/iso';
@@ -26,7 +26,7 @@ describe('loadersHandler timeouts', () => {
   it('returns a timeout outcome when the loader exceeds its timeoutMs', async () => {
     const ref = defineLoader(
       async ({ signal }) => {
-        await new Promise((resolve, reject) => {
+        await new Promise((_resolve, reject) => {
           signal.addEventListener('abort', () => reject(signal.reason), {
             once: true,
           });
@@ -53,7 +53,7 @@ describe('loadersHandler timeouts', () => {
   it('uses the handler default when timeoutMs is undefined on the loader', async () => {
     const ref = defineLoader(
       async ({ signal }) => {
-        await new Promise((resolve, reject) => {
+        await new Promise((_resolve, reject) => {
           signal.addEventListener('abort', () => reject(signal.reason), {
             once: true,
           });

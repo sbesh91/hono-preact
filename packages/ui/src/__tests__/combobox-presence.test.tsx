@@ -37,16 +37,18 @@ describe('Combobox exit animation', () => {
     restore = installGetAnimations([anim]);
     const { getByTestId } = render(<Setup />);
     // Focus opens the listbox (openOnFocus default).
-    await act(async () => fireEvent.focus(getByTestId('input')));
+    await act(async () => {
+      fireEvent.focus(getByTestId('input'));
+    });
     const lb = getByTestId('lb');
     // `hidden` is on the Positioner (parent); `data-state` is on the Popup (lb).
     const positioner = lb.parentElement!;
     expect(positioner.hidden).toBe(false);
 
     // Single Escape closes without reverting (Model A two-stage).
-    await act(async () =>
-      fireEvent.keyDown(getByTestId('input'), { key: 'Escape' })
-    );
+    await act(async () => {
+      fireEvent.keyDown(getByTestId('input'), { key: 'Escape' });
+    });
     // Still visible (animating out), marked closed for exit CSS.
     expect(positioner.hidden).toBe(false);
     expect(lb.getAttribute('data-state')).toBe('closed');

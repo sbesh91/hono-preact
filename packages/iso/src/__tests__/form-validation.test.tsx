@@ -145,7 +145,7 @@ describe('Form client pre-validation', () => {
   });
 
   it('blocks the POST and shows field errors when invalid', async () => {
-    const fetchSpy = vi.spyOn(global, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const { getByText, container } = render(
       <Form action={create} schema={schema}>
         <input name="title" />
@@ -203,7 +203,7 @@ describe('Form client pre-validation', () => {
   });
 
   it('proceeds with the POST when valid', async () => {
-    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
         headers: { 'Content-Type': 'application/json' },
       })
@@ -305,7 +305,7 @@ describe('Form client pre-validation', () => {
     // Fill both with the same value and submit (valid).
     passwordInput.value = 'hello';
     confirmInput.value = 'hello';
-    vi.spyOn(global, 'fetch').mockResolvedValue(
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({ __outcome: 'success', data: { ok: true } }),
         {
@@ -340,7 +340,7 @@ describe('Form client pre-validation', () => {
   // (Optimistic path is exercised by the same useActionResult code path since
   // [Fix 0] passes the action stub directly in both cases.)
   it('shows server deny(422) field errors scoped to this form', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({
           __outcome: 'deny',
@@ -376,7 +376,7 @@ describe('Form client pre-validation', () => {
   // debounce revalidation passes, the field stays clear. Un-edited fields' server
   // errors persist.
   it('clears a server error for an edited field after debounce revalidation', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(
         JSON.stringify({
           __outcome: 'deny',
@@ -443,7 +443,7 @@ describe('Form client pre-validation', () => {
       __module: 'pages/test.server',
       __action: 'throwing',
     });
-    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
         headers: { 'Content-Type': 'application/json' },
       })
@@ -485,7 +485,7 @@ describe('Form client pre-validation', () => {
       __module: 'pages/test.server',
       __action: 'throwing',
     });
-    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ __outcome: 'success', data: { id: 1 } }), {
         headers: { 'Content-Type': 'application/json' },
       })
@@ -675,7 +675,7 @@ describe('Form client pre-validation', () => {
       },
     };
 
-    const { getByText, queryByText, container } = render(
+    const { getByText, container } = render(
       <Form action={create} schema={controlledSchema}>
         <input name="title" />
         <FieldError name="title" />

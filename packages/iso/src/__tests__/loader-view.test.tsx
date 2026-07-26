@@ -4,6 +4,7 @@ import type { FunctionComponent } from 'preact';
 import { render, waitFor, cleanup } from '@testing-library/preact';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
+import { serverRoute } from '../server-route.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
 import { RouteLocationsProvider } from '../internal/route-locations.js';
 import type { LoaderRef } from '../define-loader.js';
@@ -55,7 +56,8 @@ describe('LoaderRef.Boundary', () => {
     // no separate Suspense fallback element.
     const Probe = () => {
       const s = ref.useData();
-      if (!('data' in s)) return <span data-testid="pending">loading</span>;
+      if (s.status === 'loading')
+        return <span data-testid="pending">loading</span>;
       return <span data-testid="data">{s.data.value}</span>;
     };
 
@@ -101,12 +103,10 @@ describe('LoaderRef.View', () => {
     });
 
     const View = ref.View((s) =>
-      'data' in s ? (
-        <span data-testid="name">{s.data.name}</span>
+      s.status === 'loading' ? (
+        <span data-testid="pending">loading:true</span>
       ) : (
-        <span data-testid="pending">
-          loading:{String(s.status === 'loading')}
-        </span>
+        <span data-testid="name">{s.data.name}</span>
       )
     );
 
@@ -139,11 +139,11 @@ describe('LoaderRef.View', () => {
     const View: FunctionComponent<{ label: string }> = ref.View<{
       label: string;
     }>((s) =>
-      'data' in s ? (
+      s.status === 'loading' ? null : (
         <span data-testid="composed">
           {s.label}:{s.data.value}
         </span>
-      ) : null
+      )
     );
     const locMap = new Map();
     locMap.set('pages/test-view-2', {
@@ -200,7 +200,9 @@ describe('LoaderRef.Boundary: errorFallback', () => {
 
     const View = ref.View(
       (s) =>
-        'data' in s ? <span data-testid="data">{s.data.value}</span> : null,
+        s.status === 'loading' ? null : (
+          <span data-testid="data">{s.data.value}</span>
+        ),
       { errorFallback: <span data-testid="view-err">view-caught</span> }
     );
 
@@ -225,7 +227,7 @@ describe('LoaderRef.Boundary: errorFallback', () => {
 describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => {
   it('uses the location for its own moduleKey', async () => {
     const seen: { path: string }[] = [];
-    const ref = defineLoader<{ path: string }>(
+    const ref = serverRoute('/movies/:id').loader<{ path: string }>(
       async ({ location }) => {
         seen.push({ path: location.path });
         return { path: location.path };
@@ -235,7 +237,7 @@ describe('LoaderRef.Boundary: reads location from RouteLocationsContext', () => 
 
     const Probe = () => {
       const s = ref.useData();
-      if (!('data' in s)) return null;
+      if (s.status === 'loading') return null;
       return <span data-testid="path">{s.data.path}</span>;
     };
 

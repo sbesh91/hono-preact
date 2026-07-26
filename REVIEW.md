@@ -81,8 +81,9 @@ why.
   against the unmodified code is not a regression test. Mutation-check it: break
   the code, confirm the test fails, restore.
 - **Cross-package reach.** A change to a public API must run the *consuming*
-  packages' suites via `pnpm test:coverage`; build and typecheck skip test
-  files, so a green build hides consumer breakage.
+  packages' suites via `pnpm test:coverage`; the build and `pnpm typecheck`
+  skip test files entirely, and `pnpm typecheck:tests` types them without
+  running them, so a green build hides consumer breakage.
 - **Verify claims yourself.** Do not accept a "this test fails" or "pre-existing
   failure" claim secondhand; run it.
 - **Right test for the layer.** Type contracts get `*.test-d.ts` under
@@ -183,17 +184,18 @@ These ride on top of the six lenses and have each blocked a merge before.
 
 ## Pre-merge gate: CI parity
 
-The reviewer confirms the eight checks that mirror `.github/workflows/ci.yml`
+The reviewer confirms the nine checks that mirror `.github/workflows/ci.yml`
 have been run locally, in order (full detail in `CLAUDE.md`):
 
 1. build framework packages (`@hono-preact/*` + `hono-preact` + `hono-preact-ui`)
 2. `pnpm gen:agents-corpus`
 3. `pnpm format:check`  (the single most-missed step; trivially fixable with `pnpm format`)
 4. `pnpm typecheck`
-5. `pnpm test:types`
-6. `pnpm test:coverage`
-7. `pnpm test:integration`
-8. `pnpm --filter site build`
+5. `pnpm typecheck:tests`  (test files only; step 4 cannot see them, because the build `tsconfig`s must keep excluding tests to keep them out of the published `dist/`)
+6. `pnpm test:types`
+7. `pnpm test:coverage`
+8. `pnpm test:integration`
+9. `pnpm --filter site build`
 
 Lighthouse, `client-size`, and the docs preview run in CI only; read their PR
 comments rather than running them locally.

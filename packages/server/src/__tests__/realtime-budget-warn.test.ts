@@ -36,7 +36,7 @@ describe('warnIfOverForwardBudget', () => {
 
   it('warns (not throws) when the data is not JSON-serializable (circular reference)', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const c: any = {};
+    const c: { self?: unknown } = {};
     c.self = c;
     expect(() => warnIfOverForwardBudget(c, true, 'socket')).not.toThrow();
     expect(warn).toHaveBeenCalledOnce();

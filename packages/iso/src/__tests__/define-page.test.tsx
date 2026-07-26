@@ -69,7 +69,11 @@ describe('definePage', () => {
     // State-based: the render fn runs eagerly during the pending window with
     // `data === undefined`, so guard for it (no separate Suspense fallback).
     const Body = loader.View((s) =>
-      'data' in s ? <p data-testid="msg">{s.data.msg}</p> : <p>loading</p>
+      s.status === 'loading' ? (
+        <p>loading</p>
+      ) : (
+        <p data-testid="msg">{s.data.msg}</p>
+      )
     );
 
     function PageBody() {

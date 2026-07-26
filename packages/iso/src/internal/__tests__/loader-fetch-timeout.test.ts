@@ -3,16 +3,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fetchLoaderData } from '../loader-fetch.js';
 import { TimeoutError } from '../../action.js';
 
-const originalFetch = global.fetch;
+const originalFetch = globalThis.fetch;
 const location = { path: '/', pathParams: {}, searchParams: {} };
 
 describe('fetchLoaderData timeout handling', () => {
   beforeEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
   });
 
   it('throws TimeoutError when the server returns a 504 timeout envelope', async () => {
-    global.fetch = vi
+    globalThis.fetch = vi
       .fn()
       .mockResolvedValue(
         new Response(
@@ -37,7 +37,7 @@ describe('fetchLoaderData timeout handling', () => {
 
   it('throws TimeoutError when the first SSE event is event: timeout', async () => {
     const body = 'event: timeout\ndata: {"timeoutMs":120}\n\n';
-    global.fetch = vi.fn().mockResolvedValue(
+    globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(body, {
         status: 200,
         headers: { 'Content-Type': 'text/event-stream' },
@@ -61,7 +61,7 @@ describe('fetchLoaderData timeout handling', () => {
     const body =
       'event: message\ndata: "first"\n\n' +
       'event: timeout\ndata: {"timeoutMs":250}\n\n';
-    global.fetch = vi.fn().mockResolvedValue(
+    globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(body, {
         status: 200,
         headers: { 'Content-Type': 'text/event-stream' },

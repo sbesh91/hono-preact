@@ -48,7 +48,9 @@ describe('ToastAnnouncer', () => {
     const { getByText, getByRole } = render(<Harness />);
     act(() => getByText('polite').click());
     expect(getByRole('status').textContent).toBe('Polite hello');
-    act(() => vi.advanceTimersByTime(1000));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
     expect(getByRole('status').textContent).toBe('');
     vi.useRealTimers();
   });

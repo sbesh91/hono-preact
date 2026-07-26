@@ -47,6 +47,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "prepublishOnly": "tsc"
   },
   "peerDependencies": {

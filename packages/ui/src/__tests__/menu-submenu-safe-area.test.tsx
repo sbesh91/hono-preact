@@ -66,7 +66,9 @@ function Example() {
 function openSubmenuAndStub() {
   const utils = render(<Example />);
   fireEvent.pointerEnter(utils.getByText('Share'), { pointerType: 'mouse' });
-  act(() => vi.advanceTimersByTime(100)); // submenu opens after openDelay
+  act(() => {
+    vi.advanceTimersByTime(100);
+  }); // submenu opens after openDelay
   // The submenu popup is the one labelled "Share"; its parent is the positioner.
   const submenuPopup = utils.getByText('Copy link').closest('[role="menu"]');
   if (!submenuPopup) throw new Error('submenu popup not found');
@@ -91,7 +93,9 @@ describe('Submenu safe area', () => {
   it('stays open while the pointer is over the submenu', () => {
     const { queryByText } = openSubmenuAndStub();
     move(250, 140); // over the submenu popup
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(queryByText('Copy link')).not.toBeNull();
   });
 
@@ -100,7 +104,9 @@ describe('Submenu safe area', () => {
     move(250, 140); // reach the submenu
     move(500, 400); // move far away, outside trigger + submenu + corridor
     expect(queryByText('Copy link')).not.toBeNull(); // grace not yet elapsed
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(queryByText('Copy link')).toBeNull();
   });
 });

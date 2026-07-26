@@ -4,13 +4,13 @@ import { renderHook, act } from '@testing-library/preact';
 import { defineAction } from '../action.js';
 import { useOptimisticAction } from '../optimistic-action.js';
 
-const originalFetch = global.fetch;
+const originalFetch = globalThis.fetch;
 
 describe('useOptimisticAction transition forwarding', () => {
-  let originalSVT: typeof document.startViewTransition | undefined;
+  let originalSVT: Document['startViewTransition'] | undefined;
   beforeEach(() => {
     originalSVT = document.startViewTransition;
-    global.fetch = vi.fn().mockResolvedValue(
+    globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -19,24 +19,25 @@ describe('useOptimisticAction transition forwarding', () => {
   });
   afterEach(() => {
     if (originalSVT === undefined) {
-      delete (document as { startViewTransition?: unknown })
-        .startViewTransition;
+      Reflect.deleteProperty(document, 'startViewTransition');
     } else {
       document.startViewTransition = originalSVT;
     }
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
   });
 
   it('wraps settle in startViewTransition when transition: true', async () => {
-    const spy = vi.fn((cb: () => void) => {
+    const spy = vi.fn((cb: () => void): ViewTransition => {
       cb();
       return {
         finished: Promise.resolve(),
         ready: Promise.resolve(),
         updateCallbackDone: Promise.resolve(),
+        types: new Set<string>(),
+        skipTransition: () => {},
       };
     });
-    document.startViewTransition = spy as never;
+    document.startViewTransition = spy;
 
     const stub = defineAction(async () => ({ ok: true }), {
       __module: 'm',
@@ -44,7 +45,7 @@ describe('useOptimisticAction transition forwarding', () => {
     });
 
     const { result } = renderHook(() =>
-      useOptimisticAction<{}, { ok: true }, number>(stub, {
+      useOptimisticAction(stub, {
         base: 0,
         apply: (acc) => acc + 1,
         transition: true,

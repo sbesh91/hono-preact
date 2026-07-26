@@ -47,16 +47,16 @@ describe('toast swipe-to-dismiss', () => {
     });
     const root = getByTestId(`root-${id}`);
     stubCapture(root);
-    act(() =>
-      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 })
-    );
-    act(() =>
-      fireEvent.pointerMove(root, { clientX: 120, clientY: 0, pointerId: 1 })
-    );
+    act(() => {
+      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 });
+    });
+    act(() => {
+      fireEvent.pointerMove(root, { clientX: 120, clientY: 0, pointerId: 1 });
+    });
     expect(root.getAttribute('data-swiping')).toBe('true');
-    act(() =>
-      fireEvent.pointerUp(root, { clientX: 120, clientY: 0, pointerId: 1 })
-    );
+    act(() => {
+      fireEvent.pointerUp(root, { clientX: 120, clientY: 0, pointerId: 1 });
+    });
     expect(toastStore.toasts).toHaveLength(0);
   });
 
@@ -69,15 +69,15 @@ describe('toast swipe-to-dismiss', () => {
     });
     const root = getByTestId(`root-${id}`);
     stubCapture(root);
-    act(() =>
-      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 })
-    );
-    act(() =>
-      fireEvent.pointerMove(root, { clientX: 10, clientY: 0, pointerId: 1 })
-    );
-    act(() =>
-      fireEvent.pointerUp(root, { clientX: 10, clientY: 0, pointerId: 1 })
-    );
+    act(() => {
+      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 });
+    });
+    act(() => {
+      fireEvent.pointerMove(root, { clientX: 10, clientY: 0, pointerId: 1 });
+    });
+    act(() => {
+      fireEvent.pointerUp(root, { clientX: 10, clientY: 0, pointerId: 1 });
+    });
     expect(toastStore.toasts).toHaveLength(1);
     expect(root.getAttribute('data-swiping')).toBe('false');
     expect(root.style.getPropertyValue('--toast-swipe-amount')).toBe('0px');
@@ -107,9 +107,9 @@ describe('toast swipe-to-dismiss', () => {
     });
     const root = getByTestId(`root-${id}`);
     stubCapture(root);
-    act(() =>
-      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 })
-    );
+    act(() => {
+      fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerId: 1 });
+    });
     expect(spy).toHaveBeenCalledOnce();
   });
 
@@ -137,12 +137,14 @@ describe('toast swipe-to-dismiss', () => {
     const close = getByText('x');
     // A press on the close button must not engage the swipe: capturing the
     // pointer here would swallow the button's own click.
-    act(() =>
-      fireEvent.pointerDown(close, { clientX: 0, clientY: 0, pointerId: 1 })
-    );
+    act(() => {
+      fireEvent.pointerDown(close, { clientX: 0, clientY: 0, pointerId: 1 });
+    });
     expect(root.getAttribute('data-swiping')).toBe('false');
     // And the close button's click still dismisses the toast.
-    act(() => fireEvent.click(close));
+    act(() => {
+      fireEvent.click(close);
+    });
     expect(toastStore.toasts).toHaveLength(0);
   });
 });

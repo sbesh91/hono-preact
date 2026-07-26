@@ -5,7 +5,6 @@ import {
   defineRoom,
   defineServerMiddleware,
   defineSocket,
-  type SocketDef,
 } from '@hono-preact/iso';
 import {
   _defineRouteSocket,
@@ -28,6 +27,7 @@ import {
   buildSocketRegistry,
   socketsHandler,
 } from '../sockets-handler.js';
+import type { AnySocketDef } from '../socket-resolution.js';
 import { MAX_FORWARD_HEADER_BYTES } from '../realtime-budget.js';
 import { buildRoomRegistry } from '../rooms-handler.js';
 import type {
@@ -82,7 +82,11 @@ function makeFakeUpgrader(): {
       const events = await createEvents(c);
       capturedEvents = events;
       capturedWs = ws;
-      return c.text('101', 101);
+      // Sentinel for the upgrade response. The real handshake answers 101, but
+      // the WHATWG Response constructor rejects that status outside workerd, so
+      // the body carries the marker and the status stays a plain 200. No test
+      // reads this response; they drive the captured events directly.
+      return c.text('101');
     };
   };
 
@@ -104,7 +108,7 @@ function makeFakeUpgrader(): {
 // ---------------------------------------------------------------------------
 
 function makeApp(
-  registry: Map<string, SocketDef<unknown, unknown, unknown>>,
+  registry: Map<string, AnySocketDef>,
   appConfig?: Parameters<typeof socketsHandler>[0]['appConfig'],
   resolvePageUse?: Parameters<typeof socketsHandler>[0]['resolvePageUse'],
   resolveRoutePath?: Parameters<typeof socketsHandler>[0]['resolveRoutePath']
@@ -146,7 +150,7 @@ describe('socketsHandler: unknown socket closes WS_DENY_CODE', () => {
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
-    const registry = new Map<string, SocketDef<unknown, unknown, unknown>>();
+    const registry = new Map<string, AnySocketDef>();
     app = makeApp(registry);
 
     await getRequest('missing/module', 'chat');
@@ -162,11 +166,7 @@ describe('socketsHandler: unknown socket closes WS_DENY_CODE', () => {
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
-    const def = defineSocket<never, never>({}) as unknown as SocketDef<
-      never,
-      never,
-      undefined
-    >;
+    const def = defineSocket<never, never>({}) as unknown as AnySocketDef;
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
 
@@ -190,7 +190,7 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
         openCalls.push('opened');
         socket.send({ reply: 'hello' });
       },
-    }) as unknown as SocketDef<{ text: string }, { reply: string }, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
@@ -215,7 +215,7 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
       message(_socket, msg) {
         received.push(msg);
       },
-    }) as unknown as SocketDef<{ text: string }, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
@@ -248,11 +248,7 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
       message(socket) {
         seen.push(socket.data.who);
       },
-    }) as unknown as SocketDef<
-      { ping: true },
-      { who: string },
-      { who: string }
-    >;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
@@ -289,7 +285,7 @@ describe('socketsHandler: known socket - open, send, message, close teardown', (
       close() {
         calls.push('closed');
       },
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
@@ -315,7 +311,7 @@ describe('socketsHandler: Node robustness + deny parity (max-review fixes)', () 
       message(_s, msg) {
         received.push(msg);
       },
-    }) as unknown as SocketDef<{ ok: true }, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     app = makeApp(new Map([['pages/chat::chatSocket', def]]));
     await getRequest('pages/chat', 'chatSocket');
@@ -343,11 +339,11 @@ describe('socketsHandler: Node robustness + deny parity (max-review fixes)', () 
     installWebSocketUpgrader(upgrader);
 
     const calls: string[] = [];
-    const def = defineSocket<never, never>({
+    const def = defineSocket<never, never, Record<string, never>>({
       use: [
         defineServerMiddleware(async (_ctx) => {
           const { deny } = await import('@hono-preact/iso');
-          throw deny('forbidden', 403);
+          throw deny(403, 'forbidden');
         }),
       ],
       data: () => {
@@ -363,7 +359,7 @@ describe('socketsHandler: Node robustness + deny parity (max-review fixes)', () 
       error: () => {
         calls.push('error');
       },
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     app = makeApp(new Map([['pages/chat::chatSocket', def]]));
     await getRequest('pages/chat', 'chatSocket');
@@ -393,7 +389,7 @@ describe('socketsHandler: Node robustness + deny parity (max-review fixes)', () 
       message(socket) {
         seen.push(socket.data.who);
       },
-    }) as unknown as SocketDef<{ ping: true }, never, { who: string }>;
+    }) as unknown as AnySocketDef;
 
     app = makeApp(new Map([['pages/chat::chatSocket', def]]));
     await app.request(
@@ -421,11 +417,11 @@ describe('socketsHandler: guard denial closes WS_DENY_CODE without calling def.o
       use: [
         defineServerMiddleware(async (_ctx) => {
           const { deny } = await import('@hono-preact/iso');
-          throw deny('forbidden', 403);
+          throw deny(403, 'forbidden');
         }),
       ],
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
@@ -455,7 +451,7 @@ describe('socketsHandler: guard denial closes WS_DENY_CODE without calling def.o
         }),
       ],
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
@@ -487,8 +483,11 @@ describe('socketsHandler: fail-closed at construction', () => {
     // would silently drop them on the socket-upgrade path. Mirrors the
     // loadersHandler / pageActionsHandler construction guards.
     expect(() =>
+      // @ts-expect-error deliberately omitting the required resolvePageUse:
+      // this asserts the construction guard rejects it at runtime too, not
+      // only at the type level.
       socketsHandler({
-        registry: new Map<string, SocketDef<unknown, unknown, unknown>>(),
+        registry: new Map<string, AnySocketDef>(),
       })
     ).toThrow(/resolvePageUse/);
   });
@@ -496,7 +495,7 @@ describe('socketsHandler: fail-closed at construction', () => {
   it('throws when resolvePageUse is not a function', () => {
     expect(() =>
       socketsHandler({
-        registry: new Map<string, SocketDef<unknown, unknown, unknown>>(),
+        registry: new Map<string, AnySocketDef>(),
         resolvePageUse: {} as never,
       })
     ).toThrow(/resolvePageUse/);
@@ -511,7 +510,7 @@ describe('socketsHandler: route-node use inheritance via resolvePageUse', () => 
     const openSpy = vi.fn();
     const def = defineSocket<never, never>({
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const moduleKey = 'pages/chat';
     const routePath = '/chat';
@@ -520,7 +519,7 @@ describe('socketsHandler: route-node use inheritance via resolvePageUse', () => 
     // Route-node use: denies all connections on /chat.
     const denyMiddleware = defineServerMiddleware(async (_ctx) => {
       const { deny } = await import('@hono-preact/iso');
-      throw deny('forbidden', 403);
+      throw deny(403, 'forbidden');
     });
     const resolvePageUse = (path: string) =>
       path === routePath ? [denyMiddleware] : [];
@@ -546,7 +545,7 @@ describe('socketsHandler: route-node use inheritance via resolvePageUse', () => 
     const openSpy = vi.fn();
     const def = defineSocket<never, never>({
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const moduleKey = 'pages/chat';
     const routePath = '/chat';
@@ -579,7 +578,7 @@ describe('socketsHandler: route-node use inheritance via resolvePageUse', () => 
     const openSpy = vi.fn();
     const def = defineSocket<never, never>({
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const moduleKey = 'pages/chat';
     const registry = new Map([[`${moduleKey}::chatSocket`, def]]);
@@ -591,7 +590,7 @@ describe('socketsHandler: route-node use inheritance via resolvePageUse', () => 
         ? [
             defineServerMiddleware(async (_ctx) => {
               const { deny } = await import('@hono-preact/iso');
-              throw deny('no', 403);
+              throw deny(403, 'no');
             }),
           ]
         : [];
@@ -613,11 +612,7 @@ describe('socketsHandler: route-node use inheritance via resolvePageUse', () => 
 
 describe('buildSocketRegistry', () => {
   it('keys entries as moduleKey::name from serverSockets', async () => {
-    const def = defineSocket<never, never>({}) as unknown as SocketDef<
-      never,
-      never,
-      undefined
-    >;
+    const def = defineSocket<never, never>({}) as unknown as AnySocketDef;
     const serverImports = [
       () =>
         Promise.resolve({
@@ -633,11 +628,7 @@ describe('buildSocketRegistry', () => {
   });
 
   it('skips modules that lack __moduleKey', async () => {
-    const def = defineSocket<never, never>({}) as unknown as SocketDef<
-      never,
-      never,
-      undefined
-    >;
+    const def = defineSocket<never, never>({}) as unknown as AnySocketDef;
     const serverImports = [
       () =>
         Promise.resolve({
@@ -653,11 +644,7 @@ describe('buildSocketRegistry', () => {
 
 describe('assertNoSocketRoomCollision', () => {
   it('throws a descriptive error when a socket and a room share a moduleKey::name key', async () => {
-    const def = defineSocket<never, never>({}) as unknown as SocketDef<
-      never,
-      never,
-      undefined
-    >;
+    const def = defineSocket<never, never>({}) as unknown as AnySocketDef;
     const channel = defineChannel('thing/:id')<void>();
     const room = defineRoom(channel, {}) as unknown as RoomDef<
       unknown,
@@ -689,11 +676,7 @@ describe('assertNoSocketRoomCollision', () => {
   });
 
   it('does not throw when socket and room names are distinct in a module', async () => {
-    const def = defineSocket<never, never>({}) as unknown as SocketDef<
-      never,
-      never,
-      undefined
-    >;
+    const def = defineSocket<never, never>({}) as unknown as AnySocketDef;
     const channel = defineChannel('thing/:id')<void>();
     const room = defineRoom(channel, {}) as unknown as RoomDef<
       unknown,
@@ -717,11 +700,7 @@ describe('assertNoSocketRoomCollision', () => {
   });
 
   it('is a no-op when there is no room registry', () => {
-    const def = defineSocket<never, never>({}) as unknown as SocketDef<
-      never,
-      never,
-      undefined
-    >;
+    const def = defineSocket<never, never>({}) as unknown as AnySocketDef;
     const registry = new Map([['pages/m::foo', def]]);
     expect(() =>
       assertNoSocketRoomCollision(registry, undefined)
@@ -793,7 +772,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
     return honoApp;
   }
 
-  function connectRoom(honoApp: Hono, rawR: string): Promise<Response> {
+  async function connectRoom(honoApp: Hono, rawR: string): Promise<Response> {
     return honoApp.request(
       `http://localhost${SOCKETS_RPC_PATH}` +
         `?${SOCKET_MODULE_PARAM}=${encodeURIComponent(ROOM_MODULE)}` +
@@ -858,7 +837,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
       use: [
         defineServerMiddleware(async () => {
           const { deny } = await import('@hono-preact/iso');
-          throw deny('forbidden', 403);
+          throw deny(403, 'forbidden');
         }),
       ],
     });
@@ -900,11 +879,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
       { who: string }
     >({
       data: (c) => ({ who: c.req.query('u') ?? 'anon' }),
-    }) as unknown as SocketDef<
-      { text: string },
-      { reply: string },
-      { who: string }
-    >;
+    }) as unknown as AnySocketDef;
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
 
@@ -941,7 +916,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
       Record<string, string>
     >('/board/:id', {
       data: (_c, params) => params,
-    }) as unknown as SocketDef<never, never, Record<string, string>>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/board::boardSocket', def]]);
     app = makeApp(registry);
@@ -975,7 +950,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
     const openSpy = vi.fn();
     const def = _defineRouteSocket<never, never>('/board/:id', {
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/board::boardSocket', def]]);
     app = makeApp(registry);
@@ -1003,10 +978,10 @@ describe('socketsHandler: realtime connector forwarding', () => {
       use: [
         defineServerMiddleware(async () => {
           const { deny } = await import('@hono-preact/iso');
-          throw deny('forbidden', 403);
+          throw deny(403, 'forbidden');
         }),
       ],
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
 
@@ -1042,7 +1017,7 @@ describe('socketsHandler: realtime connector forwarding', () => {
     const countingDenyGuard = defineServerMiddleware(async () => {
       guardRunCount++;
       const { deny } = await import('@hono-preact/iso');
-      throw deny('forbidden', 403);
+      throw deny(403, 'forbidden');
     });
 
     const app = makeRoomApp({ use: [countingDenyGuard] });
@@ -1089,10 +1064,12 @@ describe('socketsHandler: realtime connector forwarding', () => {
     });
 
     let seenRoomIdInGuard: string | undefined;
-    const requireRoomId = defineServerMiddleware(async (mwCtx, next) => {
-      seenRoomIdInGuard = mwCtx.location.pathParams.roomId;
-      await next();
-    });
+    const requireRoomId = defineServerMiddleware<'page'>(
+      async (mwCtx, next) => {
+        seenRoomIdInGuard = mwCtx.location.pathParams.roomId;
+        await next();
+      }
+    );
 
     const app = makeRoomApp(
       {},
@@ -1146,7 +1123,7 @@ describe('socketsHandler: dev budget warning threads through to warnIfOverForwar
 
     const def = defineSocket<never, never, { blob: string }>({
       data: () => ({ blob: 'x'.repeat(MAX_FORWARD_HEADER_BYTES + 1) }),
-    }) as unknown as SocketDef<never, never, { blob: string }>;
+    }) as unknown as AnySocketDef;
 
     const testApp = new Hono();
     testApp.get(
@@ -1183,7 +1160,7 @@ describe('socketsHandler: dev budget warning threads through to warnIfOverForwar
 
     const def = defineSocket<never, never, { blob: string }>({
       data: () => ({ blob: 'x'.repeat(MAX_FORWARD_HEADER_BYTES + 1) }),
-    }) as unknown as SocketDef<never, never, { blob: string }>;
+    }) as unknown as AnySocketDef;
 
     const testApp = new Hono();
     testApp.get(
@@ -1214,7 +1191,7 @@ describe('socketsHandler: dev budget warning threads through to warnIfOverForwar
 describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)', () => {
   const denyMiddleware = defineServerMiddleware(async (_ctx) => {
     const { deny } = await import('@hono-preact/iso');
-    throw deny('forbidden', 403);
+    throw deny(403, 'forbidden');
   });
 
   it('a registry-module socket bound to a guarded route runs that route gates (attacker model)', async () => {
@@ -1224,7 +1201,7 @@ describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)',
     const openSpy = vi.fn();
     const def = _defineRouteSocket<never, never>('/admin', {
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     // Registry module: not in the route tree, so the mount derivation yields
     // undefined. Before this fix the connection resolved SOCKETS_RPC_PATH and
@@ -1291,7 +1268,7 @@ describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)',
     const openSpy = vi.fn();
     const def = _defineRouteSocket<never, never>('/admin/*', {
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const resolved: string[] = [];
     const resolvePageUse = (path: string) => {
@@ -1320,11 +1297,7 @@ describe('socketsHandler: declared route binding (serverRoute(r).socket/.room)',
     const { upgrader, lastEvents, lastWs } = makeFakeUpgrader();
     installWebSocketUpgrader(upgrader);
 
-    const def = defineSocket<never, never>({}) as unknown as SocketDef<
-      never,
-      never,
-      undefined
-    >;
+    const def = defineSocket<never, never>({}) as unknown as AnySocketDef;
     const resolved: string[] = [];
     const resolvePageUse = (path: string) => {
       resolved.push(path);
@@ -1362,7 +1335,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     installWebSocketUpgrader(upgrader);
 
     let guardSeenParams: Record<string, string> | undefined;
-    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+    const captureGuard = defineServerMiddleware<'page'>(async (mwCtx, next) => {
       guardSeenParams = mwCtx.location.pathParams;
       await next();
     });
@@ -1378,7 +1351,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
       open(socket) {
         openSpy(socket.data);
       },
-    }) as unknown as SocketDef<never, never, Record<string, string>>;
+    }) as unknown as AnySocketDef;
 
     const resolvePageUse = (path: string) =>
       path === '/board/:id' ? [captureGuard] : [];
@@ -1410,7 +1383,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     const openSpy = vi.fn();
     const def = _defineRouteSocket<never, never>('/board/:id', {
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/board::boardSocket', def]]);
     app = makeApp(
@@ -1440,7 +1413,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     const def = _defineRouteSocket<never, never>(
       '/board/:id',
       {}
-    ) as unknown as SocketDef<never, never, undefined>;
+    ) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/board::boardSocket', def]]);
     const testApp = new Hono();
@@ -1472,7 +1445,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     installWebSocketUpgrader(upgrader);
 
     let guardSeenParams: Record<string, string> | undefined;
-    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+    const captureGuard = defineServerMiddleware<'page'>(async (mwCtx, next) => {
       guardSeenParams = mwCtx.location.pathParams;
       await next();
     });
@@ -1485,7 +1458,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     // params, so it must never be denied for a "missing" one.
     const def = defineSocket<never, never>({
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/board::boardSocket', def]]);
     const resolvePageUse = (path: string) =>
@@ -1517,7 +1490,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     installWebSocketUpgrader(upgrader);
 
     let guardSeenParams: Record<string, string> | undefined;
-    const captureGuard = defineServerMiddleware(async (mwCtx, next) => {
+    const captureGuard = defineServerMiddleware<'page'>(async (mwCtx, next) => {
       guardSeenParams = mwCtx.location.pathParams;
       await next();
     });
@@ -1527,7 +1500,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     // route file, exactly as the "no r=" test above.
     const def = defineSocket<never, never>({
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/board::boardSocket', def]]);
     const resolvePageUse = (path: string) =>
@@ -1564,12 +1537,12 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     installWebSocketUpgrader(upgrader);
 
     let observedId: unknown = 'not-yet-observed';
-    const requireId = defineServerMiddleware(async (mwCtx, next) => {
+    const requireId = defineServerMiddleware<'page'>(async (mwCtx, next) => {
       const id = mwCtx.location.pathParams.id;
       observedId = id;
       if (!id) {
         const { deny } = await import('@hono-preact/iso');
-        throw deny('missing id', 403);
+        throw deny(403, 'missing id');
       }
       await next();
     });
@@ -1577,7 +1550,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     const openSpy = vi.fn();
     const def = defineSocket<never, never>({
       open: openSpy,
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/plugin::feed', def]]);
     const resolvePageUse = (path: string) =>
@@ -1621,7 +1594,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
       {}
     ) as unknown as RoomDef<unknown, unknown, unknown, unknown, unknown>;
 
-    const registry = new Map<string, SocketDef<unknown, unknown, unknown>>();
+    const registry = new Map<string, AnySocketDef>();
     const rooms = new Map([['pages/room::feed', roomDef]]);
     const app2 = new Hono();
     app2.get(
@@ -1654,7 +1627,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
     const def = _defineRouteSocket<never, never>(
       '/board/:id',
       {}
-    ) as unknown as SocketDef<never, never, undefined>;
+    ) as unknown as AnySocketDef;
     const registry = new Map([['pages/board::boardSocket', def]]);
 
     const { resolveConnection } = await import('../socket-resolution.js');
@@ -1712,7 +1685,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
         readBack = params.derived;
         return { derived: 'computed' };
       },
-    }) as unknown as SocketDef<never, never, { derived: string }>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);
@@ -1747,7 +1720,7 @@ describe('socketsHandler: bound socket param resolution (serverRoute(r).socket)'
         seenParamsObjects.push(p);
         return undefined;
       },
-    }) as unknown as SocketDef<never, never, undefined>;
+    }) as unknown as AnySocketDef;
 
     const registry = new Map([['pages/chat::chatSocket', def]]);
     app = makeApp(registry);

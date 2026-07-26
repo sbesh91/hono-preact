@@ -5,7 +5,7 @@ import { RouteManifestContext } from '../internal/route-manifest.js';
 import { usePrefetch } from '../use-prefetch.js';
 import { defineLoader } from '../define-loader.js';
 import { defineRoutes } from '../define-routes.js';
-import type { LoaderRef } from '../define-loader.js';
+import type { AnyLoaderRef } from '../define-loader.js';
 
 const prefetchSpy = vi.fn();
 vi.mock('../prefetch.js', () => ({
@@ -42,13 +42,13 @@ function Harness({
   refs,
 }: {
   href: string;
-  refs: LoaderRef<unknown> | ReadonlyArray<LoaderRef<unknown>>;
+  refs: AnyLoaderRef | ReadonlyArray<AnyLoaderRef>;
 }) {
   const prefetch = usePrefetch(href, refs);
   return <button onClick={prefetch}>go</button>;
 }
 
-function renderIn(href: string, refs: LoaderRef<unknown>) {
+function renderIn(href: string, refs: AnyLoaderRef) {
   return render(
     <RouteManifestContext.Provider value={manifest.serverRoutes}>
       <Harness href={href} refs={refs} />

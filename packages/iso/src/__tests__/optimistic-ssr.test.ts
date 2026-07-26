@@ -27,7 +27,7 @@ describe('useOptimistic SSR with transition: true', () => {
     // useOptimistic hook with transition: true while document is undefined.
     // If the feature detection guard were broken, prerender would throw
     // a ReferenceError when the hook tries to access document.
-    const result = await prerender(h(Component, null));
+    const result = await prerender(h(Component, {}));
 
     // The prerender result should contain the rendered HTML.
     expect(result.html).toContain('<span>3</span>');
@@ -51,7 +51,7 @@ describe('useOptimistic SSR with transition: true', () => {
       return h('div', null, h('span', null, String(value[0])));
     }
 
-    const result = await prerender(h(Component, null));
+    const result = await prerender(h(Component, {}));
     expect(result.html).toContain('<span>0</span>');
   });
 });

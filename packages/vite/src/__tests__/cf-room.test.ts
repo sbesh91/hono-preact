@@ -237,16 +237,9 @@ function isSnapshotEnvelope(v: unknown): v is SnapshotEnvelope {
   );
 }
 
-function isPresenceJoin(v: unknown): v is PresenceEnvelope {
-  return (
-    typeof v === 'object' &&
-    v !== null &&
-    (v as { t?: unknown }).t === 'presence' &&
-    (v as { op?: unknown }).op === 'join' &&
-    typeof (v as { from?: unknown }).from === 'string'
-  );
-}
-
+// No `isPresenceJoin` counterpart: B connects after A, so B never sees a join
+// frame for A. B's roster awareness of A is asserted through the join snapshot
+// (`isSnapshotEnvelope`) instead.
 function isPresenceLeave(v: unknown): v is PresenceEnvelope {
   return (
     typeof v === 'object' &&

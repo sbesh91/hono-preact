@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/preact';
-import { h } from 'preact';
 import { renderElement } from '../internal/render-element.js';
 
 function Wrap(props: {
@@ -35,10 +34,7 @@ describe('renderElement', () => {
 
   it('accepts a render function and passes merged props', () => {
     const { container } = render(
-      <Wrap
-        className="x"
-        render={(props) => h('section', { ...props, id: 'sec' })}
-      />
+      <Wrap className="x" render={(props) => <section {...props} id="sec" />} />
     );
     const el = container.firstElementChild!;
     expect(el.tagName).toBe('SECTION');

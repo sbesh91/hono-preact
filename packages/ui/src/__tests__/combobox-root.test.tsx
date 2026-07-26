@@ -31,10 +31,9 @@ describe('ComboboxRoot', () => {
   });
 
   it('emits hidden form fields for the committed value', async () => {
-    let ctx!: ReturnType<typeof useComboboxContext>;
     const { container } = render(
       <ComboboxRoot name="fruit" defaultValue="apple">
-        <Probe onReady={(c) => (ctx = c)} />
+        <Probe onReady={() => {}} />
       </ComboboxRoot>
     );
     await act(async () => {});
