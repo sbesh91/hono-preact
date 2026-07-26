@@ -229,8 +229,17 @@ export type { MetaOptions, LinkOptions, ScriptOptions } from 'hoofd/preact';
 // Signals: re-exported first-party. The framework owns the signals integration
 // (the always-on data-layer opinion), so it offers @preact/signals' primitives
 // through its own entry rather than making apps depend on @preact/signals
-// directly. Tree-shakeable and side-effect free; the barrel adds nothing to the
-// always-loaded core graph.
+// directly.
+//
+// NOT side-effect free. @preact/signals ships no `sideEffects` field and, at
+// import, runs an effect and wraps several `preact.options` hooks (it also
+// installs a `Component.prototype.shouldComponentUpdate`, which early-returns
+// for components holding no signal subscriptions, so semantics are preserved).
+// Whether re-exporting it costs an app that never touches a signal is therefore
+// BUNDLER-DEPENDENT: it tree-shakes to ~66 B under Rollup/Vite (what a consumer
+// app actually uses) and to ~3,020 B under esbuild. The library is reached
+// anyway by loaders, actions and realtime, so this barrel is not what puts it
+// in a real app's graph.
 export {
   signal,
   computed,

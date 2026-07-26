@@ -135,7 +135,19 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       resolvedRoot = userConfig.root ? resolve(userConfig.root) : process.cwd();
       return {
         resolve: {
-          dedupe: ['preact', 'preact/hooks', 'preact-iso'],
+          dedupe: [
+            'preact',
+            'preact/hooks',
+            'preact-iso',
+            // @preact/signals patches preact.options and Signal.prototype at
+            // import and MUST be a singleton; a second copy fails SILENTLY
+            // (a computed in one copy never subscribes to a signal from the
+            // other). Both entries are needed: the adapter depends on core as
+            // a plain nested dep, so deduping the adapter alone still permits
+            // two cores.
+            '@preact/signals',
+            '@preact/signals-core',
+          ],
         },
         build: {
           target: 'esnext' as const,
