@@ -54,6 +54,8 @@ describe('defineLoader({ live })', () => {
     // public host for `useData(initial, reduce)` consumers, so it returns the
     // host vnode rather than throwing. The end-to-end collect behaviour (folding
     // through the public .Boundary) is covered in use-data-live.test.tsx.
+    // @ts-expect-error `.Boundary` is typed `never` on a streaming ref; this
+    // asserts the RUNTIME behaviour, which is a collect-mode host.
     expect(() => ref.Boundary({ children: null })).not.toThrow();
   });
 

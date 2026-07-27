@@ -16,16 +16,6 @@ import { render, act } from '@testing-library/preact';
 import type { ReadonlySignal } from '@preact/signals';
 import { useOptimistic, type OptimisticHandle } from '../optimistic.js';
 
-declare global {
-  interface Document {
-    startViewTransition?: (cb: () => unknown) => {
-      finished: Promise<void>;
-      ready: Promise<void>;
-      updateCallbackDone: Promise<void>;
-    };
-  }
-}
-
 // A DEFERRING startViewTransition: the update callback is parked and only runs
 // when the test explicitly flushes, modelling the >=1-frame delay a real
 // browser imposes. (Per spec, a transition skipped by a later one still runs

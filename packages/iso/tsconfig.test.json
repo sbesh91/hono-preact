@@ -1,6 +1,9 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": true },
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vite/client", "@testing-library/jest-dom", "node"]
+  },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["src/**/*.test-d.ts", "src/**/*.test-d.tsx"]
 }
