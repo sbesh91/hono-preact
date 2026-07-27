@@ -80,22 +80,23 @@ const ALLOWLIST: Record<string, string> = {
     'ref-callback hook form; the demo uses the ViewTransitionName component (Board.tsx), whose groupClass prop is built on it',
   ViewTransitionGroup:
     'class-only wrapper is inert without a view-transition-name; the demo pairs names with groupClass via ViewTransitionName instead (#282 finding)',
+  // The @preact/signals primitives re-exported first-party. `useComputed` is
+  // NOT here: InsightsPanel binds each stat to its own projection with it. The
+  // rest stay waived on their merits, not on a schedule.
   signal:
-    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+    'module-scope primitive for app-owned reactive state; every reactive value in the demo originates in a framework hook (loader, action, room), so there is nothing here for it to create',
   computed:
-    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+    'module-scope derivation; the demo derives inside components with useComputed, where the projection can be torn down with the component that reads it',
   effect:
-    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+    'module-scope subscription with manual disposal; the demo has no reactive state outside a component tree, so nothing outlives a component to subscribe to',
   batch:
-    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+    'collapses several signal writes into one notification; the demo writes no signals directly (the framework stores batch their own writes), so there is never more than one write to group',
   untracked:
-    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+    'reads a signal without subscribing; every signal the demo reads is one it wants to be subscribed to',
   useSignal:
-    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
-  useComputed:
-    "@preact/signals primitive re-exported first-party (Phase 4); the docs show it projecting loader.useData(), but the demo's own components do not yet author a useComputed projection, deferred to site adoption at the umbrella release",
+    "component-scoped signal for app-owned state; the demo's local state is either a framework hook's signal already or plain useState where exactly one component consumes it and reactivity buys nothing",
   useSignalEffect:
-    '@preact/signals primitive re-exported first-party (Phase 4); the demo consumes signals only through loader.useData() and does not yet author raw signals, deferred to site adoption at the umbrella release',
+    "schedules like useEffect; the demo's one signal-driven effect is the board FLIP (Board.tsx), which measures and inverts before paint and so must be a LAYOUT effect -- the wrong scheduler for it",
 };
 
 function collectFiles(root: string): string[] {
