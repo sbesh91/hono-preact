@@ -65,3 +65,30 @@ describe('signal-backed roster', () => {
     expect(store.member('a').value).toEqual({ id: 'a', state: 2 });
   });
 });
+
+describe('retention', () => {
+  it('dispose() releases the per-id cells the store retains', () => {
+    const roster = createSignalRoster<number>();
+    roster.snapshot([
+      { id: 'a', state: 1 },
+      { id: 'b', state: 2 },
+    ]);
+    // `member()` get-or-creates on READ, so asking about an id that never
+    // joined retains a cell for it too. This is the unbounded axis the doc
+    // comment on the factory calls out.
+    const ghost = roster.member('never-joined');
+    expect(ghost.value).toBeUndefined();
+
+    const a = roster.member('a');
+    expect(a.value).toEqual({ id: 'a', state: 1 });
+
+    roster.dispose();
+
+    // Every held binding is blanked, not merely orphaned: a consumer still
+    // rendering one after unmount sees absence rather than a stale member.
+    expect(a.value).toBeUndefined();
+    expect(ghost.value).toBeUndefined();
+    expect(roster.memberIds.value).toEqual([]);
+    expect(roster.members.value).toEqual([]);
+  });
+});

@@ -8,6 +8,18 @@ import type { ReadonlySignal } from '@preact/signals';
  * update patches one bound row instead of re-rendering every consumer. This is
  * the always-on data-layer store for `useRoom`; `@preact/signals` loads with it.
  */
+// RETENTION: `byId` holds one cell per id ever seen OR ever asked about, and
+// only `dispose()` clears it. `leave` and `snapshot` blank a cell rather than
+// deleting it, and `member(id)` get-or-creates on READ, both deliberately: a
+// held binding has to survive its member leaving and rejoining, and deleting
+// the cell is what made a departed member render forever.
+//
+// The trade is that a long-lived room with high id churn grows this map for the
+// life of the hook instance. Unlike `createFieldErrorStore`, whose key space is
+// one form's fields, a presence roster's key space is unbounded. Acceptable
+// because the map holds one small signal per id and a room's membership is
+// bounded in practice, but it is a trade, not a free win. `dispose()` on the
+// hook's effect cleanup is what bounds it across mounts.
 export function createSignalRoster<S>(): RosterStore<S> {
   const ids = signal<readonly string[]>([]);
   // One STABLE cell per id ever asked about. Absence is `undefined` IN the
