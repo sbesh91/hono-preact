@@ -1,88 +1,71 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import knownGaps from './type-members-known-gaps.json' with { type: 'json' };
 
-// `exports-coverage.test.ts` checks that every public runtime export is named
-// somewhere in the docs. It cannot see a level down: `memberIds` and `member`
-// are fields on `UseRoomResult`, an already-exported type, so that gate stayed
-// green while two fields of a documented API had no docs at all. This walks the
-// members.
+// `exports-coverage.test.ts` checks that every public runtime export is NAMED in
+// the docs. It cannot see a level down: `memberIds` and `member` are fields on
+// `UseRoomResult`, an already-exported type, so that gate stayed green while two
+// fields of a documented API had no documentation at all. This walks the members.
 //
-// Two decisions make the difference between a useful gate and an unlandable
-// one, both settled by measuring first:
+// Four decisions, each of which an earlier draft of this file got wrong and a
+// mutation caught. They are recorded because every one is the difference between
+// a gate that means something and a gate that is green for the wrong reason.
 //
-// 1. OWN members only. Asking the checker for a type's properties returns the
-//    APPARENT type: for `type Scope = 'page' | 'loader'` that is
-//    String.prototype, and for `NavLinkProps extends AnchorHTMLAttributes` it is
-//    every DOM attribute that exists. Measured naively this reported 535
-//    "undocumented members", essentially all of them noise (`charAt`,
-//    `accesskey`, `toExponential`). Reading members off the DECLARATION nodes
-//    instead gives what the package actually declares: 186 members across 53
-//    types, which is a real surface a human can be responsible for.
+// 1. OWN members, resolved through INTERSECTIONS AND UNIONS. Asking the checker
+//    for a type's properties returns the APPARENT type: for
+//    `type Scope = 'page' | 'loader'` that is String.prototype, and for
+//    `NavLinkProps extends AnchorHTMLAttributes` it is every DOM attribute in
+//    existence (535 "undocumented members", essentially all noise). Reading only
+//    interfaces and type-literal aliases is too narrow the other way: it walks 13
+//    documented types as ZERO members, including `ServerActionCtx` (whose
+//    `location` is the #288 route-authorization field), `LoaderState`,
+//    `ActionResult`, `Outcome`, and both `UseRoomOptions` / `UseSocketOptions`.
+//    So: resolve constituents, keep the ones declared under `packages/`, take
+//    their declared members.
 //
-// 2. CODE-ONLY matching, SCOPED TO A PAGE THAT NAMES THE TYPE. A member counts
-//    as documented when its name appears in a fenced code block or an inline
-//    `code` span on a page whose code also names the owning type. Both halves
-//    are load-bearing, and the first draft of this file got the second one
-//    wrong.
+// 2. CO-OCCURRENCE IN ONE SPAN, not co-location on a page. A member counts as
+//    documented when it appears in the same code block, inline span or table row
+//    as its own type. Requiring only "somewhere on a page that mentions the type"
+//    lets a token collision count as documentation: `LoaderCache.get` was
+//    satisfied by `get(_, name)` (a Vite Proxy trap) and `LoaderCache.invalidate`
+//    by `loader.invalidate()` (a LoaderRef method), while the equally
+//    undocumented `set` and `has` were correctly reported. That gate
+//    discriminated by how rare a member's name is; 33% of plausible names passed.
 //
-//    Code-only, because member names are ordinary English far more often than
-//    export names are: `member`, `send`, `close`, `status`, `value`, `data`. A
-//    prose match calls them documented on sight. That is the blind spot the
-//    runtime arm still has, where `Show` passes on the word "Show" starting an
-//    unrelated sentence.
+// 3. CODE ONLY. Member names are ordinary English far more often than export
+//    names are (`member`, `send`, `close`, `status`, `value`), so a prose match
+//    calls them documented on sight. Same blind spot the export gate still has,
+//    where `Show` passes on the word "Show" starting an unrelated sentence.
 //
-//    Page-scoped, because a corpus-wide match is barely better. `closeInfo` is
-//    cited on two pages; deleting it from one left this gate green, which is the
-//    same failure the UI arm of `exports-coverage.test.ts` was hardened against
-//    in #222. A member is documented where its type is, or it is not documented.
+// 4. A PINNED SET, not a floor. A type that stops being named in the docs stops
+//    being checked, and a rename is how that happens: renaming `UseRoomResult`
+//    took the suite from 99 tests to 92, all green, silently dropping the very
+//    fields that motivated this file. The enforced surface is committed and
+//    diffed, which also makes the known-gap backlog shrink visibly rather than
+//    rot.
 const here = dirname(fileURLToPath(import.meta.url));
 const docsDir = resolve(here, '..');
 const repoRoot = resolve(here, '../../../../../..');
-const ENTRY = join(repoRoot, 'packages/hono-preact/dist/index.d.ts');
+const distDir = join(repoRoot, 'packages/hono-preact/dist');
 
-// Known gaps, qualified as `Type.member` so an entry cannot over-suppress a
-// same-named field on another type. Same contract as the export allowlists in
-// `exports-coverage.test.ts`: one stated reason per entry.
-//
-// This is a seeded BACKLOG, not an endorsement. These are what the gate found
-// the day it landed; the honest options were to write the missing docs in the
-// same change (a different job) or to record them where they stay visible.
-// Deleting an entry and documenting the member is always the better fix.
-const INTENTIONALLY_UNDOCUMENTED = new Set<string>([
-  // `StreamObserver`'s callbacks ARE documented, on streaming.mdx, but the type
-  // itself is only name-dropped on routes.mdx, so the page-scoped rule cannot
-  // connect them. The real fix is to document the observer shape where the type
-  // is introduced, not to relax the rule.
-  'StreamObserver.onStart',
-  'StreamObserver.onChunk',
-  'StreamObserver.onEnd',
-  'StreamObserver.onError',
-  'StreamObserver.onAbort',
-  // Routing internals that are exported for typing generated code, not for
-  // apps to construct by hand. `routes.mdx` documents the authored `RouteDef`
-  // shape; these are what the manifest becomes afterward.
-  'FlatRoute.component',
-  'FlatRoute.key',
-  'ServerRoute.ancestors',
-  // Escape-hatch cache surface: `loaders.mdx` documents reloading and
-  // `prefetch.mdx` the prefetch cache, both through the higher-level API.
-  // Direct `set`/`has` are for custom cache plumbing.
-  'LoaderCache.set',
-  'LoaderCache.has',
-  // `WrapperProps.id` is plumbing the generated entry wrapper passes through;
-  // structure.mdx documents the wrapper, not this field.
-  'WrapperProps.id',
-]);
+// All six published entry points, matching `exports-coverage.test.ts`. Types
+// exported only from a subpath are public too: `HonoPreactAdapter` lives on
+// `hono-preact/vite` and is documented in `vite-config.mdx`.
+const ENTRIES = [
+  'index',
+  'page',
+  'server',
+  'vite',
+  'adapter-cloudflare',
+  'adapter-node',
+].map((e) => join(distDir, `${e}.d.ts`));
 
-/**
- * Docs text reduced to code: fenced blocks plus inline spans. Prose is dropped
- * on purpose (see decision 2 above).
- */
-function readCodePerPage(): string[] {
-  const pages: string[] = [];
+/** One code span (fenced block, inline span, or table row) from a docs page. */
+function readCodeSpans(): string[] {
+  const spans: string[] = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
@@ -90,30 +73,110 @@ function readCodePerPage(): string[] {
         walk(resolve(dir, entry.name));
       } else if (entry.name.endsWith('.mdx')) {
         const raw = readFileSync(resolve(dir, entry.name), 'utf8');
-        const parts: string[] = [];
-        for (const m of raw.matchAll(/```[\s\S]*?```/g)) parts.push(m[0]);
-        for (const m of raw.matchAll(/`[^`\n]+`/g)) parts.push(m[0]);
-        pages.push(parts.join('\n'));
+        for (const m of raw.matchAll(/```[\s\S]*?```/g)) spans.push(m[0]);
+        for (const m of raw.matchAll(/`[^`\n]+`/g)) spans.push(m[0]);
+        // A markdown TABLE ROW is one documentation unit even though each cell
+        // is its own inline span: the reference tables cite the type in one
+        // column and the member in another. Without this, every table-documented
+        // member reads as undocumented under co-occurrence.
+        for (const m of raw.matchAll(/^\|.*\|$/gm)) spans.push(m[0]);
       }
     }
   };
   walk(docsDir);
-  return pages;
+  return spans;
 }
 
-type TypeMembers = { type: string; members: string[] };
+const codeSpans = readCodeSpans();
+
+/** Is this declaration ours, rather than a lib or a dependency? */
+function isOurs(d: ts.Declaration): boolean {
+  const f = d.getSourceFile().fileName;
+  return f.includes('/packages/') && !f.includes('/node_modules/');
+}
 
 /**
- * Every member declared by a publicly exported interface or object-shaped type
- * alias, read off the declaration nodes.
+ * Members a type declares, resolving intersections, unions and interface
+ * heritage down to declarations that live in this repo.
  *
- * Third-party types are skipped: `ReadonlySignal` is re-exported from
+ * Third-party constituents drop out here: `ReadonlySignal` is re-exported from
  * `@preact/signals`, and documenting `peek` / `subscribe` / `toJSON` is that
- * library's job, not this one's. The test is whether the declaration lives
- * under `packages/`.
+ * library's job, not this one's.
  */
-function publicTypeMembers(): TypeMembers[] {
-  const program = ts.createProgram([ENTRY], {
+function declaredMembers(
+  sym: ts.Symbol,
+  checker: ts.TypeChecker,
+  seen: Set<ts.Symbol>
+): string[] {
+  if (seen.has(sym)) return [];
+  seen.add(sym);
+  const out = new Set<string>();
+
+  const fromNode = (node: ts.Node): void => {
+    if (ts.isTypeLiteralNode(node) || ts.isInterfaceDeclaration(node)) {
+      for (const m of node.members) {
+        if (!ts.isPropertySignature(m) && !ts.isMethodSignature(m)) continue;
+        // Non-identifier names (computed keys like `[FORM_MODULE_FIELD]`, quoted
+        // ones like `'data-loader'`) are framework plumbing, not an API a reader
+        // looks up. Skipped deliberately.
+        if (!m.name || !ts.isIdentifier(m.name)) continue;
+        if (m.name.text.startsWith('__')) continue;
+        out.add(m.name.text);
+      }
+      return;
+    }
+    if (ts.isIntersectionTypeNode(node) || ts.isUnionTypeNode(node)) {
+      for (const t of node.types) fromNode(t);
+      return;
+    }
+    if (ts.isParenthesizedTypeNode(node)) {
+      fromNode(node.type);
+      return;
+    }
+    if (ts.isTypeReferenceNode(node)) {
+      const ref = checker.getSymbolAtLocation(node.typeName);
+      if (!ref) return;
+      const target =
+        ref.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(ref) : ref;
+      if ((target.getDeclarations() ?? []).some(isOurs)) {
+        for (const n of declaredMembers(target, checker, seen)) out.add(n);
+      }
+    }
+  };
+
+  for (const d of sym.getDeclarations() ?? []) {
+    if (!isOurs(d)) continue;
+    if (ts.isInterfaceDeclaration(d)) {
+      fromNode(d);
+      for (const h of d.heritageClauses ?? []) {
+        for (const t of h.types) {
+          const ref = checker.getSymbolAtLocation(t.expression);
+          if (!ref) continue;
+          const target =
+            ref.flags & ts.SymbolFlags.Alias
+              ? checker.getAliasedSymbol(ref)
+              : ref;
+          if ((target.getDeclarations() ?? []).some(isOurs)) {
+            for (const n of declaredMembers(target, checker, seen)) out.add(n);
+          }
+        }
+      }
+    } else if (ts.isTypeAliasDeclaration(d)) {
+      fromNode(d.type);
+    }
+  }
+  return [...out];
+}
+
+function publicTypeMembers(): { type: string; members: string[] }[] {
+  const present = ENTRIES.filter((e) => existsSync(e));
+  if (!present.length) {
+    throw new Error(
+      `no entry .d.ts under ${distDir}; build the framework packages first ` +
+        `(step 1 of the pre-push sequence in CLAUDE.md)`
+    );
+  }
+  const program = ts.createProgram(present, {
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -121,128 +184,125 @@ function publicTypeMembers(): TypeMembers[] {
     noEmit: true,
   });
   const checker = program.getTypeChecker();
-  const sf = program.getSourceFile(ENTRY);
-  if (!sf) {
-    throw new Error(
-      `missing ${ENTRY}; build the framework packages first (step 1 of the pre-push sequence in CLAUDE.md)`
-    );
-  }
-  const moduleSym = checker.getSymbolAtLocation(sf);
-  const out: TypeMembers[] = [];
+  const byType = new Map<string, Set<string>>();
 
-  for (const ex of moduleSym ? checker.getExportsOfModule(moduleSym) : []) {
-    // `export * from ...` yields ALIAS symbols whose declaration is the export
-    // specifier, not the interface. Resolve before asking what it is.
-    const sym =
-      ex.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(ex) : ex;
-    const decls = sym.getDeclarations() ?? [];
-
-    const ours = decls.some((d) => {
-      const f = d.getSourceFile().fileName;
-      return f.includes('/packages/') && !f.includes('/node_modules/');
-    });
-    if (!ours) continue;
-
-    const members: string[] = [];
-    for (const d of decls) {
-      const body = ts.isInterfaceDeclaration(d)
-        ? d.members
-        : ts.isTypeAliasDeclaration(d) && ts.isTypeLiteralNode(d.type)
-          ? d.type.members
-          : undefined;
-      if (!body) continue;
-      for (const m of body) {
-        if (!ts.isPropertySignature(m) && !ts.isMethodSignature(m)) continue;
-        if (!m.name || !ts.isIdentifier(m.name)) continue;
-        const n = m.name.text;
-        // `__brand`-style fields are compile-time nominal tags, not API.
-        if (n.startsWith('__')) continue;
-        members.push(n);
-      }
+  for (const entry of present) {
+    const sf = program.getSourceFile(entry);
+    if (!sf) continue;
+    const moduleSym = checker.getSymbolAtLocation(sf);
+    for (const ex of moduleSym ? checker.getExportsOfModule(moduleSym) : []) {
+      const sym =
+        ex.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(ex) : ex;
+      if (!(sym.getDeclarations() ?? []).some(isOurs)) continue;
+      const members = declaredMembers(sym, checker, new Set());
+      if (!members.length) continue;
+      const set = byType.get(ex.getName()) ?? new Set<string>();
+      for (const m of members) set.add(m);
+      byType.set(ex.getName(), set);
     }
-    if (members.length) out.push({ type: ex.getName(), members });
   }
-  return out.sort((a, b) => a.type.localeCompare(b.type));
+  return [...byType]
+    .map(([type, members]) => ({ type, members: [...members].sort() }))
+    .sort((a, b) => a.type.localeCompare(b.type));
 }
 
-const codePages = readCodePerPage();
-const types = publicTypeMembers();
-
-/**
- * Pages whose code names this type. Empty means the type is not part of the
- * documented surface at all, which is the EXPORT gate's business, not this
- * one's: `exports-coverage.test.ts` decides whether a symbol should appear in
- * the docs. This gate answers the narrower question, and only where the answer
- * is meaningful: given that a type IS documented, is every field of it?
- *
- * Enforcing member coverage for undocumented types instead reports 71 failures
- * on a repo whose docs are in good shape, which is a gate nobody can land and
- * therefore a gate nobody keeps.
- */
-function pagesDocumenting(type: string): string[] {
-  const t = new RegExp(`\\b${type}\\b`);
-  return codePages.filter((page) => t.test(page));
-}
-
-/** Documented = named in code on a page whose code also names the owning type. */
+/** Documented = the type and the member appear in the SAME code span. */
 function documented(type: string, member: string): boolean {
+  const t = new RegExp(`\\b${type}\\b`);
   const m = new RegExp(`\\b${member}\\b`);
-  return pagesDocumenting(type).some((page) => m.test(page));
+  return codeSpans.some((s) => t.test(s) && m.test(s));
 }
+
+const typeIsDocumented = (type: string): boolean =>
+  codeSpans.some((s) => new RegExp(`\\b${type}\\b`).test(s));
+
+// Only types the docs actually document. Whether a type SHOULD be documented is
+// the export gate's question; this one answers the narrower "given that it is, is
+// every field?". Enforcing it everywhere reports failures on a repo whose docs
+// are in good shape, which is a gate nobody lands and therefore nobody keeps.
+const enforced = publicTypeMembers().filter((t) => typeIsDocumented(t.type));
+const pairs = enforced
+  .flatMap((t) => t.members.map((m) => `${t.type}.${m}`))
+  .sort();
+const undocumented = pairs.filter((p) => {
+  const i = p.lastIndexOf('.');
+  return !documented(p.slice(0, i), p.slice(i + 1));
+});
 
 describe('public type members are documented', () => {
-  it('walks a meaningful number of documented types', () => {
-    // Both halves matter. If the type list empties (moved dist, no build) or if
-    // every type falls out as undocumented, every assertion below passes
-    // vacuously and the gate silently stops gating.
-    const covered = types.filter((t) => pagesDocumenting(t.type).length > 0);
-    expect(covered.length).toBeGreaterThan(10);
-    expect(covered.flatMap((t) => t.members).length).toBeGreaterThan(40);
+  it('does not introduce a newly undocumented member', () => {
+    // A ratchet, not a clean bill of health. The known set is a committed
+    // backlog; this fails only on a member that is newly undocumented, which is
+    // exactly the `UseRoomResult.memberIds` case that motivated the file.
+    const fresh = undocumented.filter(
+      (p) => !knownGaps.undocumented.includes(p)
+    );
+    expect(
+      fresh,
+      `newly undocumented public type member(s). Cite the field in the same code span as its type ` +
+        `(a fenced block, an inline span, or one API-table row), or add it to type-members-known-gaps.json.`
+    ).toEqual([]);
   });
 
-  it('finds the exported types to walk', () => {
-    // If this list ever empties (a moved dist path, a build that did not run),
-    // every assertion below would pass vacuously.
-    expect(types.length).toBeGreaterThan(20);
-    expect(types.flatMap((t) => t.members).length).toBeGreaterThan(100);
+  it('does not leave a fixed gap sitting in the known set', () => {
+    // Ratchets forward. Without this the backlog only grows and stops
+    // describing anything.
+    const fixed = knownGaps.undocumented.filter(
+      (p) => !undocumented.includes(p)
+    );
+    expect(
+      fixed,
+      `documented now (or no longer exist); remove from type-members-known-gaps.json`
+    ).toEqual([]);
   });
 
-  for (const { type, members } of types) {
-    // Skipped rather than failed: see `pagesDocumenting`.
-    if (pagesDocumenting(type).length === 0) continue;
-    for (const member of members) {
-      if (INTENTIONALLY_UNDOCUMENTED.has(`${type}.${member}`)) continue;
-      it(`documents ${type}.${member}`, () => {
-        expect(
-          documented(type, member),
-          `${type}.${member} is not named in code on any page that documents ${type}. ` +
-            `Prose does not count (member names are ordinary words), and neither does a mention on ` +
-            `some other page (a member is documented where its type is).`
-        ).toBe(true);
-      });
-    }
-  }
+  it('pins the enforced surface so a rename goes loud', () => {
+    // A type that stops being named in the docs stops being checked, silently.
+    // Renaming `UseRoomResult` dropped 7 members from the gate and left it
+    // green. Diffing the pinned list makes that a visible, reviewable change.
+    expect(pairs).toEqual(knownGaps.enforced);
+  });
 });
 
 describe('the matcher discriminates', () => {
-  it('reads inline code spans, not just fenced blocks', () => {
-    // API reference tables cite members as `member`, inline. If only fenced
-    // blocks counted, every table-documented field would report as missing.
-    expect(documented('UseRoomResult', 'closeInfo')).toBe(true);
+  it('rejects a member documented on the same PAGE but not the same span', () => {
+    // The flaw an earlier version shipped with. `LoaderCache` and `get` both
+    // appear in loaders.mdx, but never together in one span: the `get` there is
+    // a Vite Proxy trap. Page-scoping called that documented.
+    const bothOnAPage = readdirSync(docsDir)
+      .filter((f) => f.endsWith('.mdx'))
+      .map((f) => readFileSync(resolve(docsDir, f), 'utf8'))
+      .some((raw) => /\bLoaderCache\b/.test(raw) && /\bget\b/.test(raw));
+    expect(bothOnAPage).toBe(true);
+    expect(documented('LoaderCache', 'get')).toBe(false);
   });
 
-  it('does not accept a member documented on some OTHER page', () => {
-    // The flaw this gate exists to avoid, and which its own first draft had.
-    // `closeInfo` is cited on two pages, so a corpus-wide match stayed green
-    // when it was removed from one. Scoped to the type's page, a member is
-    // documented where its type is or not at all.
-    expect(documented('UseRoomResult', 'closeInfo')).toBe(true);
-    expect(documented('ThisTypeIsNotInTheDocs', 'closeInfo')).toBe(false);
+  it('rejects a name that appears only in prose', () => {
+    // Asserted against REAL content. An earlier version used a sentinel that
+    // appears nowhere, so it passed under any matcher: replacing the code
+    // extraction with raw page text left it green.
+    const rooms = readFileSync(resolve(docsDir, 'rooms.mdx'), 'utf8');
+    const proseOnly = /reactive and updates on every join/.test(rooms);
+    expect(proseOnly).toBe(true);
+    // "join" is in that sentence and in no UseRoomResult code span.
+    expect(documented('UseRoomResult', 'join')).toBe(false);
   });
 
-  it('does not count a name that appears only in prose', () => {
-    expect(documented('UseRoomResult', 'zzzprosewordthatisnotcode')).toBe(
-      false
-    );
+  it('accepts a member cited beside its type in one span', () => {
+    // A real passing pair, so this asserts the positive direction rather than
+    // only the rejections.
+    expect(documented('CallResult', 'outcome')).toBe(true);
+  });
+
+  it('is honest that most reference tables do NOT satisfy it', () => {
+    // Worth pinning, because it explains the 136-entry backlog and stops the
+    // next reader assuming the docs are 80% broken. This repo's reference
+    // tables list a type's members WITHOUT naming the type in each row: the
+    // `useRoom` returns table cites `closeInfo` while `UseRoomResult` is named
+    // only in a separate "Type exports" block. Under co-occurrence that reads
+    // as undocumented, and it is a real (if mild) attribution gap: nothing in
+    // the row tells a reader which type the field belongs to.
+    expect(documented('UseRoomResult', 'closeInfo')).toBe(false);
+    expect(knownGaps.undocumented).toContain('UseRoomResult.closeInfo');
   });
 });
