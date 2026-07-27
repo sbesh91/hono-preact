@@ -67,9 +67,21 @@ export function useOptimistic<TBase, TPayload>(
     lastBaseRef.current = base;
   }
 
+  // Holds `reducer` as a tracked signal for the same reason `base` is held
+  // above: the value computed is created once (`useComputed` is
+  // `useMemo(..., [])`), so a plain closure capture would pin the fold to the
+  // reducer passed on the mount render, and a call site whose reducer closes
+  // over changing props (`(acc, p) => acc + p * mult`) would keep folding with
+  // the stale one. A fresh arrow per render is a new reference, so this writes
+  // during render; the value computed is read later in the SAME render pass,
+  // which reconciles the version before the batch ends, so no re-render is
+  // scheduled and there is no loop.
+  const reducerState = useStoreState(reducer);
+  reducerState.set(reducer);
+
   const value = useStoreValue(() =>
     queue.signal.value.reduce(
-      (acc, e) => reducer(acc, e.payload),
+      (acc, e) => reducerState.signal.value(acc, e.payload),
       baseState.signal.value
     )
   );
@@ -121,12 +133,19 @@ export function useOptimistic<TBase, TPayload>(
     queue.set([...queue.signal.value, { id, payload, status: 'active' }]);
     return {
       settle: () => {
-        const current = queue.signal.value;
-        const entry = current.find((e) => e.id === id);
+        const entry = queue.signal.value.find((e) => e.id === id);
         if (entry && entry.status === 'active') {
           runWithTransition(() => {
+            // Read FRESH inside the mutator (as `revert` does). With
+            // `transition: true` the mutator runs >=1 frame later, so a queue
+            // snapshot taken here at call time would clobber anything enqueued
+            // in between -- and two settles racing in the same frame would each
+            // write the other's entry back to `active`, stranding it forever
+            // (the base-change eviction above only drops `ready` entries).
             queue.set(
-              current.map((e) => (e.id === id ? { ...e, status: 'ready' } : e))
+              queue.signal.value.map((e) =>
+                e.id === id ? { ...e, status: 'ready' } : e
+              )
             );
           });
         }

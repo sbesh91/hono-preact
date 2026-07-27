@@ -1,6 +1,8 @@
 import type { ComponentChildren } from 'preact';
-import { useContext } from 'preact/hooks';
-import { LoaderDataContext } from './contexts.js';
+import { useContext, useRef } from 'preact/hooks';
+import { LoaderDataContext, LoaderViewSignalContext } from './contexts.js';
+import { createPhaseCell } from './loader-signal.js';
+import type { PhaseCell } from './reactive.js';
 import type { LoaderRef } from '../define-loader.js';
 import type { LoaderState, StreamState } from '../loader-state.js';
 
@@ -63,34 +65,51 @@ export function OptimisticOverlay<T, A>({
     base
   );
 
-  // Data-bearing arm (`success` / `revalidating` / `error`): re-provide the SAME
-  // discriminated arm with the data replaced (load status unchanged).
-  if (isDataBearing(ctx)) {
-    return (
-      <LoaderDataContext.Provider value={{ ...ctx, data: projected }}>
-        {children}
-      </LoaderDataContext.Provider>
-    );
+  // The arm this overlay re-provides:
+  //
+  //  - Data-bearing (`success` / `revalidating` / `error`): the SAME
+  //    discriminated arm with the data replaced (load status unchanged).
+  //  - Cold first load (`loading` / `connecting`, no underlying value yet) WITH
+  //    pending actions: surface their projection so descendants reading
+  //    `loader.useData()` see the optimistic items DURING the first load,
+  //    restoring parity with the overlay before the loader state machine landed
+  //    (which always projected). It rides the `revalidating` arm: data is
+  //    available but PROVISIONAL while the real first load is still in flight,
+  //    which is the honest status (`success` would falsely claim the load
+  //    completed). The reduce seeds from the absent base; the reducer is
+  //    responsible for tolerating an empty base, so the overlay never builds an
+  //    invalid value itself.
+  //  - Cold first load with nothing pending: nothing to project, so the genuine
+  //    `loading` / `connecting` arm passes through unchanged.
+  const arm: ConsumptionState = isDataBearing(ctx)
+    ? { ...ctx, data: projected }
+    : pending.length > 0
+      ? { status: 'revalidating', data: projected }
+      : ctx;
+
+  // `useData()` reads `LoaderViewSignalContext`, NOT `LoaderDataContext`, so the
+  // overlay has to re-provide that channel too or its projection never reaches a
+  // descendant's `loader.useData()` (it would read the host's raw loader state
+  // straight through this component).
+  //
+  // The identity of the provided reactive must be STABLE across renders:
+  // `readDataSignal` in define-loader.ts memoizes its `derive(source, …)` behind
+  // a `useRef` on FIRST render, so handing down a fresh `{ value: arm }` object
+  // per render would freeze every consumer at the projection's first value.
+  // Hold one phase cell for the lifetime of the overlay and write the new arm
+  // into it each render, exactly as `LoaderHost` does with its own view cell.
+  const cellRef = useRef<PhaseCell<ConsumptionState> | null>(null);
+  if (cellRef.current === null) {
+    cellRef.current = createPhaseCell<ConsumptionState>(arm);
+  } else {
+    cellRef.current.set(arm);
   }
 
-  // Cold first load (`loading` / `connecting`, no underlying value yet). When
-  // there ARE pending actions, surface their projection so descendants reading
-  // `loader.useData()` see the optimistic items DURING the first load, restoring
-  // parity with the overlay before the loader state machine landed (which always
-  // projected). It rides the `revalidating` arm: data is available but
-  // PROVISIONAL while the real first load is still in flight, which is the honest
-  // status (`success` would falsely claim the load completed). With no pending
-  // actions there is nothing to project, so the genuine `loading` / `connecting`
-  // arm passes through unchanged. The reduce seeds from the absent base; the
-  // reducer is responsible for tolerating an empty base, so the overlay never
-  // builds an invalid value itself.
   return (
-    <LoaderDataContext.Provider
-      value={
-        pending.length > 0 ? { status: 'revalidating', data: projected } : ctx
-      }
-    >
-      {children}
+    <LoaderDataContext.Provider value={arm}>
+      <LoaderViewSignalContext.Provider value={cellRef.current.source}>
+        {children}
+      </LoaderViewSignalContext.Provider>
     </LoaderDataContext.Provider>
   );
 }

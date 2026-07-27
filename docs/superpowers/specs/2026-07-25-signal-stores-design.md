@@ -129,7 +129,16 @@ The `@preact/signals` + `preact-render-to-string` patches are already proven
 Breaking return-type changes to released hooks, shipping with the umbrella's one
 release (documented in its release notes): `useActionResult`, `useFormStatus`
 return `ReadonlySignal`s; `useOptimistic`'s tuple value becomes a `ReadonlySignal`.
-The transition is compiler-guided (add `.value`). No hook is renamed; no new hook
+The transition is compiler-guided (add `.value`) for most call sites, but NOT for
+all of them, and the exceptions are silent. `Signal.prototype` defines `valueOf`,
+`toString` and `toJSON`, so a value consumed only via a template literal,
+`String()`, `JSON.stringify` or an `unknown`-typed sink type-checks unchanged and
+keeps rendering the right characters. Separately, the returned signals are stable
+identities (`useComputed`/`useSignal` are `useMemo(..., [])`), so a signal left in
+a `useEffect`/`useMemo` dependency array type-checks and pins that effect at mount
+- the effect silently stops firing. The correct spelling in a dependency array is
+`signal.value`. The repo has no linter (prettier + tsc only), so nothing backstops
+either shape; both must be caught by review. No hook is renamed; no new hook
 is added. `FieldErrorsMap` and the `useFieldErrors` / `<FieldError>` names are
 unchanged; only their reactivity narrows to per-field.
 
@@ -167,10 +176,14 @@ unchanged; only their reactivity narrows to per-field.
 
 ## 10. Risks
 
-- **Breaking-surface breadth.** Three released hooks change return type. Mitigated
-  by its being compiler-guided (`.value`) and shipping in the umbrella's one
-  release with notes; all call sites are updated in this PR (the same fan-out
-  Phase 4b's value-`useData` removal handled).
+- **Breaking-surface breadth.** Three released hooks change return type. Partly
+  mitigated by its being compiler-guided (`.value`) and shipping in the umbrella's
+  one release with notes; all call sites are updated in this PR (the same fan-out
+  Phase 4b's value-`useData` removal handled). The residual risk is the two shapes
+  tsc does NOT flag (see section 7): coercion sinks (template literal, `String()`,
+  `JSON.stringify`, `unknown` parameters) and dependency arrays, where a stale
+  spelling compiles, renders correctly, and silently freezes the effect. Nothing
+  in the repo lints for it, so it is a review obligation.
 - **Per-field store correctness.** The client/server error merge must feed the
   per-field signals without dropping the coarse "all errors" read or breaking SSR
   seeding. Covered by the granularity test plus an SSR-parity test.
