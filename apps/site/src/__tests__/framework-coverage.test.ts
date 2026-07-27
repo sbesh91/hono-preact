@@ -55,8 +55,6 @@ const ALLOWLIST: Record<string, string> = {
   LoaderValidationError:
     'thrown internally by the framework on failed loader validation; the demo relies on the framework surfacing it as a 400 response and never catches or constructs it directly',
   Page: 'manual escape-hatch component; every demo page uses definePage() instead',
-  For: 'signal-backed keyed list helper (Phase 4); the demo does not yet dogfood signal-driven lists, deferred to site adoption at the umbrella release',
-  Show: 'signal-backed conditional helper (Phase 4); the demo does not yet dogfood signal-driven conditionals, deferred to site adoption at the umbrella release',
   defineRoom:
     'route-independent room variant; the demo covers serverRoute(r).room (cursors-demo.server.ts)',
   getValidationIssues:

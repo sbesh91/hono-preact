@@ -92,7 +92,6 @@ export const FEATURE_MODULES = {
   ],
   head: ['head.js'],
   middleware: ['define-middleware.js', 'reload-context.js'],
-  'signals-dx': ['for.js', 'show.js'],
 };
 
 // Top-level dist modules intentionally NOT attributed to any bucket, so the

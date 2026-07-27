@@ -1,19 +1,27 @@
 // @vitest-environment happy-dom
 // P1-2 mutation check: does the roster preserve per-member signal IDENTITY?
 //
-// The contract at internal/reactive.ts:24 is "One member's entry; changes only
+// The contract on `RosterStore.member` is "One member's entry; changes only
 // when THAT member changes". That only means anything if a consumer may HOLD
 // the reactive it got back. Every assertion in signal-roster.test.ts re-calls
 // `member(id)` FRESH after each mutation, so it can never observe a broken
-// identity. These tests hold the binding across the mutation, which is exactly
-// what `<For>` (the shipped list helper, documented against `memberIds`) makes
-// a real consumer do.
+// identity. These tests hold the binding across the mutation, which is what
+// the rooms docs tell a consumer to do ("Hold the binding `member(id)` gives
+// you... Reach for it once, per row").
+//
+// The end-to-end block below holds the binding in a ref inside the row, rather
+// than relying on a list helper that never re-invokes the child closure. That
+// is deliberate: the property under test is the STORE's, and it must not be
+// stated in terms of a rendering helper that may or may not exist. A plain
+// `.map()` re-invokes the row on every membership change, so the ref is what
+// makes "taken once, held across the mutation" true -- and it is exactly the
+// discipline a reader following the docs applies.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/preact';
+import { useRef } from 'preact/hooks';
 import { effect } from '@preact/signals';
 import { createSignalRoster } from '../roster-signal.js';
 import type { PresenceMember } from '../room-envelope.js';
-import { For } from '../../for.js';
 import { defineChannel } from '../../define-channel.js';
 import { defineRoom } from '../../define-room.js';
 import { useRoom } from '../../use-room.js';
@@ -166,24 +174,36 @@ describe('P1-2 store level: a HELD member binding survives roster mutation', () 
   });
 });
 
-describe('P1-2 end to end: a reconnect snapshot freezes every <For> row', () => {
+describe('P1-2 end to end: a reconnect snapshot freezes every bound row', () => {
   it('a bound row keeps rendering pre-reconnect state forever', async () => {
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
     const rowRenders: Record<string, number> = { a: 0, b: 0 };
 
+    // Whatever `useRoom` hands back, rather than a hand-written restatement of
+    // it: the point is that a consumer can store the binding it was given.
+    type Binding = ReturnType<RoomHook['member']>;
+
     function Row({ id, room: r }: { id: string; room: RoomHook }) {
       rowRenders[id] = (rowRenders[id] ?? 0) + 1;
-      // The row holds its own binding for as long as the row lives; <For> does
-      // not re-invoke a surviving row, so this call happens exactly once.
-      const m = r.member(id);
+      // Taken ONCE and held for the row's lifetime. Re-reading `r.member(id)`
+      // every render would resolve the current cell each time and pass against
+      // a store that reallocates cells, which is the blindness this file
+      // exists to remove.
+      const held = useRef<Binding | null>(null);
+      const m = (held.current ??= r.member(id));
       return <li data-testid={`row-${id}`}>{String(m.value?.state?.x)}</li>;
     }
 
     function Board() {
       const r = useRoom(room, { presence: { x: 0 } });
+      // `memberIds` is written as a fresh array on every snapshot, so this
+      // re-renders on reconnect and re-invokes each row -- which is precisely
+      // why the binding above must be held rather than re-read.
       return (
         <ul>
-          <For each={r.memberIds}>{(id) => <Row id={id} room={r} />}</For>
+          {r.memberIds.value.map((id) => (
+            <Row key={id} id={id} room={r} />
+          ))}
         </ul>
       );
     }

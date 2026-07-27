@@ -263,8 +263,12 @@ they are reachable and because at least one released component consumed them.
   *silently* when duplicated: a `computed` in one copy never subscribes to a
   signal from the other. The Vite plugin dedupes both `@preact/signals` and
   `@preact/signals-core` for the same reason.
-- **`<For>` and `<Show>`** are in the branch but **contested**; see A7 on #349.
-  Do not document or announce them until that decision lands.
+**Not in this release:** the `<For>` / `<Show>` rendering helpers. They were
+built in Phase 4 and **cut before release** (2026-07-27), because the vnode cache
+that gives `<For>` its granularity is the same thing that freezes a row against
+any non-signal input it closes over. Fixing that changes the child signature, so
+it had to happen before a release rather than after one. Nothing shipped, so
+nothing breaks; the work is preserved on `feat/signals-rendering-helpers`.
 
 ---
 

@@ -1,9 +1,9 @@
 # Signals migration (umbrella)
 
-Date: 2026-07-22 (Phase 3 recorded 2026-07-25)
-Status: **Feature-complete.** Every planned phase shipped on this branch: Phase 5
-made signals the always-on data-layer opinion; Phase 4 added the keyed `<For>` /
-`<Show>` rendering helpers; Phase 4b unified the loader read into one adaptive
+Date: 2026-07-22 (Phase 3 recorded 2026-07-25; Phase 4 cut 2026-07-27)
+Status: **Feature-complete, minus Phase 4.** Phase 5
+made signals the always-on data-layer opinion; **Phase 4's `<For>` / `<Show>`
+helpers were cut from this release** (see below); Phase 4b unified the loader read into one adaptive
 `useData`, re-exported `@preact/signals` first-party, and retired
 `ReadonlyReactive`; Phase 3 (the last) converted the action / form / optimistic /
 field-error stores to signals (the read hooks return signals; per-field errors
@@ -42,7 +42,7 @@ Ordered by payoff-to-risk. Each is a stacked sub-PR into this branch.
 | 1 | Presence roster as keyed signals (`memberIds` / `member(id)` on `useRoom`). Positioning DROPPED (see below). | #343 | shipped (in this PR) |
 | 2 | Loader read-side as a signal mirror (`useDataSignal` / `useFieldSignal`). Single-value first; streaming a follow-on. | #344 | shipped (in this PR) |
 | 3 | Signal-backed stores: action-result / form-submit / optimistic to signals (the read hooks `useActionResult` / `useFormStatus` / `useOptimistic` return signals); per-field form-error signals; delete the `use-store-snapshot` / `use-force-update` bridges. | #348 | shipped (in this PR) |
-| 4 | Signals DX: keyed `<For>` / `<Show>` rendering helpers (per-row component boundary; atomicity proven). Streaming-loader signals split out (see below). | #346 | shipped (in this PR) |
+| 4 | Signals DX: keyed `<For>` / `<Show>` rendering helpers (per-row component boundary; atomicity proven). Streaming-loader signals split out (see below). | #346 | **CUT 2026-07-27** (see below) |
 | 4b | Unified reactive read API: one adaptive `useData` (single-value `()` + live `(initial, reduce)`), both returning signals; removes `useDataSignal` / `useFieldSignal`; re-exports `@preact/signals` first-party; retires `ReadonlyReactive` for `ReadonlySignal`; live `.Boundary` collect-mode host. Absorbs the split-out streaming signals. | #347 | shipped (in this PR) |
 | 5 | Signals as the always-on data layer: delete the opt-in seam and the `hono-preact/signals` subpath; loaders and rooms are signal-backed with no opt-in import. | #345 | shipped (in this PR) |
 
@@ -88,6 +88,39 @@ auto-subscribe and import no `@preact/signals`, so the module-graph guard holds)
 and atomicity is proven (a per-row / child signal re-renders only its own
 component, not `<For>` / `<Show>`). `signal.map()` was dropped (it would need a
 `Signal`-prototype monkey-patch). See `2026-07-24-signals-dx-design.md`.
+
+**Phase 4 CUT from this release (2026-07-27).** `<For>` and `<Show>` are removed
+from the umbrella; the work is preserved on `feat/signals-rendering-helpers`,
+whose single commit against the umbrella restores them, and the characterisation
+spike is on `spike/for-vnode-cache` (deliberately red).
+
+The reason is the paragraph above: "it caches each row by key so a join/leave
+reconciles by key without re-rendering survivors." Caching the row's **vnode**
+is what delivers the granularity, and it is also what freezes the row. A cached
+vnode is never re-created, so the child closure is never re-invoked, so a row
+never observes a change to anything it closed over that is not a signal. Solid
+can do this because its JSX is not re-created per render; Preact's is.
+
+The `by`-on-index case makes it concrete: keying by index means the key is
+stable while the item at that index changes, so the whole list freezes on its
+first contents. A row closing over any parent state has the same problem, and a
+no-`by` list of freshly-deserialised objects remounts everything instead.
+`item` / `index` staleness was documented as intended (`for.tsx:14-18`); these
+three were not.
+
+The spike confirms there is no cheap fix: the obvious one leaves 2 of 10 new
+tests red **and** breaks `for.test.tsx > a join/leave does NOT re-invoke
+surviving rows`, which asserts the freeze **as the feature**. That collision is
+the finding, not a bug in the spike. A real fix gives each row a `Signal` cell
+so the row re-renders from its own reactive input instead of from a fresh
+closure, which is a breaking change to the child signature and therefore has to
+happen before release, not after.
+
+Cutting is cheap and reversible: zero consumers (`rg '<For\b|<Show\b'` found only
+their own source and tests), so nothing depends on the shape that would be
+breaking to change. The roster-identity mutation check was the one test that
+consumed `<For>`; it now holds the binding in a ref, which is what the rooms
+docs tell a consumer to do and which was re-mutation-checked after the rewrite.
 
 The streaming-loader signals originally grouped here (a signal read channel for
 live loaders) were **split into Phase 4b**: design review found the accumulator
@@ -165,7 +198,7 @@ adds. Updated as phases land.
 | Phase 0 | 4914 (+3) | loaders +258 B | structural, parameter passing over closure capture |
 | Phase 1 | 5519 unchanged | realtime +~65 B | the signal-mode branch + lazy getters in `useRoom` |
 | Phase 5 | 5521 unchanged | realtime 2261 B, loaders 10215 B (marginal) | seam removed; the `signals` opt-in bucket is gone, its glue folded into the two feature buckets |
-| Phase 4 | 5521 unchanged | signals-dx 307 B (marginal) | pure-Preact `<For>` / `<Show>`; a new tree-shakeable bucket, imports no `@preact/signals` |
+| Phase 4 | 5521 unchanged | signals-dx 307 B (marginal) | pure-Preact `<For>` / `<Show>`; a new tree-shakeable bucket, imports no `@preact/signals`. **Cut 2026-07-27**, so the `signals-dx` bucket is gone from the probe. |
 | Phase 4b | 5524 (+3 noise) | loaders 10545 B, realtime 2261 B | one adaptive `useData` + collect-mode streaming; `@preact/signals` re-export stays tree-shaken out of core |
 | Phase 3 | 5498 (signals-free) | actions 7396 B | stores to signals; the store factory keeps `@preact/signals` off `page-middleware-host` (core), so core stays signals-free |
 
