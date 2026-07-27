@@ -90,7 +90,7 @@ const Movies = ({ loaderData }) => {
 };
 ```
 
-`movies` is a `ReadonlySignal<TBase>`; read `.value` to get the current projection. `addOptimistic(payload)` appends a queue entry and returns an `OptimisticHandle`:
+`movies` is a `ReadonlySignal<TBase>`; read `.value` to get the current projection, or pass the signal to a leaf so only that leaf re-renders (see [Signals](/docs/signals)). `addOptimistic(payload)` appends a queue entry and returns an `OptimisticHandle`:
 
 ```ts
 type OptimisticHandle = {

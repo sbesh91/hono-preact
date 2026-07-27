@@ -172,6 +172,8 @@ Calling `member(id)` again on every render works too, but it throws away the sub
 
 Both are worth it when the roster is large or presence updates are frequent. Below that, `members` is simpler and there is nothing wrong with it.
 
+[Signals](/docs/signals) covers the reactive value these return, including the two mistakes that do not produce a compile error.
+
 ## Broadcast vs send
 
 The server `conn` has two delivery methods:

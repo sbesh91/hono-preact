@@ -204,7 +204,7 @@ const AddMovieForm = () => {
 };
 ```
 
-`useActionResult(stub?)` returns a `ReadonlySignal` of the result of the most recent action invocation that targeted the current page render. Read `.value` to get the current `ActionResult`. The `submittedPayload` field lets you re-populate form inputs via `defaultValue` so users don't lose what they typed on a deny.
+`useActionResult(stub?)` returns a `ReadonlySignal` of the result of the most recent action invocation that targeted the current page render. Read `.value` to get the current `ActionResult`, or hold the signal and read it in a leaf so only that leaf re-renders; see [Signals](/docs/signals). The `submittedPayload` field lets you re-populate form inputs via `defaultValue` so users don't lose what they typed on a deny.
 
 Pass no argument (or pass `undefined`) to receive the result of any action that posted to this page. Pass a specific stub to filter to that action only.
 
