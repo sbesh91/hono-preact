@@ -84,6 +84,33 @@ export function hasPhaseValue<T>(p: LoaderPhase<T>): p is ValuedPhase<T> {
 }
 
 /**
+ * The statuses that appear ONLY on a streaming `StreamState`, never on a
+ * single-value `LoaderState` (the shared `error` status stays on the
+ * `LoaderState` side). Derived from the status union via `Exclude`, so the
+ * exclusion set has ONE source of truth: adding a `StreamStatus` member forces
+ * this map to list it (a missing key is a compile error) and it cannot drift.
+ */
+type StreamOnlyStatus = Exclude<StreamStatus, LoaderState<unknown>['status']>;
+const STREAM_ONLY_STATUSES: Record<StreamOnlyStatus, true> = {
+  connecting: true,
+  open: true,
+  closed: true,
+};
+
+/**
+ * Type predicate: is this consumption state the single-value `LoaderState` half
+ * of the union? Narrows by excluding the stream-only statuses, so a consumer
+ * that only ever sees a non-streaming loader (`useData()`'s no-arg arm, which
+ * a streaming loader never reaches) can read the value as a `LoaderState`
+ * without a cast. Structural, on the discriminant, like `hasPhaseValue` above.
+ */
+export function isLoaderState(
+  s: LoaderState<unknown> | StreamState<unknown>
+): s is LoaderState<unknown> {
+  return !(s.status in STREAM_ONLY_STATUSES);
+}
+
+/**
  * The current value as a present/absent carrier: the phase's settled value if it
  * carries one, else the synchronously-adopted preload/cache value if present,
  * else absent. STRUCTURAL throughout (the phase branch is `hasPhaseValue`, the

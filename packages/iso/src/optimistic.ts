@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'preact/hooks';
+import { useComputed, useSignal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
-import { useStoreState, useStoreValue } from './internal/store-signal.js';
 
 type Status = 'active' | 'ready';
 type Entry<TPayload> = { id: number; payload: TPayload; status: Status };
@@ -37,15 +37,14 @@ export function useOptimistic<TBase, TPayload>(
   reducer: (current: TBase, payload: TPayload) => TBase,
   options?: UseOptimisticOptions
 ): [ReadonlySignal<TBase>, (payload: TPayload) => OptimisticHandle] {
-  const queue = useStoreState<Entry<TPayload>[]>([]);
+  const queue = useSignal<Entry<TPayload>[]>([]);
   // Holds `base` as a tracked signal, not just the plain closure capture
-  // below, so the value computed (which reads `baseState.signal.value`)
-  // re-derives when `base` changes even while the queue is idle. Written
-  // every render (see below); @preact/signals dedupes a same-reference
-  // write, so an unchanged `base` is a no-op and a changed `base` notifies
-  // exactly once.
-  const baseState = useStoreState<TBase>(base);
-  baseState.set(base);
+  // below, so the value computed (which reads `baseState.value`) re-derives
+  // when `base` changes even while the queue is idle. Written every render
+  // (see below); @preact/signals dedupes a same-reference write, so an
+  // unchanged `base` is a no-op and a changed `base` notifies exactly once.
+  const baseState = useSignal<TBase>(base);
+  baseState.value = base;
   const lastBaseRef = useRef(base);
   const idRef = useRef(0);
   const transitionRef = useRef(options?.transition === true);
@@ -59,10 +58,10 @@ export function useOptimistic<TBase, TPayload>(
     // be a fresh reference each time (e.g. an inline literal) even with an
     // empty queue, which is a synchronous render loop: write -> subscribed
     // component re-renders -> `base` is a new reference again -> write ...
-    const current = queue.signal.value;
+    const current = queue.value;
     const filtered = current.filter((e) => e.status !== 'ready');
     if (filtered.length !== current.length) {
-      queue.set(filtered);
+      queue.value = filtered;
     }
     lastBaseRef.current = base;
   }
@@ -76,13 +75,13 @@ export function useOptimistic<TBase, TPayload>(
   // during render; the value computed is read later in the SAME render pass,
   // which reconciles the version before the batch ends, so no re-render is
   // scheduled and there is no loop.
-  const reducerState = useStoreState(reducer);
-  reducerState.set(reducer);
+  const reducerState = useSignal(reducer);
+  reducerState.value = reducer;
 
-  const value = useStoreValue(() =>
-    queue.signal.value.reduce(
-      (acc, e) => reducerState.signal.value(acc, e.payload),
-      baseState.signal.value
+  const value = useComputed(() =>
+    queue.value.reduce(
+      (acc, e) => reducerState.value(acc, e.payload),
+      baseState.value
     )
   );
 
@@ -130,10 +129,10 @@ export function useOptimistic<TBase, TPayload>(
 
   const addOptimistic = useCallback((payload: TPayload): OptimisticHandle => {
     const id = ++idRef.current;
-    queue.set([...queue.signal.value, { id, payload, status: 'active' }]);
+    queue.value = [...queue.value, { id, payload, status: 'active' }];
     return {
       settle: () => {
-        const entry = queue.signal.value.find((e) => e.id === id);
+        const entry = queue.value.find((e) => e.id === id);
         if (entry && entry.status === 'active') {
           runWithTransition(() => {
             // Read FRESH inside the mutator (as `revert` does). With
@@ -142,17 +141,15 @@ export function useOptimistic<TBase, TPayload>(
             // in between -- and two settles racing in the same frame would each
             // write the other's entry back to `active`, stranding it forever
             // (the base-change eviction above only drops `ready` entries).
-            queue.set(
-              queue.signal.value.map((e) =>
-                e.id === id ? { ...e, status: 'ready' } : e
-              )
+            queue.value = queue.value.map((e) =>
+              e.id === id ? { ...e, status: 'ready' } : e
             );
           });
         }
       },
       revert: () => {
         runWithTransition(() => {
-          queue.set(queue.signal.value.filter((e) => e.id !== id));
+          queue.value = queue.value.filter((e) => e.id !== id);
         });
       },
     };

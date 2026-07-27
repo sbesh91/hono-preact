@@ -47,7 +47,7 @@ afterEach(() => {
 // renders a "loading" marker until a data-carrying arm is present, then the
 // data. This replaces the Suspense `fallback` prop, which no longer exists.
 function Probe({ testid = 'msg' }: { testid?: string }) {
-  const ctx = useContext(LoaderDataContext);
+  const ctx = useContext(LoaderDataContext)?.value ?? null;
   if (ctx?.status === 'loading')
     return <span data-testid="loading">loading</span>;
   const data =
@@ -70,13 +70,13 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     const ref = defineLoader<{ msg: string }>(fn);
 
     function Capture() {
-      captured = useContext(LoaderDataContext);
+      captured = useContext(LoaderDataContext)?.value ?? null;
       return <Probe />;
     }
 
     const { container } = render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Capture />
         </Loader>
       </LocationProvider>
@@ -111,14 +111,14 @@ describe('state-based <Loader>: pending/resolved render model', () => {
     const ref = defineLoader<number>(async () => 0);
     let observed: unknown = 'unset';
     function Capture() {
-      const ctx = useContext(LoaderDataContext);
+      const ctx = useContext(LoaderDataContext)?.value ?? null;
       const data = ctx && 'data' in ctx ? ctx.data : undefined;
       observed = data;
       return <span data-testid="val">{String(data)}</span>;
     }
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Capture />
         </Loader>
       </LocationProvider>
@@ -151,7 +151,7 @@ describe('v3 <Loader> stability', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -208,7 +208,7 @@ describe('v3 <Loader> stability', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -272,7 +272,7 @@ describe('v3 <Loader> stability', () => {
       const [, force] = useState(0);
       trigger = () => force((n) => n + 1);
       return (
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       );
@@ -342,7 +342,7 @@ describe('v3 <Loader> stability', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -400,7 +400,7 @@ describe('v3 <Loader> stability', () => {
 
     const { rerender } = render(
       <LocationProvider>
-        <Loader loader={ref} location={make('alpha')}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={make('alpha')}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -411,7 +411,7 @@ describe('v3 <Loader> stability', () => {
 
     rerender(
       <LocationProvider>
-        <Loader loader={ref} location={make('beta')}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={make('beta')}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -450,7 +450,7 @@ describe('Loader: parametric loader cache should key on location', () => {
     // First mount with id=1
     const first = render(
       <LocationProvider>
-        <Loader loader={ref} location={makeLoc('1')}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={makeLoc('1')}>
           <Page id="1" />
         </Loader>
       </LocationProvider>
@@ -464,7 +464,7 @@ describe('Loader: parametric loader cache should key on location', () => {
     // Remount with id=2. The shared cache must NOT return id=1's data.
     const second = render(
       <LocationProvider>
-        <Loader loader={ref} location={makeLoc('2')}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={makeLoc('2')}>
           <Page id="2" />
         </Loader>
       </LocationProvider>
@@ -493,7 +493,7 @@ describe('Loader: no-location error message', () => {
     expect(() => {
       render(
         <LocationProvider>
-          <Loader loader={ref}>
+          <Loader mode={{ kind: 'single' }} loader={ref}>
             <span />
           </Loader>
         </LocationProvider>
@@ -508,7 +508,7 @@ describe('Loader: no-location error message', () => {
     expect(() => {
       render(
         <LocationProvider>
-          <Loader loader={ref}>
+          <Loader mode={{ kind: 'single' }} loader={ref}>
             <span />
           </Loader>
         </LocationProvider>
@@ -532,7 +532,7 @@ describe('Loader: useError() on successful static load', () => {
     }
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -558,7 +558,7 @@ describe('LoaderRef.useData(): discriminated LoaderState (review #1,#2)', () => 
     }
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -597,7 +597,7 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -652,7 +652,7 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -716,7 +716,7 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -759,7 +759,7 @@ describe('loader-state end-to-end regressions (review #1,#2,#3,#7)', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -826,6 +826,7 @@ describe('stale-while-error for preloaded loaders on stream error (R1R2 review)'
     render(
       <LocationProvider>
         <Loader
+          mode={{ kind: 'single' }}
           loader={ref}
           location={loc}
           errorFallback={() => <span data-testid="fallback">FALLBACK</span>}
@@ -910,6 +911,7 @@ describe('undefined/null loader values (re-review #192 deep fix)', () => {
     render(
       <LocationProvider>
         <Loader
+          mode={{ kind: 'single' }}
           loader={ref}
           location={loc}
           errorFallback={() => <span data-testid="fallback">FALLBACK</span>}
@@ -979,7 +981,7 @@ describe('undefined/null loader values (re-review #192 deep fix)', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>
@@ -1026,7 +1028,7 @@ describe('undefined/null loader values (re-review #192 deep fix)', () => {
 
     render(
       <LocationProvider>
-        <Loader loader={ref} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
           <Child />
         </Loader>
       </LocationProvider>

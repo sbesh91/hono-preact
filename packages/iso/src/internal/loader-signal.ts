@@ -1,31 +1,7 @@
 import { signal, computed, batch } from '@preact/signals';
 import type { ReadonlySignal, Signal } from '@preact/signals';
-import type { PhaseCell } from './reactive.js';
 import type { StreamState, StreamStatus } from '../loader-state.js';
 import { toStreamState } from '../loader-state.js';
-
-/**
- * A phase cell mirroring one loader's projected `LoaderState`. The loader host
- * writes it each render (memoized value = no-op); `useData()` reads `source`.
- * The always-on data-layer implementation for loaders.
- */
-export function createPhaseCell<T>(initial: T): PhaseCell<T> {
-  const s = signal(initial);
-  return {
-    set(value) {
-      s.value = value;
-    },
-    source: s,
-  };
-}
-
-/** A memoized projection off a reactive source (a `computed`). */
-export function derive<T, R>(
-  source: ReadonlySignal<T>,
-  select: (v: T) => R
-): ReadonlySignal<R> {
-  return computed(() => select(source.value));
-}
 
 /**
  * Fold a retained collect-mode chunk log into a `StreamState<Acc>`,
@@ -93,10 +69,11 @@ export function foldStream<Acc>(
 /**
  * A live loader's collect-mode state: the retained chunk log plus
  * status/error, as WRITABLE signals. Kept here (not in `use-loader-runner.tsx`
- * / `loader.tsx`) so `@preact/signals` enters the module graph only through
- * this file and `roster-signal.ts` (`signals-always-on.test.ts` pins this
- * invariant); callers get pre-built signals and mutator functions, never a
- * raw `signal()`/`batch()` call of their own.
+ * / `loader.tsx`) because the four fields have to move ATOMICALLY: every
+ * mutator below is a `batch`, and a caller writing the raw signals itself
+ * would have to re-derive that pairing at each call site. Callers get
+ * pre-built signals plus the mutators, so the atomicity contract has exactly
+ * one implementation.
  */
 export type CollectSignals = {
   chunks: Signal<readonly unknown[]>;

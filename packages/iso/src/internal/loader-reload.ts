@@ -11,7 +11,7 @@ import {
   type LoaderSession,
 } from './loader-session.js';
 import type { LoaderPhaseOps } from './loader-readers.js';
-import type { AccumulateOptions } from './use-loader-runner.js';
+import { isStreamingMode, type LoaderMode } from './loader-mode.js';
 
 /**
  * Everything a reload needs, none of it a hook. `ops` is the same write surface
@@ -29,10 +29,13 @@ export type ReloadDeps<T> = {
   loaderRef: LoaderRef<T, boolean>;
   currentLocation: () => RouteHook;
   id: string;
-  accumulate?: AccumulateOptions;
-  /** Collect-mode: see `BuildReaderArgs.collect` in `loader-readers.ts`. Shares
-   * the resubscribe branch below with `accumulate` (never both set). */
-  collect?: boolean;
+  /**
+   * How the host consumes this loader. Both streaming modes (`fold` and
+   * `collect`) take the resubscribe branch below; `single` takes the refetch
+   * branch. Nothing here reads the fold payload: the reducer is already baked
+   * into `ops.applyChunk`.
+   */
+  mode: LoaderMode;
 };
 
 /**
@@ -46,8 +49,7 @@ export type ReloadDeps<T> = {
  * paths cannot drift apart.
  */
 export function runReload<T>(deps: ReloadDeps<T>): void {
-  const { session, ops, loaderRef, currentLocation, id, accumulate, collect } =
-    deps;
+  const { session, ops, loaderRef, currentLocation, id, mode } = deps;
 
   // A reload supersedes the SSR-baked deny: drop the seed so the view projects
   // from the real phase (loading -> success/coldError) as the refetch runs.
@@ -67,9 +69,9 @@ export function runReload<T>(deps: ReloadDeps<T>): void {
       : { tag: 'loading' };
   });
 
-  if (accumulate || collect) {
-    // Streaming/live reload = resubscribe: `ops.subscribeAccumulate` (fold-mode
-    // `subscribeAccumulate`, or collect-mode's `subscribeCollect`, selected by
+  if (isStreamingMode(mode)) {
+    // Streaming reload = resubscribe: `ops.subscribeStream` (fold-mode's
+    // `subscribeFold` or collect-mode's `subscribeCollect`, resolved by
     // `use-loader-runner.tsx`) aborts the current stream, resets to `initial` /
     // clears the retained log, reopens, and folds/appends chunks. Drive status
     // connecting -> open/closed/error, mirroring a fresh mount. `revalidating`
@@ -79,7 +81,7 @@ export function runReload<T>(deps: ReloadDeps<T>): void {
     // for collect (nothing reads that `useState` in collect-mode).
     ops.setStatus('connecting');
     ops
-      .subscribeAccumulate(nextAbortSignal(session))
+      .subscribeStream(nextAbortSignal(session))
       .then((firstChunk) => {
         // applyChunk moves the phase to `success` (clears reloading).
         ops.applyChunk(firstChunk);

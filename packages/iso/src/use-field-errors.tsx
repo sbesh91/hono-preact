@@ -24,8 +24,10 @@ import {
  * `<Form>`.
  */
 export function useFieldErrors(): FieldErrorsMap;
-export function useFieldErrors(name: string): string[];
-export function useFieldErrors(name?: string): FieldErrorsMap | string[] {
+export function useFieldErrors(name: string): readonly string[];
+export function useFieldErrors(
+  name?: string
+): FieldErrorsMap | readonly string[] {
   const store = useContext(FieldErrorsContext);
   if (name !== undefined) return store.fieldError(name).value;
   return store.all.value;

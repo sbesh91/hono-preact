@@ -33,7 +33,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>static</p>
         </Loader>
       )
@@ -55,7 +55,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>
       )
@@ -79,7 +79,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>static</p>
         </Loader>
       )
@@ -107,7 +107,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>
       )
@@ -130,7 +130,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>,
         { dev: true }
@@ -152,7 +152,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>
       )
@@ -184,7 +184,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>scope</p>
         </Loader>
       )
@@ -211,7 +211,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>,
         { dev: true }
@@ -232,7 +232,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>
       )
@@ -249,7 +249,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>sync</p>
         </Loader>
       )
@@ -282,7 +282,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>
       )
@@ -345,7 +345,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>
       )
@@ -387,7 +387,7 @@ describe('renderPage: streaming SSR', () => {
     app.get('/', (c) =>
       renderPage(
         c,
-        <Loader loader={loader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
           <p>streaming</p>
         </Loader>
       )

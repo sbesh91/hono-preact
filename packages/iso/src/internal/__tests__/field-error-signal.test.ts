@@ -1,11 +1,42 @@
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
-import { createFieldErrorStore } from '../store-signal.js';
+import { effect } from '@preact/signals';
+import { createFieldErrorStore } from '../field-error-signal.js';
 
 describe('createFieldErrorStore', () => {
   it('returns a STABLE signal per field name (identity preserved across calls)', () => {
     const store = createFieldErrorStore();
     expect(store.fieldError('a')).toBe(store.fieldError('a'));
+  });
+
+  it('seeds each never-errored field with its OWN empty array', () => {
+    // `useFieldErrors(name)` hands this array straight to userland. One shared
+    // module-level constant would make every valid field's messages the same
+    // object, so a caller mutating it would rewrite the store's idea of every
+    // other field at once, without any signal write to notify a reader.
+    const store = createFieldErrorStore();
+    expect(store.fieldError('a').value).toEqual([]);
+    expect(store.fieldError('a').value).not.toBe(store.fieldError('b').value);
+  });
+
+  it('setAll notifies ONCE per call, not once per changed field', () => {
+    // `<Form>` calls setAll during its render, so an unbatched store would run
+    // a full synchronous notification pass per changed field mid-render.
+    const store = createFieldErrorStore();
+    const a = store.fieldError('a');
+    const b = store.fieldError('b');
+    let runs = 0;
+    const dispose = effect(() => {
+      a.value;
+      b.value;
+      runs++;
+    });
+    expect(runs).toBe(1); // the effect's own first run
+
+    store.setAll({ a: ['a1'], b: ['b1'] });
+    expect(runs).toBe(2);
+
+    dispose();
   });
 
   it('setAll is value-gated: updating one field does not touch a sibling field signal', () => {

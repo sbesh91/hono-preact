@@ -7,7 +7,6 @@ import {
 import { FEATURE_MODULES } from '../size-probe-config.mjs';
 import { resolve, join } from 'node:path';
 import { mkdtempSync, cpSync, rmSync, existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 
 const ISO = resolve('packages/iso/dist');
 const UI = resolve('packages/ui/dist');
@@ -56,7 +55,16 @@ describe('a manifest module absent from the measured dist', () => {
   // module list against the dist being measured, esbuild fails to resolve the
   // missing path and the whole measurement throws.
   it('measures the bucket without it instead of throwing', async () => {
-    const tmp = mkdtempSync(join(tmpdir(), 'iso-dist-missing-module-'));
+    // The copy lives INSIDE packages/iso, not in os tmpdir. Dist modules import
+    // bare specifiers (`@preact/signals`), which esbuild resolves relative to
+    // the importing FILE, not to `resolveDir`; under pnpm that package exists
+    // only at packages/iso/node_modules. A copy in os tmpdir cannot resolve it
+    // and the measurement throws. This also models the real CI job more
+    // closely: it measures a base-ref git worktree's dist, which likewise sits
+    // inside an installed checkout.
+    const tmp = mkdtempSync(
+      join(resolve('packages/iso'), 'dist-missing-module-')
+    );
     try {
       cpSync(ISO, tmp, { recursive: true });
       rmSync(join(tmp, 'boot-client.js'));

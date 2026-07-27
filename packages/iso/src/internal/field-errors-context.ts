@@ -1,11 +1,8 @@
 import { createContext } from 'preact';
-import { createFieldErrorStore } from './store-signal.js';
-import type { FieldErrorStore } from './store-signal.js';
+import { createFieldErrorStore } from './field-error-signal.js';
+import type { FieldErrorStore } from './field-error-signal.js';
 
-/** Field name (dot-joined issue path) -> messages for that field. */
-export type FieldErrorsMap = Record<string, string[]>;
-
-export type { FieldErrorStore };
+export type { FieldErrorStore, FieldErrorsMap } from './field-error-signal.js';
 
 /**
  * Carries a `<Form>`'s merged field errors (client pre-validation + server
@@ -18,7 +15,7 @@ export type { FieldErrorStore };
  *
  * The default (outside a `<Form>`) is an inert store that nothing ever
  * writes to, so `fieldError(name).value` is always `[]` and `all.value` is
- * always `{}`, matching the old default map's `{}` behavior.
+ * always `{}`.
  */
 export const FieldErrorsContext = createContext<FieldErrorStore>(
   createFieldErrorStore()

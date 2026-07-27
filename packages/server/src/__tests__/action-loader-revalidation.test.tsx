@@ -157,7 +157,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
 
     render(
       <LocationProvider>
-        <Loader loader={countLoader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={countLoader} location={loc}>
           <CountView />
         </Loader>
       </LocationProvider>

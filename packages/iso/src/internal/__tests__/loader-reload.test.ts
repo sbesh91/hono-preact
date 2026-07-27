@@ -43,7 +43,7 @@ function recordingOps<T>(): RecordingOps<T> {
     applyChunk() {
       rec.log.push('chunk');
     },
-    subscribeAccumulate() {
+    subscribeStream() {
       rec.log.push('subscribe');
       return new Promise<T>(() => {});
     },
@@ -99,6 +99,7 @@ describe('runReload: entry transition', () => {
       loaderRef: ref,
       currentLocation: () => LOC,
       id: 'r1',
+      mode: { kind: 'single' },
     });
 
     expect(ops.phase).toEqual({ tag: 'revalidating', value: 5 });
@@ -122,6 +123,7 @@ describe('runReload: entry transition', () => {
       loaderRef: ref,
       currentLocation: () => LOC,
       id: 'r2',
+      mode: { kind: 'single' },
     });
 
     expect(ops.phase).toEqual({ tag: 'loading' });
@@ -146,6 +148,7 @@ describe('runReload: entry transition', () => {
       loaderRef: ref,
       currentLocation: () => LOC,
       id: 'r3',
+      mode: { kind: 'single' },
     });
 
     expect(ops.phase).toEqual({ tag: 'revalidating', value: 9 });
@@ -170,6 +173,7 @@ describe('runReload: settle drains the queue', () => {
       loaderRef: ref,
       currentLocation: () => LOC,
       id: 'r4',
+      mode: { kind: 'single' } as const,
     };
     session.runReload = () => {
       runs++;
@@ -202,7 +206,7 @@ describe('runReload: streaming reload', () => {
       loaderRef: ref,
       currentLocation: () => LOC,
       id: 'r5',
-      accumulate: { initial: 0, reduce: (_a, c) => c },
+      mode: { kind: 'fold', initial: 0, reduce: (_a, c) => c },
     });
 
     expect(ops.log).toContain('status:connecting');

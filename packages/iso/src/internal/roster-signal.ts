@@ -1,12 +1,35 @@
 import { signal, computed, batch, type Signal } from '@preact/signals';
 import type { PresenceMember } from './room-envelope.js';
-import type { RosterStore } from './reactive.js';
 import type { ReadonlySignal } from '@preact/signals';
 
 /**
+ * A room's roster. `useRoom` drives it with the same wire deltas it applies to
+ * its `members` array; the granular reads (`memberIds` / `member`) are exposed
+ * on the hook result.
+ */
+export type RosterStore<S> = {
+  /** Replace the whole roster (connect / reconnect snapshot). */
+  snapshot(members: ReadonlyArray<PresenceMember<S>>): void;
+  /** Add or update one member. The store decides join vs update by whether the
+   * id is already known, matching `useRoom`'s existing upsert semantics. */
+  upsert(id: string, state: S): void;
+  /** Remove one member. */
+  leave(id: string): void;
+  /** Membership ids; changes on join/leave only. */
+  readonly memberIds: ReadonlySignal<readonly string[]>;
+  /** The whole roster as one reactive array. Reading it subscribes to every
+   * member, so a coarse `members` consumer updates on any change; `useRoom`
+   * exposes it as the `members` result field. */
+  readonly members: ReadonlySignal<ReadonlyArray<PresenceMember<S>>>;
+  /** One member's entry; changes only when THAT member changes. */
+  member(id: string): ReadonlySignal<PresenceMember<S> | undefined>;
+  /** Release retained reactive state. Called from `useRoom`'s effect cleanup. */
+  dispose(): void;
+};
+
+/**
  * The signal-backed roster: `member(id)` is a per-member signal, so a presence
- * update patches one bound row instead of re-rendering every consumer. This is
- * the always-on data-layer store for `useRoom`; `@preact/signals` loads with it.
+ * update patches one bound row instead of re-rendering every consumer.
  */
 // RETENTION: `byId` holds one cell per id ever seen OR ever asked about, and
 // only `dispose()` clears it. `leave` and `snapshot` blank a cell rather than

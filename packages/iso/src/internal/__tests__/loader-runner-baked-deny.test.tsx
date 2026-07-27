@@ -37,7 +37,9 @@ function Harness({
 }: {
   loaderRef: Parameters<typeof useLoaderRunner<Data>>[0];
 }) {
-  captured = useLoaderRunner<Data>(loaderRef, loc, 'FIXED_ID');
+  captured = useLoaderRunner<Data>(loaderRef, loc, 'FIXED_ID', {
+    kind: 'single',
+  });
   return null;
 }
 

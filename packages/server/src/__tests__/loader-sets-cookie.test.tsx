@@ -65,7 +65,7 @@ describe('V3 - loader can set a response cookie', () => {
       return (
         <html>
           <body>
-            <Loader loader={ref} location={loc}>
+            <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
               <div>ok</div>
             </Loader>
           </body>
@@ -115,7 +115,7 @@ describe('V3 - loader can set a response cookie', () => {
       return (
         <html>
           <body>
-            <Loader loader={ref} location={loc}>
+            <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
               <div>ok</div>
             </Loader>
           </body>
@@ -162,7 +162,7 @@ describe('V3 - loader can set a response cookie', () => {
       return (
         <html>
           <body>
-            <Loader loader={ref} location={loc}>
+            <Loader mode={{ kind: 'single' }} loader={ref} location={loc}>
               <div>ok</div>
             </Loader>
           </body>

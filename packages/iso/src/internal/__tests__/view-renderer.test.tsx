@@ -2,10 +2,11 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { h } from 'preact';
 import type { ComponentChildren } from 'preact';
-import { render, cleanup } from '@testing-library/preact';
+import { render, cleanup, act } from '@testing-library/preact';
+import { signal } from '@preact/signals';
 import { ViewRenderer, type ViewState } from '../view-renderer.js';
 import type { LoaderState, StreamState } from '../../loader-state.js';
-import { LoaderDataContext } from '../contexts.js';
+import { LoaderDataContext, type LoaderData } from '../contexts.js';
 
 afterEach(() => {
   cleanup();
@@ -13,6 +14,7 @@ afterEach(() => {
 
 // Mounts `ViewRenderer` under a `LoaderDataContext` already carrying the
 // PROJECTED union (the projection now happens once in `loader.tsx`, not here).
+// The context channel is a signal, so the state goes in as one here too.
 // ViewRenderer's job is to read that union and merge the consumer's spread
 // props, so these assert it passes the union through unchanged (plus props).
 function renderViewRenderer(
@@ -23,7 +25,7 @@ function renderViewRenderer(
   render(
     h(
       LoaderDataContext.Provider,
-      { value: state },
+      { value: signal<LoaderData>(state) },
       h(ViewRenderer, { props, render: renderFn })
     )
   );
@@ -113,6 +115,33 @@ describe('ViewRenderer', () => {
       data: { title: 'Dune' },
       extra: 'x',
     });
+  });
+
+  it('re-renders the render fn when the context signal changes (the read subscribes)', () => {
+    // The channel is a signal and `ViewRenderer` reads `.value`, so a write to
+    // the cell reaches the render function on its own. Nothing re-provides the
+    // context here, so a non-subscribing read would leave `seen` at one entry.
+    const cell = signal<LoaderData>({ status: 'loading' });
+    const seen: ViewState[] = [];
+    render(
+      h(
+        LoaderDataContext.Provider,
+        { value: cell },
+        h(ViewRenderer, {
+          props: {},
+          render: (s: ViewState) => {
+            seen.push(s);
+            return null;
+          },
+        })
+      )
+    );
+    expect(seen).toEqual([{ status: 'loading' }]);
+
+    act(() => {
+      cell.value = { status: 'success', data: { title: 'Dune' } };
+    });
+    expect(seen.at(-1)).toEqual({ status: 'success', data: { title: 'Dune' } });
   });
 
   it('throws when rendered outside a Loader (no context)', () => {

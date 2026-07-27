@@ -55,7 +55,7 @@ describe('loader field granularity through <Loader> (signal mode)', () => {
     }
 
     render(
-      <Loader loader={loader} location={loc}>
+      <Loader mode={{ kind: 'single' }} loader={loader} location={loc}>
         <TitleField />
         <OtherField />
         <ReloadButton />

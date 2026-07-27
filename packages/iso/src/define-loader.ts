@@ -11,20 +11,26 @@ import type { RouteHook } from 'preact-iso';
 import type { Serialize } from './internal/serialize.js';
 import { createCache, type LoaderCache } from './cache.js';
 import {
+  LoaderDataContext,
   LoaderErrorContext,
   LoaderStreamContext,
-  LoaderViewSignalContext,
+  type LoaderData,
 } from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
-import type { AccumulateOptions } from './internal/use-loader-runner.js';
+import {
+  resolveLoaderMode,
+  type AccumulateOptions,
+} from './internal/loader-mode.js';
+import { isLoaderState } from './loader-state.js';
 import type { LoaderState, StreamState } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
 import type { ServerCaller } from './server-caller.js';
-import { derive, foldStream } from './internal/loader-signal.js';
+import { foldStream } from './internal/loader-signal.js';
+import { useComputed } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
@@ -390,6 +396,44 @@ function getSharedCaches(): SharedCacheMap {
 }
 
 /**
+ * The cold arm `toSingleValueState` reports for the two shapes a single-value
+ * `useData()` can never legitimately observe. Module-level so the projection
+ * returns a STABLE reference: a `computed` recompute that lands here hands back
+ * the same object, and a memoized consumer sees no change.
+ */
+const COLD_LOADING: LoaderState<unknown> = { status: 'loading' };
+
+/**
+ * Project `LoaderDataContext`'s value down to the single-value `LoaderState`
+ * half, for `useData()`'s no-arg arm.
+ *
+ * The `null` fallback IS unreachable defense: `null` is the cold-error routing
+ * signal, and `loader.tsx` renders the `errorFallback` instead of the children,
+ * so no mounted consumer sees it.
+ *
+ * The `StreamState` fallback is NOT. One host reaches it: a NON-streaming
+ * loader consumed with `accumulate` (`{ kind: 'fold' }` per
+ * `internal/loader-mode.ts`, pinned as supported by
+ * `internal/__tests__/loader-mode.test.ts`). That host projects a `StreamState`,
+ * while the no-arg `useData()` routes here by branching on the loader's own
+ * shape rather than the host's mode, so `isLoaderState` rejects `connecting`
+ * and the consumer sits on `COLD_LOADING` permanently.
+ *
+ * That is a real defect, inherited rather than introduced here: the merge base
+ * threw a sharp error for this case and the umbrella replaced the throw with a
+ * silent `?? { status: 'loading' }` behind an unsound cast. Restoring a throw is
+ * the right end state and belongs in its own change, not behind a comment
+ * claiming the case cannot happen. Tracked on #349.
+ *
+ * Reporting the cold `loading` arm keeps the return type honest (no fabricated
+ * value); the data-bearing path returns the context value BY REFERENCE, so a
+ * memoized consumer stays stable.
+ */
+function toSingleValueState(s: LoaderData): LoaderState<unknown> {
+  return s !== null && isLoaderState(s) ? s : COLD_LOADING;
+}
+
+/**
  * Symbol that `liveStream` stamps onto the generator function it returns.
  * `makeLoaderRef` reads it via `isLiveStreamFn` (no cast; plain `in` check)
  * to auto-set `live: true` without requiring callers to pass the flag.
@@ -560,24 +604,19 @@ function makeLoaderRef(
   // an `as any` on `this`. `useDataDispatch` below only ever calls this when
   // `!isStreaming`, so no `isStreaming` guard is needed here.
   function readDataSignal(): ReadonlySignal<LoaderState<unknown>> {
-    const ctx = useContext(LoaderViewSignalContext);
-    if (!ctx) {
+    const source = useContext(LoaderDataContext);
+    if (!source) {
       throw new Error(
         'loader.useData() must be called inside a `loader.View` render function or a `<Loader>`.'
       );
     }
-    // Structural context read: `LoaderViewSignalContext` is typed as an opaque
-    // `{ value: unknown }` so core names no signal shape; at runtime, for a
-    // single-value loader, its value is a `LoaderState | null` (null only on a
-    // cold error, which never reaches a mounted child). Treat null as loading.
-    const source = ctx as ReadonlySignal<LoaderState<unknown> | null>;
-    // `source` is a single stable signal; memoize the derived reactive so a
-    // binding does not resubscribe each render.
-    const stateRef = useRef<ReadonlySignal<LoaderState<unknown>> | null>(null);
-    if (stateRef.current === null) {
-      stateRef.current = derive(source, (s) => s ?? { status: 'loading' });
-    }
-    return stateRef.current;
+    // The context's signal carries the WHOLE consumption union, and
+    // `ReadonlySignal<A | B>` is not assignable to `ReadonlySignal<A>`, so the
+    // narrowing has to happen INSIDE a derived signal rather than at the read.
+    // `source` is a single stable signal (see `LoaderDataProvider`);
+    // `useComputed` memoizes the derived reactive for this component instance
+    // so a binding does not resubscribe each render.
+    return useComputed(() => toSingleValueState(source.value));
   }
 
   // Shared body for `useData` (live arm). Reads the collect-mode host's
@@ -677,21 +716,17 @@ function makeLoaderRef(
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
     Boundary: (props) => {
-      // A streaming loader hosted WITHOUT `accumulate` runs in collect-mode:
-      // the host provides the raw chunk-log context and children fold it via
-      // `useData(initial, reduce)`. A streaming loader WITH `accumulate` is the
-      // fold-mode path `View` delegates here (it always passes the reducer).
-      // A single-value loader ignores both and provides its `LoaderState`.
-      const collect = isStreaming && !props.accumulate;
-      // Non-streaming + accumulate is valid on the server: `DataReader` keys the
-      // SSR projection on the consumption form (accumulate), so an accumulating
-      // consumer renders the `connecting` StreamState on the server, matching the
-      // client's first render (it reconnects on mount).
+      // The ONE place a host's mode is decided. `resolveLoaderMode` owns the
+      // three-way (and the order it tests in, which is load-bearing): with
+      // `accumulate` this is the fold-mode path `View` delegates here (it always
+      // passes the reducer) AND the non-streaming accumulating host, which is
+      // supported; without it, a streaming loader collects (the host provides
+      // the raw chunk-log context and children fold it via `useData(initial,
+      // reduce)`) and a single-value loader provides its `LoaderState`.
       return h(LoaderHost<unknown>, {
         loader: ref,
         errorFallback: props.errorFallback,
-        accumulate: props.accumulate,
-        collect,
+        mode: resolveLoaderMode(props.accumulate, isStreaming),
         children: props.children,
       });
     },
@@ -726,10 +761,10 @@ function makeLoaderRef(
           'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`.'
         );
       }
-      // Non-streaming + accumulate is valid on the server: `DataReader` keys the
-      // SSR projection on the consumption form (accumulate), so an accumulating
-      // consumer renders the `connecting` StreamState on the server, matching the
-      // client's first render (it reconnects on mount).
+      // `accumulate` is built ONCE per `View(...)` call, not per render, so its
+      // `initial`/`reduce` identities are fixed for the life of the returned
+      // component. That is what lets the runner's `useStableLoaderMode` hold the
+      // resolved fold mode stable across renders.
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
           errorFallback: viewOpts?.errorFallback,

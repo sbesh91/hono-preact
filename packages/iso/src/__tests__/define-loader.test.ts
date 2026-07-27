@@ -2,8 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import { defineLoader } from '../define-loader.js';
 import { createCache } from '../cache.js';
-import { LoaderViewSignalContext } from '../internal/contexts.js';
+import { LoaderDataContext, type LoaderData } from '../internal/contexts.js';
 import { h } from 'preact';
+import { signal } from '@preact/signals';
 import { render } from '@testing-library/preact';
 
 describe('defineLoader', () => {
@@ -96,8 +97,13 @@ describe('LoaderRef methods', () => {
     };
     const { container } = render(
       h(
-        LoaderViewSignalContext.Provider,
-        { value: { value: { status: 'success', data: { value: 42 } } } },
+        LoaderDataContext.Provider,
+        {
+          value: signal<LoaderData>({
+            status: 'success',
+            data: { value: 42 },
+          }),
+        },
         h(Probe, null)
       )
     );

@@ -1,4 +1,5 @@
 import { useContext } from 'preact/hooks';
+import { useComputed, useSignal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 import { ActionResultContext } from './action-result-context.js';
 import {
@@ -6,7 +7,6 @@ import {
   pickLastActionResult,
   type StoredActionResult,
 } from './internal/action-result-store.js';
-import { useStoreState, useStoreValue } from './internal/store-signal.js';
 import { isBrowser } from './is-browser.js';
 import type { ActionRef } from './action.js';
 import type { Serialize } from './internal/serialize.js';
@@ -92,10 +92,10 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   // below is created once (`useComputed` is `useMemo(..., [])`) and only
   // re-evaluates when a tracked signal changes, so a plain closure capture of
   // `stub` would pin this reader to the action passed on the mount render.
-  const stubModule = useStoreState<string | undefined>(stub?.__module);
-  const stubAction = useStoreState<string | undefined>(stub?.__action);
-  stubModule.set(stub?.__module);
-  stubAction.set(stub?.__action);
+  const stubModule = useSignal<string | undefined>(stub?.__module);
+  const stubAction = useSignal<string | undefined>(stub?.__action);
+  stubModule.value = stub?.__module;
+  stubAction.value = stub?.__action;
 
   // Two-stage projection. The inner computed yields the STORED ENTRY, whose
   // identity the store preserves across writes keyed to other actions, so
@@ -104,9 +104,9 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   // reader's own entry actually changed. Projecting out of a single computed
   // would bump the computed's version on every store write (a fresh literal is
   // never `===` the previous one) and re-render every binding on the page.
-  const entry = useStoreValue(() => {
-    const module = stubModule.signal.value;
-    const action = stubAction.signal.value;
+  const entry = useComputed(() => {
+    const module = stubModule.value;
+    const action = stubAction.value;
     const ref =
       module !== undefined && action !== undefined
         ? { __module: module, __action: action }
@@ -126,7 +126,7 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
     }
     return source;
   });
-  return useStoreValue(() =>
+  return useComputed(() =>
     entry.value ? projectActionResult<TPayload, TResult>(entry.value) : null
   );
 }

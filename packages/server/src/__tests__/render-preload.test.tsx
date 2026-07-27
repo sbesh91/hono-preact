@@ -108,7 +108,7 @@ describe('renderPage: modulepreload closure', () => {
     app.get('*', (c) =>
       renderPage(
         c,
-        <Loader loader={streaming} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={streaming} location={loc}>
           <p>x</p>
         </Loader>
       )

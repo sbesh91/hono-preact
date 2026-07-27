@@ -1,6 +1,11 @@
 import type { RouteHook } from 'preact-iso';
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import type { ReadonlySignal } from '@preact/signals';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks';
 import type { LoaderRef } from '../define-loader.js';
 import { deletePreloadedData, deletePreloadedDeny } from './preload.js';
 import { createLoaderSession, type LoaderSession } from './loader-session.js';
@@ -8,11 +13,14 @@ import { buildLoaderReader, type LoaderPhaseOps } from './loader-readers.js';
 import { runReload, requestReload } from './loader-reload.js';
 import { runLoader } from './loader-runner.js';
 import { serializeLocationForCache } from './cache-key.js';
+import type { LoaderStreamValue } from './contexts.js';
+import type { LoaderMode } from './loader-mode.js';
 import type {
   LoaderPhase,
   LoaderView,
   StreamState,
   StreamStatus,
+  SyncValue,
 } from '../loader-state.js';
 import {
   hasPhaseValue,
@@ -31,12 +39,6 @@ import {
   type CollectSignals,
 } from './loader-signal.js';
 
-/** Streaming consumption: fold every chunk into accumulated state. */
-export type AccumulateOptions = {
-  initial: unknown;
-  reduce: (acc: unknown, chunk: unknown) => unknown;
-};
-
 /**
  * The runner's renderable view: the single-value `LoaderView` (a `LoaderState`
  * or a cold-error signal) OR a streaming `StreamState` wrapped in `render`.
@@ -47,17 +49,62 @@ export type RunnerView<T> =
   | { kind: 'render'; state: StreamState<T> };
 
 /**
- * Collect-mode's reactive output: the retained chunk log plus status/error, as
- * signals. `loader.tsx` puts this on `LoaderStreamContext`; `useData(initial,
- * reduce)` folds `chunks` through the caller's `reduce` (see `foldStream`).
+ * Project the runner's state into the view `loader.tsx` routes. Pure and
+ * mode-exhaustive; extracted from the hook so the three arms are readable side
+ * by side and testable without a renderer.
+ *
+ * `fold` is the only mode whose view is a `StreamState`: it is the only mode
+ * that folds chunks INTO `phase`, so the accumulated value and the streaming
+ * `status` both describe the same thing.
+ *
+ * `collect` is streaming yet deliberately takes the SINGLE-VALUE projection,
+ * which is not an oversight. A collect host's chunks never enter `phase` (they
+ * append to the collect signals that `useData(initial, reduce)` reads off
+ * `LoaderStreamContext`), so `phase` only ever holds `loading` or a COLD error
+ * there, and a cold error must route to the boundary exactly as a single-value
+ * loader's does. Its in-view streaming lifecycle comes from the collect signals,
+ * not from here.
  */
-export type CollectState = {
-  chunks: ReadonlySignal<readonly unknown[]>;
-  status: ReadonlySignal<StreamStatus>;
-  error: ReadonlySignal<Error | null>;
-  /** See `LoaderStreamValue.epoch` / `CollectSignals.epoch`. */
-  epoch: ReadonlySignal<number>;
-};
+function projectRunnerView<T>(
+  mode: LoaderMode,
+  phase: LoaderPhase<T>,
+  status: StreamStatus,
+  sync: SyncValue<T>
+): RunnerView<T> {
+  switch (mode.kind) {
+    case 'fold':
+      return {
+        kind: 'render',
+        state: toStreamState(
+          status,
+          hasPhaseValue(phase) ? { present: true, value: phase.value } : sync,
+          phaseError(phase)
+        ),
+      };
+    case 'single':
+    case 'collect':
+      return toLoaderView(phase, sync);
+    default: {
+      const unreachable: never = mode;
+      return unreachable;
+    }
+  }
+}
+
+/**
+ * Hold the host's mode IDENTITY stable across renders that did not change it.
+ * A host may legitimately build a fresh `LoaderMode` object per render (a fold
+ * mode wraps the caller's `accumulate`; a bare `<Loader>` host may write a
+ * literal), and the runner's mode-keyed `useCallback`s would then rebuild every
+ * render. Memoized on the mode's own fields, the same shape `loader.tsx` uses to
+ * stabilize the projected union.
+ */
+function useStableLoaderMode(mode: LoaderMode): LoaderMode {
+  const kind = mode.kind;
+  const initial = mode.kind === 'fold' ? mode.initial : undefined;
+  const reduce = mode.kind === 'fold' ? mode.reduce : undefined;
+  return useMemo(() => mode, [kind, initial, reduce]);
+}
 
 export type LoaderRunnerState<T> = {
   /**
@@ -88,28 +135,25 @@ export type LoaderRunnerState<T> = {
    */
   reader: { read: () => T };
   /**
-   * Present only when `collect` is true: the retained chunk log plus
-   * status/error, for `loader.tsx` to put on `LoaderStreamContext`. `undefined`
-   * outside collect-mode (single-value and `.View` accumulate hosts).
+   * Present only in collect-mode: the retained chunk log plus status/error, for
+   * `loader.tsx` to put on `LoaderStreamContext`. `undefined` in `single` and
+   * `fold` mode.
    */
-  collect?: CollectState;
+  collect?: LoaderStreamValue;
 };
 
 export function useLoaderRunner<T>(
   loaderRef: LoaderRef<T, boolean>,
   location: RouteHook,
   id: string,
-  accumulate?: AccumulateOptions,
   /**
-   * Run the runner in COLLECT-mode: a live loader hosted for `useData(initial,
-   * reduce)` rather than `.View`'s accumulating fold. Distinct from
-   * `accumulate` (never both set): collect-mode appends every chunk to a
-   * retained log signal instead of folding it, so N independent `useData`
-   * consumers under one host can fold the SAME log differently off ONE
-   * subscription. See `CollectState` / `LoaderStreamContext`.
+   * How this host consumes the loader (`single` / `fold` / `collect`), built
+   * once by the host. See `loader-mode.ts`; the modes are mutually exclusive by
+   * construction, so nothing below re-derives or re-checks that.
    */
-  collect?: boolean
+  hostMode: LoaderMode
 ): LoaderRunnerState<T> {
+  const mode = useStableLoaderMode(hostMode);
   // Single-value lifecycle as one ADT (replaces the `overrideData` sentinel +
   // separate `reloading`/`loadError` states). The public `view` is built
   // STRUCTURALLY from this phase below (value-presence = the variant tag).
@@ -120,19 +164,19 @@ export function useLoaderRunner<T>(
   const sessionRef = useRef<LoaderSession<T> | null>(null);
   if (sessionRef.current === null) {
     const created = createLoaderSession<T>();
-    if (accumulate) created.acc = accumulate.initial;
+    if (mode.kind === 'fold') created.acc = mode.initial;
     sessionRef.current = created;
   }
   const session = sessionRef.current;
 
-  // Collect-mode's reactive output: created once, lazily, only when `collect`
-  // is set, via `loader-signal.ts`'s factory (this file never calls
-  // `@preact/signals` directly, see `signals-always-on.test.ts`). Writing
-  // these does NOT re-render this host, which is the point (a `useData`
-  // consumer reads them independently via `LoaderStreamContext`, granularly).
-  // See `applyCollectChunk` / `subscribeCollect` below.
+  // Collect-mode's reactive output: created once, lazily, only in that mode,
+  // via `loader-signal.ts`'s factory (which pairs the signals with the batched
+  // mutators that keep them atomic). Writing these does NOT re-render this
+  // host, which is the point (a `useData` consumer reads them independently via
+  // `LoaderStreamContext`, granularly). See `applyCollectChunk` /
+  // `subscribeCollect` below.
   const collectRef = useRef<CollectSignals | null>(null);
-  if (collect && collectRef.current === null) {
+  if (mode.kind === 'collect' && collectRef.current === null) {
     collectRef.current = createCollectSignals();
   }
 
@@ -178,7 +222,7 @@ export function useLoaderRunner<T>(
   //
   // This is ALSO how a collect-mode COLD connect error (one that rejects
   // before the first chunk) reaches the host: `phase` never carries a chunk
-  // value in collect-mode (chunks fold only into the `collect` signals
+  // value in collect-mode (chunks only ever append to the `collect` signals
   // `useData()` reads, never into `phase`), so this always lands on the cold
   // `error` tag, and `loader.tsx` routes it exactly like a single-value
   // loader's cold error (`errorFallback` / an outer boundary), NOT in-view via
@@ -202,39 +246,54 @@ export function useLoaderRunner<T>(
     if (c) appendCollectChunk(c, chunk);
   }, []);
 
-  // Fold one chunk into the accumulator and surface it. Shared by the initial
-  // subscribe and reload() so a streaming reload re-folds through `reduce`
-  // rather than overwriting the accumulator with a raw chunk.
-  //
-  // `collect` short-circuits to the collect-mode append above: `accumulate`
-  // and `collect` are never both set (mutually exclusive host modes), so this
-  // branch never changes the `.View` fold-mode's behaviour below it.
+  // Apply one chunk, per mode. Shared by the initial subscribe and by reload()
+  // so a streaming reload re-folds through `reduce` rather than overwriting the
+  // accumulator with a raw chunk. Exhaustive on the mode union: a new mode
+  // cannot be added without deciding what a chunk does here.
   const applyChunk = useCallback(
     (chunk: unknown) => {
-      if (collect) {
-        applyCollectChunk(chunk);
-        return;
+      switch (mode.kind) {
+        case 'collect':
+          applyCollectChunk(chunk);
+          return;
+        case 'fold':
+          session.acc = mode.reduce(session.acc, chunk);
+          // A fresh `success` object per chunk; streaming already re-renders.
+          // The accumulator is `unknown` by design (erased-ref boundary), so
+          // reading it as `T` here is the ONE sanctioned cast (not a
+          // phase-variant coercion).
+          setPhase({ tag: 'success', value: session.acc as T });
+          setStatus('open');
+          return;
+        case 'single':
+          // A single-value host never subscribes to a stream, so nothing ever
+          // calls this. It stays a no-op rather than a throw because `ops` is
+          // built for every mode.
+          return;
+        default: {
+          const unreachable: never = mode;
+          return unreachable;
+        }
       }
-      if (!accumulate) return;
-      session.acc = accumulate.reduce(session.acc, chunk);
-      // A fresh `success` object per chunk; streaming already re-renders. The
-      // accumulator is `unknown` by design (erased-ref boundary), so reading it
-      // as `T` here is the ONE sanctioned cast (not a phase-variant coercion).
-      setPhase({ tag: 'success', value: session.acc as T });
-      setStatus('open');
     },
-    [accumulate, collect, applyCollectChunk]
+    [mode, session, applyCollectChunk]
   );
 
-  // (Re)subscribe a streaming/live loader: reset the accumulator to `initial`
-  // and open a fresh stream that folds every chunk through `applyChunk`. Returns
-  // the first-chunk promise (the Suspense reader on first mount; reload awaits it
-  // to clear in-flight tracking). It does not `setStatus('connecting')` itself:
-  // the initial subscribe runs during render (where setState is unsafe) and
-  // relies on the 'connecting' default, while reload sets it explicitly first.
-  const subscribeAccumulate = useCallback(
+  // (Re)subscribe a FOLD-mode stream: reset the accumulator to `initial` and
+  // open a fresh stream that folds every chunk through `applyChunk`. Returns the
+  // first-chunk promise (the Suspense reader on first mount; reload awaits it to
+  // clear in-flight tracking). It does not `setStatus('connecting')` itself: the
+  // initial subscribe runs during render (where setState is unsafe) and relies
+  // on the 'connecting' default, while reload sets it explicitly first.
+  //
+  // The `fold` narrow below is a real guard, not a type formality: this is also
+  // the subscriber `single` mode gets in the `ops` slot (only `collect` swaps
+  // it), and a single-value host has no accumulator to seed. It replaces the
+  // `accumulate!.initial` non-null assertion, which was held up by nothing but
+  // which guards happened to precede it.
+  const subscribeFold = useCallback(
     (signal: AbortSignal): Promise<T> => {
-      session.acc = accumulate!.initial;
+      if (mode.kind === 'fold') session.acc = mode.initial;
       return runLoader<T>(loaderRef, locationRef.current, id, signal, {
         onChunk: (value) => applyChunk(value),
         onError: (err) => {
@@ -245,14 +304,14 @@ export function useLoaderRunner<T>(
         onEnd: () => setStatus('closed'),
       });
     },
-    [accumulate, applyChunk, loaderRef, id]
+    [mode, session, applyChunk, loaderRef, id]
   );
 
   // (Re)subscribe the collect-mode stream: reset the retained log (a fresh
   // subscription starts a fresh log; a resubscribing consumer should not see
   // the PRIOR connection's chunks folded in) and open a stream that appends
-  // every chunk via `applyCollectChunk`. Mirrors `subscribeAccumulate` above,
-  // for the collect (non-folding) form.
+  // every chunk via `applyCollectChunk`. Mirrors `subscribeFold` above, for the
+  // collect (non-folding) form.
   const subscribeCollect = useCallback(
     (signal: AbortSignal): Promise<T> => {
       const c = collectRef.current;
@@ -272,25 +331,25 @@ export function useLoaderRunner<T>(
 
   // The write surface shared by the reader factories and the reload state
   // machine: one way to move the phase, and both go through it. Built fresh each
-  // render so it closes over the current `accumulate`-dependent callbacks; every
-  // member is either a stable `useState` setter or a `useCallback`.
+  // render so it closes over the current mode-dependent callbacks; every member
+  // is either a stable `useState` setter or a `useCallback`.
   //
-  // `subscribeAccumulate` selects the mode's subscribe function: collect-mode
-  // uses `subscribeCollect` (append, no fold); everything else (including
-  // `.View` fold-mode) uses the untouched `subscribeAccumulate`. `applyChunk`
-  // is already mode-aware internally, so it needs no such selection.
+  // `subscribeStream` is the MODE-AGNOSTIC subscribe slot, resolved here:
+  // collect-mode uses `subscribeCollect` (append, no fold), every other mode
+  // uses `subscribeFold`. `applyChunk` is already mode-aware internally, so it
+  // needs no such selection.
   const ops: LoaderPhaseOps<T> = {
     setPhase,
     setStatus,
     setError,
     applyChunk,
-    subscribeAccumulate: collect ? subscribeCollect : subscribeAccumulate,
+    subscribeStream: mode.kind === 'collect' ? subscribeCollect : subscribeFold,
   };
 
   // The reload state machine lives in `loader-reload.ts`. Rebind the session's
-  // bound entry each render so it closes over the latest ops/accumulate, and
-  // read the location through a thunk so a reload uses the location as of when
-  // it runs, not when it was wired.
+  // bound entry each render so it closes over the latest ops/mode, and read the
+  // location through a thunk so a reload uses the location as of when it runs,
+  // not when it was wired.
   session.runReload = () =>
     runReload<T>({
       session,
@@ -298,8 +357,7 @@ export function useLoaderRunner<T>(
       loaderRef,
       currentLocation: () => locationRef.current,
       id,
-      accumulate,
-      collect,
+      mode,
     });
 
   const reload = useCallback(() => requestReload(session), [session]);
@@ -348,32 +406,23 @@ export function useLoaderRunner<T>(
       location,
       locKey,
       id,
-      accumulate,
-      collect,
+      mode,
     });
   }
 
   // Build the public view STRUCTURALLY from the phase, WITHOUT calling the
-  // throwing bridge reader and WITHOUT any `data === undefined` test. The
-  // single-value union (and the cold-error signal) is `toLoaderView(phase,
-  // session.sync)`; value-presence is the variant tag / the `present` flag. The
-  // streaming union is `toStreamState(status, value, error)`, keyed on `status`
-  // alone, with the accumulated value sourced from the phase (present iff the
-  // phase carries one). `loader.tsx` only ROUTES this; it never re-projects.
+  // throwing bridge reader and WITHOUT any `data === undefined` test:
+  // value-presence is the phase's variant tag / `session.sync`'s `present` flag
+  // throughout. `projectRunnerView` above owns the per-mode dispatch;
+  // `loader.tsx` only ROUTES the result and never re-projects it.
   const reloading = phase.tag === 'revalidating';
 
-  const view: RunnerView<T> = accumulate
-    ? {
-        kind: 'render',
-        state: toStreamState(
-          status,
-          hasPhaseValue(phase)
-            ? { present: true, value: phase.value }
-            : session.sync,
-          phaseError(phase)
-        ),
-      }
-    : toLoaderView(phase, session.sync);
+  const view: RunnerView<T> = projectRunnerView(
+    mode,
+    phase,
+    status,
+    session.sync
+  );
 
   // While the baked-deny seed is active, project it over whatever `view` would
   // otherwise show (the phase is still `loading`, since no fetch ran): a
