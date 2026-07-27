@@ -3,7 +3,9 @@ import { readSSE } from '../sse-decoder.js';
 
 const encoder = new TextEncoder();
 
-function streamOf(...chunks: string[]): ReadableStream<Uint8Array> {
+function streamOf(
+  ...chunks: string[]
+): ReadableStream<Uint8Array<ArrayBuffer>> {
   return new ReadableStream({
     start(controller) {
       for (const c of chunks) controller.enqueue(encoder.encode(c));

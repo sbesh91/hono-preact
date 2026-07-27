@@ -89,14 +89,60 @@ export type LoaderCtx<
     ? {}
     : LoaderCtxLocation<TParams, TSearch>);
 
+/**
+ * The type of a loader function as authored. Reach for it when the function is
+ * written out of line (a named `const`, a helper two loaders share); a function
+ * written inline in the constructor call needs no annotation, since the
+ * constructor contextually types its ctx.
+ *
+ * Its generics mirror `LoaderRef`'s and `LoaderCtx`'s, so a `LoaderFn<T, Live>`
+ * is exactly what `defineLoader` takes to return a `LoaderRef<T, Live>`:
+ *
+ * - `LoaderFn<T>` is the STANDALONE single-value form, `(ctx) => Promise<T>`
+ *   over a ctx with no `location`: what a bare `defineLoader(fn)` accepts.
+ * - `LoaderFn<T, true>` is the STANDALONE streaming form,
+ *   `(ctx) => AsyncGenerator<T, void, unknown>`.
+ * - `LoaderFn<T, Live, TParams, TSearch>` is the ROUTE-BOUND form: the ctx
+ *   gains the typed `location` that `serverRoute(r).loader(fn)` supplies. Spell
+ *   the params out (`LoaderFn<Movie, false, RouteParams<'/movies/:id'>>`) only
+ *   when the out-of-line function reads `ctx.location`; a standalone-typed
+ *   function requires less of its ctx, so `route.loader` accepts one too.
+ *
+ * A single call signature per form is what makes this composable: a union of
+ * signatures (see `Loader` below) resolves against neither constructor
+ * overload, since each overload discriminates on the return type.
+ */
+export type LoaderFn<
+  T,
+  Live extends boolean = false,
+  TParams = StandaloneCtxMarker,
+  TSearch = Record<string, string>,
+> = Live extends true
+  ? (ctx: LoaderCtx<TParams, TSearch>) => AsyncGenerator<T, void, unknown>
+  : (ctx: LoaderCtx<TParams, TSearch>) => Promise<T>;
+
+/**
+ * Any loader function the framework holds or dispatches: the union `LoaderRef`
+ * stores in `fn` and the constructors' implementation signatures accept. It is
+ * NOT the type to annotate an authored loader with; that is `LoaderFn`, which
+ * this derives its two authored members from.
+ *
+ * `TParams` defaults to the ROUTE-BOUND `Record<string, string>` because the
+ * route-bound function type is the supertype here: its ctx carries `location`,
+ * so a standalone function (whose ctx requires less) is assignable to it, and
+ * this one type therefore accepts both bindings.
+ *
+ * The `ReadableStream` arm is the raw stream return the loaders handler pipes to
+ * SSE. That is a runtime form only, unreachable through the constructors'
+ * public overloads, which is why `LoaderFn` does not offer it.
+ */
 export type Loader<
   T,
   TParams = Record<string, string>,
   TSearch = Record<string, string>,
 > =
-  | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<T>)
-  | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<ReadableStream<T>>)
-  | ((ctx: LoaderCtx<TParams, TSearch>) => AsyncGenerator<T, void, unknown>);
+  | LoaderFn<T, boolean, TParams, TSearch>
+  | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<ReadableStream<T>>);
 
 // The accumulating (streaming) `.View` form: streaming loaders only. The render fn
 // receives the `StreamState<Acc>` discriminated union (pattern-match on

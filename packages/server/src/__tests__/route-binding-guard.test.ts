@@ -279,7 +279,9 @@ describe('root-layout bindings (real manifest)', () => {
   // root '/' node, so the boot checks accept exactly what the types accept.
   const noopView = () => Promise.resolve({ default: () => null });
   const noopLayout = () => Promise.resolve({ default: () => null });
-  const gate = defineServerMiddleware(async (_c, next) => next());
+  const gate = defineServerMiddleware(async (_c, next) => {
+    await next();
+  });
 
   const manifestFor = (server?: () => Promise<unknown>) =>
     defineRoutes([
@@ -813,7 +815,9 @@ describe('room route/channel param congruence', () => {
   // `runs === 'server'` entries (see `isServerMiddleware` in
   // route-binding-guard.ts), so a bare function no longer counts as a guard;
   // this must be a real `defineServerMiddleware` object.
-  const guard = defineServerMiddleware(async (_c, next) => next());
+  const guard = defineServerMiddleware(async (_c, next) => {
+    await next();
+  });
 
   // A route-BOUND room def: same shape the `boundDef` helper in the
   // 'socket/room bindings' describe block above builds for sockets, but
@@ -1222,7 +1226,9 @@ describe('room route/channel param congruence', () => {
     // client-scope middleware hard-fail the boot of an otherwise-exempt
     // (guard-less) BOUND room.
     it('does not throw when the app tier contains ONLY a non-server (client-scope) middleware (BOUND room)', async () => {
-      const clientOnly = defineClientMiddleware(async (_c, next) => next());
+      const clientOnly = defineClientMiddleware(async (_c, next) => {
+        await next();
+      });
       const routes = [
         routeOf('/board/:id', {
           __moduleKey: 'm',
@@ -1259,7 +1265,9 @@ describe('room route/channel param congruence', () => {
     // reasoning as above), the colocated exemption advisory now stays
     // silent too, matching the socket twin's identical gate.
     it('does not fire the colocated exemption advisory when the app tier contains ONLY a non-server middleware', async () => {
-      const clientOnly = defineClientMiddleware(async (_c, next) => next());
+      const clientOnly = defineClientMiddleware(async (_c, next) => {
+        await next();
+      });
       const routes = [
         routeOf('/board/:id', {
           __moduleKey: 'm',
@@ -1354,7 +1362,9 @@ describe('room route/channel param congruence', () => {
 // advisory.
 // -----------------------------------------------------------------------
 describe('colocated vs bound room asymmetry (#274 asymmetry fix)', () => {
-  const guard = defineServerMiddleware(async (_c, next) => next());
+  const guard = defineServerMiddleware(async (_c, next) => {
+    await next();
+  });
   const boundRoomDef = (
     routeId: string,
     extra: Record<string, unknown>
@@ -1524,7 +1534,9 @@ describe('colocated socket param advisory (onColocatedSocketParams, round-6 fix 
   // escape hatch, and a boot throw here would break every released
   // colocated-socket app (colocation predates the route-bound param wire),
   // so this is a dev-only advisory instead of a throw.
-  const guard = defineServerMiddleware(async (_c, next) => next());
+  const guard = defineServerMiddleware(async (_c, next) => {
+    await next();
+  });
 
   it('fires for a colocated socket on a param-bearing route with a live guard', async () => {
     const routes = [
@@ -1658,7 +1670,9 @@ describe('colocated socket param advisory (onColocatedSocketParams, round-6 fix 
   // describe block green. This test makes app-use the ONLY live tier (page-use
   // and def-use are both empty), so it only passes when appUse is counted.
   it('fires when the ONLY live tier is app-use (page-use and def-use are both empty)', async () => {
-    const appGuard = defineServerMiddleware(async (_c, next) => next());
+    const appGuard = defineServerMiddleware(async (_c, next) => {
+      await next();
+    });
     const routes = [
       routeOf('/board/:id', {
         __moduleKey: 'm',

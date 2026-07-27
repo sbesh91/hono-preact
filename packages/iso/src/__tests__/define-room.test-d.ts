@@ -11,6 +11,7 @@
 import { expectTypeOf } from 'vitest';
 import { defineRoom } from '../define-room.js';
 import { defineChannel } from '../define-channel.js';
+import { defineServerMiddleware } from '../define-middleware.js';
 import { serverRoute } from '../server-route.js';
 import { useRoom } from '../use-room.js';
 import type { UseRoomArgs } from '../index.js';
@@ -304,3 +305,34 @@ void _dataFactoryProbe;
 void _noDataFactoryProbe;
 void _asyncRoomDataProbe;
 void _deepReadonlyDataProbe;
+
+// `use` scope contract, mirroring define-socket.test-d.ts. A room's `use` is
+// dispatched with a `ServerLoaderCtx` (`socket-resolution.ts` builds
+// `scope: 'loader'`), so the slot admits the all-scope spelling and
+// `<'loader'>` and rejects the other two. Enforceable only because
+// `ServerCtx<S>` is an indexed access, which makes `ServerMiddleware<S>`
+// contravariant in `S`; the previous conditional spelling was bivariant and
+// would have accepted every arm below.
+const _roomUseProbe = () => {
+  const allScopes = defineServerMiddleware(async (_ctx, next) => {
+    await next();
+  });
+  const loaderScoped = defineServerMiddleware<'loader'>(async (_ctx, next) => {
+    await next();
+  });
+  const pageScoped = defineServerMiddleware<'page'>(async (_ctx, next) => {
+    await next();
+  });
+  const actionScoped = defineServerMiddleware<'action'>(async (_ctx, next) => {
+    await next();
+  });
+
+  defineRoom(roomChannel, { use: [allScopes] });
+  defineRoom(roomChannel, { use: [loaderScoped] });
+  // @ts-expect-error page-scope middleware never receives a page ctx here
+  defineRoom(roomChannel, { use: [pageScoped] });
+  // @ts-expect-error action-scope middleware never receives an action ctx here
+  defineRoom(roomChannel, { use: [actionScoped] });
+};
+
+void _roomUseProbe;

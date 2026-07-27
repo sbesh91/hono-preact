@@ -37,12 +37,14 @@ describe('renderElement', () => {
     let refNode: HTMLElement | null = null;
     const { container } = render(
       <Widget
-        render={h('span', {
-          class: 'user',
-          ref: (n: HTMLElement | null) => {
-            refNode = n;
-          },
-        })}
+        render={
+          <span
+            class="user"
+            ref={(n) => {
+              refNode = n;
+            }}
+          />
+        }
       />
     );
     const el = container.querySelector('span')!;

@@ -3,7 +3,6 @@ import {
   decodeActionResponse,
   RENDER_PAGE_SCOPE_MESSAGE,
   serializeActionOutcome,
-  type ActionEnvelope,
 } from '../internal/action-envelope.js';
 import { deny, redirect, timeoutOutcome } from '../outcomes.js';
 

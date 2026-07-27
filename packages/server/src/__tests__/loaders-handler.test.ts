@@ -2,13 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { Hono } from 'hono';
 import {
   redirect,
-  defineLoader,
   serverRoute,
   defineRoutes,
   defineServerMiddleware,
   type AppConfig,
 } from '@hono-preact/iso';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
+import type { StandardSchemaV1 } from '@hono-preact/iso';
+import { _defineRouteLoader } from '@hono-preact/iso/internal';
 import { loadersHandler } from '../loaders-handler.js';
 
 function makeApp(glob: Parameters<typeof loadersHandler>[0]) {
@@ -188,7 +188,7 @@ describe('loadersHandler', () => {
     // be translated into the handler's own 500 envelope (plus onError) rather
     // than escaping to Hono's default error handler.
     const onError = vi.fn();
-    const gate = defineServerMiddleware<'loader'>(async (_c, next) => {
+    const gate = defineServerMiddleware<'page'>(async (_c, next) => {
       await next();
     });
     const loaderFn = vi.fn().mockResolvedValue({ secret: 'data' });
@@ -661,7 +661,11 @@ describe('loadersHandler: schema validation (searchSchema / paramsSchema)', () =
 
   it('coerces searchParams via searchSchema and passes them to the loader', async () => {
     let seen: unknown;
-    const ref = defineLoader(
+    // `searchSchema` / `paramsSchema` and a `ctx.location` are route-bound
+    // loader surface; `_defineRouteLoader` is the constructor that carries them
+    // (it is what `serverRoute(r).loader` calls).
+    const ref = _defineRouteLoader(
+      '/x',
       async (ctx) => {
         seen = ctx.location.searchParams;
         return 'ok';
@@ -686,7 +690,9 @@ describe('loadersHandler: schema validation (searchSchema / paramsSchema)', () =
   });
 
   it('returns 400 when searchSchema fails', async () => {
-    const ref = defineLoader(async () => 'ok', { searchSchema: minPage });
+    const ref = _defineRouteLoader('/x', async () => 'ok', {
+      searchSchema: minPage,
+    });
     const handler = loadersHandler(globWith(ref), {
       resolvePageUse: async () => [],
     });
@@ -704,7 +710,9 @@ describe('loadersHandler: schema validation (searchSchema / paramsSchema)', () =
   });
 
   it('returns 404 when paramsSchema fails', async () => {
-    const ref = defineLoader(async () => 'ok', { paramsSchema: numericId });
+    const ref = _defineRouteLoader('/x/:id', async () => 'ok', {
+      paramsSchema: numericId,
+    });
     const handler = loadersHandler(globWith(ref), {
       resolvePageUse: async () => [],
     });
@@ -956,7 +964,7 @@ describe('subtree-bound loader chain (real manifest)', () => {
     gateImpl: (calls: string[]) => Parameters<typeof defineServerMiddleware>[0],
     calls: string[]
   ) => {
-    const gate = defineServerMiddleware<'loader'>(gateImpl(calls));
+    const gate = defineServerMiddleware(gateImpl(calls));
     const m = defineRoutes([
       {
         path: '/shop',
@@ -1044,7 +1052,7 @@ describe('root-layout bound loader chain (real manifest)', () => {
 
   it("a serverRoute('/x') loader under a root layout runs the root gate", async () => {
     const calls: string[] = [];
-    const gate = defineServerMiddleware<'loader'>(async (_ctx, next) => {
+    const gate = defineServerMiddleware(async (_ctx, next) => {
       calls.push('gate');
       await next();
     });

@@ -51,7 +51,9 @@ describe('toast stacking attributes', () => {
     });
     const root = getByTestId(`root-${id}`);
     expect(root.getAttribute('data-expanded')).toBe('false');
-    act(() => fireEvent.pointerEnter(getByRole('region')));
+    act(() => {
+      fireEvent.pointerEnter(getByRole('region'));
+    });
     expect(root.getAttribute('data-expanded')).toBe('true');
   });
 });

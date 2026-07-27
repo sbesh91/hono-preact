@@ -1,5 +1,8 @@
 import type { Context } from 'hono';
-import type { Middleware } from './define-middleware.js';
+import type {
+  ServerMiddleware,
+  ClientMiddleware,
+} from './define-middleware.js';
 import { assertConformingChannelName, type Channel } from './define-channel.js';
 import type { RouteParams } from './internal/typed-routes.js';
 import { FORM_MODULE_FIELD, FORM_ROOM_FIELD } from './internal/contract.js';
@@ -50,8 +53,14 @@ export interface RoomConnection<Outgoing, State, Data> {
  * flat `/__sockets` endpoint.
  */
 export interface RoomHandler<Incoming, Outgoing, State, Data, Params> {
-  /** Guard/middleware chain run before the upgrade; a deny closes 4403. */
-  use?: ReadonlyArray<Middleware>;
+  /**
+   * Guard/middleware chain run before the upgrade; a deny closes 4403.
+   *
+   * Dispatched in loader scope (`socket-resolution.ts` builds a
+   * `ServerLoaderCtx` for the upgrade probe), so that is what an entry is typed
+   * for. An all-scope `defineServerMiddleware(...)` fits here too.
+   */
+  use?: ReadonlyArray<ServerMiddleware<'loader'> | ClientMiddleware>;
   /** Seed the joining member's initial presence state. */
   presence?: () => State;
   /**

@@ -37,7 +37,9 @@ describe('toast auto-dismiss timer', () => {
       toast('Auto', { duration: 1000 });
     });
     expect(toastStore.toasts).toHaveLength(1);
-    act(() => vi.advanceTimersByTime(1000));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
     expect(toastStore.toasts).toHaveLength(0);
   });
 
@@ -49,12 +51,22 @@ describe('toast auto-dismiss timer', () => {
       toast('Auto', { duration: 1000 });
     });
     const region = getByRole('region');
-    act(() => vi.advanceTimersByTime(600));
-    act(() => fireEvent.pointerEnter(region));
-    act(() => vi.advanceTimersByTime(5000)); // paused: no expiry
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+    act(() => {
+      fireEvent.pointerEnter(region);
+    });
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    }); // paused: no expiry
     expect(toastStore.toasts).toHaveLength(1);
-    act(() => fireEvent.pointerLeave(region));
-    act(() => vi.advanceTimersByTime(400)); // 1000 - 600 remaining
+    act(() => {
+      fireEvent.pointerLeave(region);
+    });
+    act(() => {
+      vi.advanceTimersByTime(400);
+    }); // 1000 - 600 remaining
     expect(toastStore.toasts).toHaveLength(0);
   });
 
@@ -65,7 +77,9 @@ describe('toast auto-dismiss timer', () => {
     act(() => {
       toast.loading('Working', { duration: Infinity });
     });
-    act(() => vi.advanceTimersByTime(100000));
+    act(() => {
+      vi.advanceTimersByTime(100000);
+    });
     expect(toastStore.toasts).toHaveLength(1);
   });
 });

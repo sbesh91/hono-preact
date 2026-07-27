@@ -25,13 +25,11 @@ afterEach(() => {
   resetHistoryShimForTesting();
 });
 
-const loc = {
+const loc: RouteHook = {
   path: '/x',
-  url: 'http://localhost/x',
   searchParams: {},
   pathParams: {},
-  route: () => {},
-} as never;
+};
 
 // Mount a PageMiddlewareHost (carrying `mw`, rendering `childText`) as the /x
 // route inside a Router, the post-navigation contract under test (the host needs
@@ -42,17 +40,19 @@ function renderHostInRouter(
   childText: string,
   wrap?: (inner: VNode<any>) => VNode<any>
 ) {
+  // `children` is a required prop of PageMiddlewareHost, so `h` wants it in the
+  // props object rather than as a trailing argument.
   const HostRoute = () =>
-    h(
-      PageMiddlewareHost,
-      { use: [mw], location: loc },
-      h('div', null, childText)
-    );
+    h(PageMiddlewareHost, {
+      use: [mw],
+      location: loc,
+      children: h('div', null, childText),
+    });
   window.history.replaceState({}, '', '/x');
   const router = h(
     Router,
     null,
-    h(Route, { path: '/x', component: HostRoute as never })
+    h(Route, { path: '/x', component: HostRoute })
   );
   return rtlRender(h(LocationProvider, null, wrap ? wrap(router) : router));
 }

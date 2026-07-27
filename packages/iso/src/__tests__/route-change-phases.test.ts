@@ -9,7 +9,6 @@ import {
   resetHistoryShimForTesting,
   setNavDirectionForTesting,
 } from '../internal/history-shim.js';
-import type { ViewTransitionEvent } from '../internal/view-transition-event.js';
 
 interface FakeViewTransition {
   ready: Promise<void>;
@@ -65,14 +64,18 @@ describe('__dispatchRouteChange phase dispatcher', () => {
   it('walks phases in order: beforeTransition, beforeSwap, afterSwap, afterTransition', async () => {
     const { resolveFinished } = installFakeVt();
     const calls: string[] = [];
-    const u1 = __subscribePhase('beforeTransition', () =>
-      calls.push('beforeTransition')
-    );
-    const u2 = __subscribePhase('beforeSwap', () => calls.push('beforeSwap'));
-    const u3 = __subscribePhase('afterSwap', () => calls.push('afterSwap'));
-    const u4 = __subscribePhase('afterTransition', () =>
-      calls.push('afterTransition')
-    );
+    const u1 = __subscribePhase('beforeTransition', () => {
+      calls.push('beforeTransition');
+    });
+    const u2 = __subscribePhase('beforeSwap', () => {
+      calls.push('beforeSwap');
+    });
+    const u3 = __subscribePhase('afterSwap', () => {
+      calls.push('afterSwap');
+    });
+    const u4 = __subscribePhase('afterTransition', () => {
+      calls.push('afterTransition');
+    });
 
     __dispatchRouteChange('/a', undefined);
     resolveFinished();
@@ -94,8 +97,12 @@ describe('__dispatchRouteChange phase dispatcher', () => {
   it('fires multiple subscribers in registration order within a phase', async () => {
     const { resolveFinished } = installFakeVt();
     const order: string[] = [];
-    const u1 = __subscribePhase('beforeTransition', () => order.push('one'));
-    const u2 = __subscribePhase('beforeTransition', () => order.push('two'));
+    const u1 = __subscribePhase('beforeTransition', () => {
+      order.push('one');
+    });
+    const u2 = __subscribePhase('beforeTransition', () => {
+      order.push('two');
+    });
 
     __dispatchRouteChange('/a', undefined);
     resolveFinished();

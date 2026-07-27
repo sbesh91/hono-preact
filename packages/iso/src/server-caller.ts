@@ -8,12 +8,13 @@ import {
   coerceActionInput,
 } from './internal/loader-schema.js';
 import { dispatchServer } from './internal/middleware-runner.js';
-import { assertUseEntry, isMiddleware } from './internal/use-entry.js';
+import { partitionUse } from './internal/use-partitioner.js';
 import { runRequestScope, getRequestStore } from './cache.js';
 import type {
   ServerLoaderCtx,
   ServerActionCtx,
   ServerMiddleware,
+  Middleware,
 } from './define-middleware.js';
 
 export type CallResult<T> =
@@ -93,21 +94,19 @@ type ServerActionView = {
 // leg and no streaming pump, so a valid client middleware or observer is
 // correctly skipped. What must NOT be skipped is an entry the framework
 // cannot classify -- silently discarding one here is the same fail-open
-// partitionUse closes, so validate before filtering. Shared by both the
+// `partitionUse` closes, so classify before filtering. Shared by both the
 // loader and action legs; `source` names whichever one called it so the
 // error points at the right `use` array.
-function serverMiddleware(
+//
+// The `runs === 'server'` narrowing lives at each leg's call site, where the
+// scope is a literal. Classification proves `runs` and nothing else: the scope
+// an entry was authored for is a guarantee of the `use` array's own type
+// (`LoaderUse` / `ActionUse`), which this boundary reads as `unknown`.
+function classifiedUse(
   use: ReadonlyArray<unknown> | undefined,
   source: string
-): ReadonlyArray<ServerMiddleware> {
-  const entries = use ?? [];
-  const out: ServerMiddleware[] = [];
-  for (let index = 0; index < entries.length; index++) {
-    const entry = entries[index];
-    assertUseEntry(entry, index, source);
-    if (isMiddleware(entry) && entry.runs === 'server') out.push(entry);
-  }
-  return out;
+): ReadonlyArray<Middleware> {
+  return partitionUse(use ?? [], source).middleware;
 }
 
 function isLoaderRef(ref: unknown): ref is LoaderRef<unknown, boolean> {
@@ -158,10 +157,10 @@ async function callLoader<T>(
   const signal = opts?.signal
     ? AbortSignal.any([c.req.raw.signal, opts.signal])
     : c.req.raw.signal;
-  const serverMw = serverMiddleware(
+  const serverMw = classifiedUse(
     ref.use,
     `the loader's own \`use\` for ${ref.__moduleKey ?? '<unkeyed>'}`
-  );
+  ).filter((m): m is ServerMiddleware<'loader'> => m.runs === 'server');
   const ctx: ServerLoaderCtx = {
     scope: 'loader',
     c,
@@ -210,7 +209,9 @@ async function callAction<TResult>(
   ref: ServerActionView,
   payload: unknown
 ): Promise<CallResult<TResult>> {
-  const serverMw = serverMiddleware(ref.use, "the action's own `use`");
+  const serverMw = classifiedUse(ref.use, "the action's own `use`").filter(
+    (m): m is ServerMiddleware<'action'> => m.runs === 'server'
+  );
   const ctx: ServerActionCtx = {
     scope: 'action',
     c,

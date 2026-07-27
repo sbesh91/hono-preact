@@ -6,6 +6,7 @@ import {
   type SocketHandler,
 } from '../define-socket.js';
 import { serverRoute } from '../server-route.js';
+import { defineServerMiddleware } from '../define-middleware.js';
 import { useSocket } from '../use-socket.js';
 import type { UseSocketArgs } from '../index.js';
 import type { Serialize } from '../internal/serialize.js';
@@ -229,3 +230,34 @@ void _openArityProbe;
 void _useSocketMethodProbe;
 void _asyncDataProbe;
 void _deepReadonlyDataProbe;
+
+// `use` scope contract. A socket's `use` is dispatched with a `ServerLoaderCtx`
+// (`socket-resolution.ts` builds `scope: 'loader'` and calls
+// `dispatchServer<true, 'loader'>`), so the slot admits the all-scope spelling
+// and `<'loader'>`, and rejects the other two. This is only enforceable because
+// `ServerCtx<S>` is an indexed access rather than a conditional, which makes
+// `ServerMiddleware<S>` contravariant in `S`; under the previous conditional
+// spelling the type was bivariant and every arm below would have been accepted.
+const _socketUseProbe = () => {
+  const allScopes = defineServerMiddleware(async (_ctx, next) => {
+    await next();
+  });
+  const loaderScoped = defineServerMiddleware<'loader'>(async (_ctx, next) => {
+    await next();
+  });
+  const pageScoped = defineServerMiddleware<'page'>(async (_ctx, next) => {
+    await next();
+  });
+  const actionScoped = defineServerMiddleware<'action'>(async (_ctx, next) => {
+    await next();
+  });
+
+  defineSocket({ use: [allScopes] });
+  defineSocket({ use: [loaderScoped] });
+  // @ts-expect-error page-scope middleware never receives a page ctx here
+  defineSocket({ use: [pageScoped] });
+  // @ts-expect-error action-scope middleware never receives an action ctx here
+  defineSocket({ use: [actionScoped] });
+};
+
+void _socketUseProbe;

@@ -38,13 +38,18 @@ describe('Select exit animation', () => {
     const anim = makeAnimation();
     restore = installGetAnimations([anim]);
     const { getByTestId, getByRole } = render(<Setup />);
-    await act(async () => fireEvent.click(getByRole('combobox')));
+    await act(async () => {
+      fireEvent.click(getByRole('combobox'));
+    });
     const lb = getByTestId('lb');
     // `hidden` is on the Positioner (parent); `data-state` is on the Popup (lb).
     const positioner = lb.parentElement!;
     expect(positioner.hidden).toBe(false);
 
-    await act(async () => fireEvent.click(getByRole('combobox'))); // toggle closed
+    // toggle closed
+    await act(async () => {
+      fireEvent.click(getByRole('combobox'));
+    });
     // Still visible (animating), marked closed for the exit CSS.
     expect(positioner.hidden).toBe(false);
     expect(lb.getAttribute('data-state')).toBe('closed');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { h } from 'preact';
+import { h, type ComponentChildren } from 'preact';
 import { Hono } from 'hono';
 import { LocationProvider } from 'preact-iso';
 import { renderPage } from '../render.js';
@@ -30,8 +30,8 @@ function Page() {
   );
 }
 
-function Layout({ children }: { children: unknown }) {
-  return h('html', null, h('body', null, children as never));
+function Layout({ children }: { children?: ComponentChildren }) {
+  return h('html', null, h('body', null, children));
 }
 
 const submit = async () => {

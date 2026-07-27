@@ -9,7 +9,7 @@
  *   - the teardown returned by open clears the interval on close
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Hono } from 'hono';
 import { WebSocket } from 'ws';
 import type { AddressInfo } from 'node:net';
@@ -130,9 +130,14 @@ const activeTimers = new Set<ReturnType<typeof setInterval>>();
 const chatDef = defineSocket<Incoming, Outgoing, { n: number }>({
   data: () => ({ n: 0 }),
   open(socket) {
+    // `socket.data` is the read-only connect-time seed (a Cloudflare DO is
+    // hibernatable, so an in-place write would not survive), which is why the
+    // per-connection counter lives in an `open()` closure seeded from it --
+    // the documented pattern for evolving Node-side state.
+    let n = socket.data.n;
     const id = setInterval(() => {
-      socket.data.n += 1;
-      socket.send({ kind: 'tick', n: socket.data.n });
+      n += 1;
+      socket.send({ kind: 'tick', n });
     }, 100);
     activeTimers.add(id);
     return () => {

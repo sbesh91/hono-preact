@@ -3,41 +3,41 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/preact';
 import { useOptimistic } from '../optimistic.js';
 
-declare global {
-  interface Document {
-    startViewTransition?: (cb: () => void) => {
-      finished: Promise<void>;
-      ready: Promise<void>;
-      updateCallbackDone: Promise<void>;
+// A synchronous stand-in for the real API: runs the update callback inline and
+// hands back a settled `ViewTransition`, so `useOptimistic`'s transition branch
+// completes within the surrounding `act()`.
+function makeSvtSpy() {
+  return vi.fn((cb: () => void): ViewTransition => {
+    cb();
+    return {
+      finished: Promise.resolve(),
+      ready: Promise.resolve(),
+      updateCallbackDone: Promise.resolve(),
+      types: new Set<string>(),
+      skipTransition: () => {},
     };
-  }
+  });
 }
 
 describe('useOptimistic transition option', () => {
-  let originalSVT: typeof document.startViewTransition | undefined;
+  // happy-dom implements no View Transitions API, so this is `undefined` in
+  // practice; captured and restored anyway so the suite does not depend on that.
+  let originalSVT: Document['startViewTransition'] | undefined;
 
   beforeEach(() => {
     originalSVT = document.startViewTransition;
   });
   afterEach(() => {
     if (originalSVT === undefined) {
-      delete (document as { startViewTransition?: unknown })
-        .startViewTransition;
+      Reflect.deleteProperty(document, 'startViewTransition');
     } else {
       document.startViewTransition = originalSVT;
     }
   });
 
   it('does not wrap settle/revert when transition is omitted (default)', () => {
-    const spy = vi.fn((cb: () => void) => {
-      cb();
-      return {
-        finished: Promise.resolve(),
-        ready: Promise.resolve(),
-        updateCallbackDone: Promise.resolve(),
-      };
-    });
-    document.startViewTransition = spy as never;
+    const spy = makeSvtSpy();
+    document.startViewTransition = spy;
 
     const { result } = renderHook(() =>
       useOptimistic<number, number>(0, (acc, p) => acc + p)
@@ -54,15 +54,8 @@ describe('useOptimistic transition option', () => {
   });
 
   it('wraps settle and revert when transition is true, but not the initial mutate', () => {
-    const spy = vi.fn((cb: () => void) => {
-      cb();
-      return {
-        finished: Promise.resolve(),
-        ready: Promise.resolve(),
-        updateCallbackDone: Promise.resolve(),
-      };
-    });
-    document.startViewTransition = spy as never;
+    const spy = makeSvtSpy();
+    document.startViewTransition = spy;
 
     const { result } = renderHook(() =>
       useOptimistic<number, number>(0, (acc, p) => acc + p, {
@@ -86,7 +79,7 @@ describe('useOptimistic transition option', () => {
   });
 
   it('no-ops gracefully when startViewTransition is unavailable', () => {
-    delete (document as { startViewTransition?: unknown }).startViewTransition;
+    Reflect.deleteProperty(document, 'startViewTransition');
     const { result } = renderHook(() =>
       useOptimistic<number, number>(0, (acc, p) => acc + p, {
         transition: true,

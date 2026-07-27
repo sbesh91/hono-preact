@@ -79,15 +79,16 @@
     "dev": "tsc --watch",
     "prepack": "node scripts/publish-manifest.mjs prepack",
     "postpack": "node scripts/publish-manifest.mjs postpack",
-    "prepublishOnly": "tsc && node scripts/consolidate.mjs"
+    "prepublishOnly": "tsc && node scripts/consolidate.mjs",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@standard-schema/spec": "^1.1.0",
     "@babel/parser": "^8.0.0",
     "@babel/traverse": "^8.0.0",
     "@babel/types": "^8.0.0",
     "@preact/preset-vite": "^2.10.5",
     "@preact/signals": "^2.9.4",
+    "@standard-schema/spec": "^1.1.0",
     "lightningcss": "^1.32.0",
     "magic-string": "^0.30.21"
   },
@@ -122,6 +123,7 @@
     "@hono-preact/iso": "workspace:*",
     "@hono-preact/server": "workspace:*",
     "@hono-preact/vite": "workspace:*",
+    "@types/node": "^25.6.0",
     "typescript": "*"
   },
   "sideEffects": false

@@ -68,7 +68,9 @@ describe('useSafeArea', () => {
     );
     stub(getByText);
     move(150, 130); // gap, outside corridor, but no reference hit yet
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -80,7 +82,9 @@ describe('useSafeArea', () => {
     stub(getByText);
     move(50, 25); // engaged
     move(150, 25); // inside corridor -> safe region
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -93,7 +97,9 @@ describe('useSafeArea', () => {
     move(50, 25); // over the anchor -> engaged
     move(150, 130); // gap, outside corridor -> arms the close grace
     expect(onClose).not.toHaveBeenCalled();
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -105,10 +111,14 @@ describe('useSafeArea', () => {
     stub(getByText);
     move(50, 25); // engaged
     move(150, 130); // outside corridor -> arms grace at t=0
-    act(() => vi.advanceTimersByTime(200)); // t=200, still pending
+    act(() => {
+      vi.advanceTimersByTime(200);
+    }); // t=200, still pending
     move(160, 140); // still outside; must NOT reset the deadline
     expect(onClose).not.toHaveBeenCalled();
-    act(() => vi.advanceTimersByTime(100)); // t=300 from arm -> fires
+    act(() => {
+      vi.advanceTimersByTime(100);
+    }); // t=300 from arm -> fires
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -120,9 +130,13 @@ describe('useSafeArea', () => {
     stub(getByText);
     move(50, 25); // engaged
     move(150, 130); // outside corridor -> arms grace
-    act(() => vi.advanceTimersByTime(200)); // still pending
+    act(() => {
+      vi.advanceTimersByTime(200);
+    }); // still pending
     move(150, 25); // back inside the corridor -> cancels the close
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -135,7 +149,9 @@ describe('useSafeArea', () => {
     move(50, 25); // engaged
     move(150, 130); // outside corridor -> arms grace
     move(250, 75); // over the floating element -> clears grace
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -148,7 +164,9 @@ describe('useSafeArea', () => {
     move(50, 25); // engaged over the anchor
     leaveDocument(); // pointer left the viewport -> arms the close grace
     expect(onClose).not.toHaveBeenCalled();
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -159,7 +177,9 @@ describe('useSafeArea', () => {
     );
     stub(getByText);
     leaveDocument(); // never engaged -> nothing to close
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -179,7 +199,9 @@ describe('useSafeArea', () => {
       clientY: 130,
       pointerType: 'touch',
     });
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -193,7 +215,9 @@ describe('useSafeArea', () => {
     rerender(<Harness enabled={false} onClose={onClose} graceMs={300} />);
     move(150, 130); // would arm a close if still listening
     leaveDocument(); // and so would this
-    act(() => vi.advanceTimersByTime(300));
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 });

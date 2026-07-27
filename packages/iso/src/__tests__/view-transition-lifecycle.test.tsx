@@ -46,10 +46,18 @@ describe('useViewTransitionLifecycle', () => {
 
     const { unmount } = renderHook(() =>
       useViewTransitionLifecycle({
-        onBeforeTransition: () => calls.push('beforeTransition'),
-        onBeforeSwap: () => calls.push('beforeSwap'),
-        onAfterSwap: () => calls.push('afterSwap'),
-        onAfterTransition: () => calls.push('afterTransition'),
+        onBeforeTransition: () => {
+          calls.push('beforeTransition');
+        },
+        onBeforeSwap: () => {
+          calls.push('beforeSwap');
+        },
+        onAfterSwap: () => {
+          calls.push('afterSwap');
+        },
+        onAfterTransition: () => {
+          calls.push('afterTransition');
+        },
       })
     );
 
@@ -72,7 +80,9 @@ describe('useViewTransitionLifecycle', () => {
     const calls: string[] = [];
     const { unmount } = renderHook(() =>
       useViewTransitionLifecycle({
-        onBeforeTransition: () => calls.push('hit'),
+        onBeforeTransition: () => {
+          calls.push('hit');
+        },
       })
     );
 

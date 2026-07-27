@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readSSE } from '../sse-decoder.js';
 
-function asStream(text: string): ReadableStream<Uint8Array> {
+function asStream(text: string): ReadableStream<Uint8Array<ArrayBuffer>> {
   const bytes = new TextEncoder().encode(text);
-  return new ReadableStream<Uint8Array>({
+  return new ReadableStream<Uint8Array<ArrayBuffer>>({
     start(controller) {
       // Split in odd places to exercise multi-chunk buffering.
       controller.enqueue(bytes.slice(0, 5));

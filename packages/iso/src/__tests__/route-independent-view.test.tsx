@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, afterEach } from 'vitest';
+import { it, expect, afterEach } from 'vitest';
 import { render } from 'preact';
 import { LocationProvider } from 'preact-iso';
 import { defineLoader } from '../define-loader.js';
@@ -23,7 +23,7 @@ it('route-independent live loader .View renders connecting on SSR with NO RouteL
   const Bar = ref.View<number[]>(
     (s) => (
       <p>
-        {(s.status === 'connecting' ? [] : s.data).join(',')}|{s.status}
+        {(s.data ?? []).join(',')}|{s.status}
       </p>
     ),
     { initial: [], reduce: (acc, c) => [...acc, c.n] }

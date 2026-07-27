@@ -1,0 +1,38 @@
+{
+  // Typechecks the test files `tsconfig.json` excludes from the BUILD (that
+  // exclusion is load-bearing: without it, tests would be emitted into `dist`
+  // and published). `noEmit` makes this config incapable of writing to `dist`.
+  //
+  // `*.test-d.ts(x)` stays out: `pnpm test:types` already runs those
+  // through vitest's typecheck mode against the built `dist`.
+  //
+  // `src/__tests__/fixtures/**` IS included. Those are standalone mini-apps
+  // compiled by a CHILD Vite process, and the framework imports they make
+  // (`hono-preact`, the umbrella) are supplied to that process by each
+  // fixture's `resolve.alias`, because the umbrella is deliberately unreachable
+  // from `packages/vite` (depending on it would be a circular workspace edge).
+  // `paths` below is tsc's equivalent of that alias and needs no dependency
+  // edge, so the fixtures typecheck here without one. It points at the built
+  // `dist` (what a real consumer of the package resolves), which CI and the
+  // documented pre-push order already build before any typecheck runs.
+  //
+  // The tradeoff: this is a build-order dependency that no `package.json` edge
+  // declares, so `pnpm -r` cannot order it for you. Running `typecheck:tests`
+  // in a fresh worktree BEFORE `pnpm build` reports ~14 `TS2307: Cannot find
+  // module 'hono-preact'` against fixture files nobody touched. Build first.
+  // Note `tsconfig.json` (the emitting config) deliberately has no `paths`, so
+  // a non-fixture `src` file still cannot name the umbrella.
+  //
+  // Everything else the fixtures import (`@hono-preact/iso`, `hono`, `preact`,
+  // `vite`, ...) is a real dependency of this package and resolves normally.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "hono-preact": ["../hono-preact/dist/index.d.ts"],
+      "hono-preact/*": ["../hono-preact/dist/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["src/**/*.test-d.ts", "src/**/*.test-d.tsx"]
+}

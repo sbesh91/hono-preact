@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { defineLoader } from '../define-loader.js';
+import { _defineRouteLoader } from '../define-loader.js';
 import { prefetch } from '../prefetch.js';
 import { env } from '../is-browser.js';
 
@@ -14,7 +14,8 @@ describe('prefetch (direct-fn path)', () => {
   });
 
   it('derives pathParams from url + route', async () => {
-    const ref = defineLoader(
+    const ref = _defineRouteLoader(
+      '/movies/:id',
       async ({ location }) => {
         return { id: location.pathParams.id };
       },
@@ -28,7 +29,8 @@ describe('prefetch (direct-fn path)', () => {
   });
 
   it('derives searchParams from url query string', async () => {
-    const ref = defineLoader(
+    const ref = _defineRouteLoader(
+      '/search',
       async ({ location }) => {
         return { q: location.searchParams.q };
       },
@@ -39,7 +41,8 @@ describe('prefetch (direct-fn path)', () => {
   });
 
   it('derives a clean path (no trailing slash, leading slash preserved)', async () => {
-    const ref = defineLoader(
+    const ref = _defineRouteLoader(
+      '/movies',
       async ({ location }) => {
         return { path: location.path };
       },
@@ -55,7 +58,8 @@ describe('prefetch (direct-fn path)', () => {
   });
 
   it('back-compat: location overrides url/route derivation', async () => {
-    const ref = defineLoader(
+    const ref = _defineRouteLoader(
+      '/should-be-ignored/:id',
       async ({ location }) => {
         return {
           path: location.path,
@@ -78,7 +82,8 @@ describe('prefetch (direct-fn path)', () => {
   });
 
   it('no-args call resolves with an empty but type-complete location', async () => {
-    const ref = defineLoader(
+    const ref = _defineRouteLoader(
+      '/empty-loc',
       async ({ location }) => {
         return {
           path: location.path,

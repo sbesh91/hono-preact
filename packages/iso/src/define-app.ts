@@ -1,18 +1,24 @@
 import type {
   ServerMiddleware,
   ClientMiddleware,
+  Scope,
 } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 
-// App-level `use` runs in page scope (see `render.tsx`'s root dispatch),
-// so only page-scope server middleware is allowed. `ServerMiddleware<Scope>`
-// looks innocuous but distributes over the `Scope` union and would let a
-// `defineServerMiddleware<'loader'>(...)` or `<'action'>(...)` slip in;
-// the dispatcher would then call it with a `ServerPageCtx` and the
-// `ctx.module` / `ctx.loader` reads would be undefined. List the legal
-// shapes explicitly to keep the type honest.
+// App-level `use` is the outermost layer of EVERY server chain, not just the
+// page one: `render.tsx` dispatches it with a `ServerPageCtx`, and
+// `composeServerChain` folds the same array into the loader and action chains,
+// where the handlers dispatch it with a `ServerLoaderCtx` / `ServerActionCtx`.
+// That is what "app-level" means, and narrowing the dispatch instead would drop
+// an app-tier guard off the loader and action paths. So an entry here has to
+// handle all three scopes: `ServerMiddleware` (i.e. `ServerMiddleware<Scope>`,
+// the ctx union) is the only server shape that does. A single-scope
+// `defineServerMiddleware<'page'>(...)` / `<'loader'>(...)` / `<'action'>(...)`
+// is rejected, because the two scopes it did not sign up for are exactly the
+// ones where its ctx reads (`ctx.location` on the bare-action path, `ctx.module`
+// / `ctx.loader` on the page path) are absent.
 export type AppUseElement =
-  | ServerMiddleware<'page'>
+  | ServerMiddleware<Scope>
   | ClientMiddleware
   | StreamObserver<unknown, never>;
 

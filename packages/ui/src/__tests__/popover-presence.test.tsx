@@ -34,10 +34,15 @@ describe('Popover exit animation', () => {
     const anim = makeAnimation();
     restore = installGetAnimations([anim]);
     const { getByText, queryByTestId } = render(<Setup />);
-    await act(async () => fireEvent.click(getByText('open')));
+    await act(async () => {
+      fireEvent.click(getByText('open'));
+    });
     expect(queryByTestId('pop')).not.toBeNull();
 
-    await act(async () => fireEvent.click(getByText('open'))); // toggle closed
+    // toggle closed
+    await act(async () => {
+      fireEvent.click(getByText('open'));
+    });
     // Still mounted, marked closed for the exit CSS.
     expect(queryByTestId('pop')).not.toBeNull();
     expect(queryByTestId('pop')!.getAttribute('data-state')).toBe('closed');

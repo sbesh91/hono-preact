@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { defineLoader } from '../define-loader.js';
+import { defineLoader, _defineRouteLoader } from '../define-loader.js';
 import { prefetch } from '../prefetch.js';
 
 afterEach(() => vi.restoreAllMocks());
@@ -16,7 +16,8 @@ describe('prefetch (browser)', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     let fnInvoked = false;
-    const ref = defineLoader(
+    const ref = _defineRouteLoader(
+      '/movies/:id',
       async ({ location }) => {
         fnInvoked = true;
         return { id: location.pathParams.id };
@@ -56,7 +57,8 @@ describe('prefetch (browser)', () => {
     // No params declared — cache key includes path only (no searchParam
     // dependency). The loader runtime will look up by the same key when
     // navigation actually mounts the loader.
-    const ref = defineLoader(
+    const ref = _defineRouteLoader(
+      '/search',
       async ({ location }) => ({ q: location.searchParams.q }),
       { __moduleKey: 'search-by-q' }
     );
@@ -77,7 +79,8 @@ describe('prefetch (browser)', () => {
     // this file. defineLoader caches live in a process-global Symbol.for
     // registry and persist across tests; sharing a module key would let
     // earlier tests pre-warm this one's cache.
-    const ref = defineLoader<{ id: string }>(
+    const ref = _defineRouteLoader<{ id: string }>(
+      '/movies/:id',
       async ({ location }) => ({ id: location.pathParams.id }),
       { __moduleKey: 'prefetch-no-op-on-repeat' }
     );
@@ -116,7 +119,8 @@ describe('prefetch (browser)', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
 
-    const ref = defineLoader<{ id: string }>(
+    const ref = _defineRouteLoader<{ id: string }>(
+      '/movies/:id',
       async ({ location }) => ({ id: location.pathParams.id }),
       { __moduleKey: 'movie-by-id-distinct' }
     );

@@ -351,7 +351,7 @@ Returns:
 | `send`        | `(msg: Incoming) => void`          | Send a message. Queued if not yet open.                   |
 | `status`      | `SocketStatus`                     | Reactive connection status.                               |
 | `close`       | `(code?, reason?) => void`         | Close the connection. Suppresses reconnect.               |
-| `closeInfo`   | `SocketCloseInfo \| undefined`     | Code, reason, and wasClean from the last close event.     |
+| `closeInfo`   | `SocketCloseInfo \| undefined`     | The last close event's `code`, `reason`, and `wasClean`.  |
 | `lastMessage` | `Serialize<Outgoing> \| undefined` | Last received message, when `opts.lastMessage` is `true`. |
 
 ### `upgradeWebSocket(createEvents)`

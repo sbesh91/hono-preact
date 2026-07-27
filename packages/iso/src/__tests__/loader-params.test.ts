@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { defineLoader } from '../define-loader.js';
+import { serverRoute } from '../server-route.js';
 
 describe('defineLoader: params opt', () => {
   it('defaults params to []', () => {
@@ -8,12 +9,14 @@ describe('defineLoader: params opt', () => {
   });
 
   it('persists params: string[]', () => {
-    const ref = defineLoader(async () => ({}), { params: ['genre', 'page'] });
+    const ref = serverRoute('/x').loader(async () => ({}), {
+      params: ['genre', 'page'],
+    });
     expect(ref.params).toEqual(['genre', 'page']);
   });
 
   it('persists params: "*"', () => {
-    const ref = defineLoader(async () => ({}), { params: '*' });
+    const ref = serverRoute('/x').loader(async () => ({}), { params: '*' });
     expect(ref.params).toBe('*');
   });
 });

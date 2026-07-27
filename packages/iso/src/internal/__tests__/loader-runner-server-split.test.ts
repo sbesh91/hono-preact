@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { build } from 'esbuild';
-import { resolve } from 'node:path';
 
 // The loader client entry (loader-runner) must not eagerly bundle the
 // server-side direct-dispatch path (createCaller / dispatchServer /
@@ -15,7 +14,9 @@ const SERVER_MARKER = 'ctx.c is not available'; // unique to the server branch
 describe('loader-runner client/server split', () => {
   it('keeps the server dispatch path out of the eager loader entry chunk', async () => {
     const result = await build({
-      entryPoints: [resolve('packages/iso/dist/internal/loader-runner.js')],
+      // Relative to esbuild's absWorkingDir, which defaults to the runner cwd
+      // (the repo root).
+      entryPoints: ['packages/iso/dist/internal/loader-runner.js'],
       bundle: true,
       splitting: true,
       format: 'esm',

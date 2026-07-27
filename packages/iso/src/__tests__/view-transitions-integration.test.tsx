@@ -174,8 +174,12 @@ describe('toolkit integration', () => {
     const phases: string[] = [];
     function App() {
       useViewTransitionLifecycle({
-        onBeforeTransition: () => phases.push('bt'),
-        onAfterSwap: () => phases.push('as'),
+        onBeforeTransition: () => {
+          phases.push('bt');
+        },
+        onAfterSwap: () => {
+          phases.push('as');
+        },
       });
       useViewTransitionTypes(['custom-type']);
       return (

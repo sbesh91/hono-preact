@@ -62,10 +62,12 @@ describe('ViewTransitionEvent', () => {
   });
 });
 
-const _typeCheck: NavDirection[] = [
+// Type-level assertion that NavDirection admits exactly these members; `void`
+// keeps it a statement (no unused local) while `satisfies` still checks it.
+void ([
   'initial',
   'push',
   'replace',
   'back',
   'forward',
-];
+] satisfies NavDirection[]);

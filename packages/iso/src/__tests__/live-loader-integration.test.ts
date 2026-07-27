@@ -25,7 +25,7 @@ describe('channel-driven live loader (integration)', () => {
     let count = 0;
     const route = serverRoute('/counter');
     const ref = route.loader(
-      liveStream<{ count: number }>({
+      liveStream({
         topic: () => channel.key(),
         load: async (): Promise<{ count: number }> => ({ count }),
       })

@@ -66,6 +66,16 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The step above cannot see a single test file: every framework package's
+      # build `tsconfig` excludes `src/**/__tests__/**` so tests are never
+      # emitted into a published `dist/`. Each package carries a second config
+      # (`tsconfig.test.json`, `noEmit`, tests re-included) that this fans out
+      # to. `scripts/__tests__/typecheck-tests-gate.test.mjs` is the guard that
+      # stops a package from silently having neither and being skipped by
+      # `--if-present`.
+      - name: Typecheck tests
+        run: pnpm typecheck:tests
+
       # Type-level tests (`*.test-d.ts`): tsc enforces the type assertions
       # (typed-routes today) that the package `tsconfig`s exclude from typecheck.
       - name: Type tests

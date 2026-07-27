@@ -4,8 +4,19 @@ import { h } from 'preact';
 import { z } from 'zod';
 import { pageActionsHandler } from '../page-actions-handler.js';
 import { loadersHandler } from '../loaders-handler.js';
-import { defineAction, defineLoader } from '@hono-preact/iso';
+import { defineAction } from '@hono-preact/iso';
+import { _defineRouteLoader } from '@hono-preact/iso/internal';
 import { VALIDATION_ISSUES_KEY } from '@hono-preact/iso/internal/runtime';
+
+/**
+ * The wire shape the handlers answer with on the deny paths asserted below.
+ * Reading `await res.json()` (typed `unknown`) through this keeps the
+ * assertions honest about what they index into.
+ */
+type DenyBody = {
+  __outcome?: string;
+  data: Record<string, readonly unknown[] | undefined>;
+};
 
 const NewTask = z.object({
   title: z.string().min(1),
@@ -56,7 +67,7 @@ describe('Standard Schema end-to-end (Zod)', () => {
       }),
     });
     expect(bad.status).toBe(422);
-    const badBody = await bad.json();
+    const badBody = (await bad.json()) as DenyBody;
     expect(Array.isArray(badBody.data[VALIDATION_ISSUES_KEY])).toBe(true);
     expect(fn).not.toHaveBeenCalled();
 
@@ -81,9 +92,16 @@ describe('Standard Schema end-to-end (Zod)', () => {
   });
 
   it('coerces loader search params and 400s on invalid', async () => {
-    const ref = defineLoader(async (ctx) => ctx.location.searchParams, {
-      searchSchema: z.object({ page: z.coerce.number().min(1) }),
-    });
+    // `searchSchema` / `paramsSchema` and a `ctx.location` are route-bound
+    // loader surface; `_defineRouteLoader` is the constructor that carries
+    // them (it is what `serverRoute(r).loader` calls).
+    const ref = _defineRouteLoader(
+      '/t',
+      async (ctx) => ctx.location.searchParams,
+      {
+        searchSchema: z.object({ page: z.coerce.number().min(1) }),
+      }
+    );
     const glob = {
       './t.server.ts': {
         __moduleKey: 'pages/t.server',
@@ -118,9 +136,13 @@ describe('Standard Schema end-to-end (Zod)', () => {
   });
 
   it('surfaces loader search-schema issues under VALIDATION_ISSUES_KEY (parity with actions)', async () => {
-    const ref = defineLoader(async (ctx) => ctx.location.searchParams, {
-      searchSchema: z.object({ page: z.coerce.number().min(1) }),
-    });
+    const ref = _defineRouteLoader(
+      '/t',
+      async (ctx) => ctx.location.searchParams,
+      {
+        searchSchema: z.object({ page: z.coerce.number().min(1) }),
+      }
+    );
     const glob = {
       './t.server.ts': {
         __moduleKey: 'pages/t.server',
@@ -140,16 +162,21 @@ describe('Standard Schema end-to-end (Zod)', () => {
       }),
     });
     expect(bad.status).toBe(400);
-    const body = await bad.json();
+    const body = (await bad.json()) as DenyBody;
     expect(body.__outcome).toBe('deny');
-    expect(Array.isArray(body.data[VALIDATION_ISSUES_KEY])).toBe(true);
-    expect(body.data[VALIDATION_ISSUES_KEY].length).toBeGreaterThan(0);
+    const issues = body.data[VALIDATION_ISSUES_KEY];
+    expect(Array.isArray(issues)).toBe(true);
+    expect(issues ?? []).not.toHaveLength(0);
   });
 
   it('surfaces loader params-schema issues under VALIDATION_ISSUES_KEY (404 path)', async () => {
-    const ref = defineLoader(async (ctx) => ctx.location.pathParams, {
-      paramsSchema: z.object({ id: z.coerce.number().int() }),
-    });
+    const ref = _defineRouteLoader(
+      '/t',
+      async (ctx) => ctx.location.pathParams,
+      {
+        paramsSchema: z.object({ id: z.coerce.number().int() }),
+      }
+    );
     const glob = {
       './t.server.ts': {
         __moduleKey: 'pages/t.server',
@@ -169,9 +196,10 @@ describe('Standard Schema end-to-end (Zod)', () => {
       }),
     });
     expect(bad.status).toBe(404);
-    const body = await bad.json();
+    const body = (await bad.json()) as DenyBody;
     expect(body.__outcome).toBe('deny');
-    expect(Array.isArray(body.data[VALIDATION_ISSUES_KEY])).toBe(true);
-    expect(body.data[VALIDATION_ISSUES_KEY].length).toBeGreaterThan(0);
+    const issues = body.data[VALIDATION_ISSUES_KEY];
+    expect(Array.isArray(issues)).toBe(true);
+    expect(issues ?? []).not.toHaveLength(0);
   });
 });
