@@ -405,17 +405,29 @@ const COLD_LOADING: LoaderState<unknown> = { status: 'loading' };
 
 /**
  * Project `LoaderDataContext`'s value down to the single-value `LoaderState`
- * half, for `useData()`'s no-arg arm. Both fallbacks are unreachable defense
- * rather than real states:
+ * half, for `useData()`'s no-arg arm.
  *
- *  - `null` is the cold-error routing signal; `loader.tsx` renders the
- *    `errorFallback` instead of the children, so no mounted consumer sees it.
- *  - a `StreamState` only rides this context for a live loader, whose
- *    `useData(initial, reduce)` takes the collect arm and never gets here.
+ * The `null` fallback IS unreachable defense: `null` is the cold-error routing
+ * signal, and `loader.tsx` renders the `errorFallback` instead of the children,
+ * so no mounted consumer sees it.
  *
- * Reporting the cold `loading` arm keeps the return type honest in both cases
- * (no fabricated value); the data-bearing path returns the context value BY
- * REFERENCE, so a memoized consumer stays stable.
+ * The `StreamState` fallback is NOT. One host reaches it: a NON-streaming
+ * loader consumed with `accumulate` (`{ kind: 'fold' }` per
+ * `internal/loader-mode.ts`, pinned as supported by
+ * `internal/__tests__/loader-mode.test.ts`). That host projects a `StreamState`,
+ * while the no-arg `useData()` routes here by branching on the loader's own
+ * shape rather than the host's mode, so `isLoaderState` rejects `connecting`
+ * and the consumer sits on `COLD_LOADING` permanently.
+ *
+ * That is a real defect, inherited rather than introduced here: the merge base
+ * threw a sharp error for this case and the umbrella replaced the throw with a
+ * silent `?? { status: 'loading' }` behind an unsound cast. Restoring a throw is
+ * the right end state and belongs in its own change, not behind a comment
+ * claiming the case cannot happen. Tracked on #349.
+ *
+ * Reporting the cold `loading` arm keeps the return type honest (no fabricated
+ * value); the data-bearing path returns the context value BY REFERENCE, so a
+ * memoized consumer stays stable.
  */
 function toSingleValueState(s: LoaderData): LoaderState<unknown> {
   return s !== null && isLoaderState(s) ? s : COLD_LOADING;

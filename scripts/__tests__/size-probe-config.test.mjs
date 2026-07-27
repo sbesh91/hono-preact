@@ -57,9 +57,11 @@ describe('size-probe-config manifests', () => {
     // A bundled dependency listed in EXTERNAL prices its own bytes at zero in
     // every feature row that drags it in. That is how @preact/signals hid the
     // whole cost of the always-on signals decision: it sat in `dependencies`
-    // while being excluded here, so `loaders` measured 8,169 B instead of
-    // 11,037 B gzip. Peers are safe to exclude because the consumer installs
-    // them itself; dependencies are not.
+    // while being excluded here, so the `loaders` row read ~8.2 kB instead of
+    // ~11.2 kB gzip. Peers are safe to exclude because the consumer installs
+    // them itself; dependencies are not. (Approximate on purpose: an exact
+    // byte count here goes stale the moment either side of the comparison
+    // changes, and a stale number in a comment reads as a current one.)
     const manifests = await Promise.all(
       ['iso', 'hono-preact', 'ui', 'server', 'vite'].map(async (pkg) => {
         const url = new URL(`../../packages/${pkg}/package.json`, import.meta.url);

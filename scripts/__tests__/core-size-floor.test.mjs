@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { bundleSize, entryFor } from '../measure-framework-size.mjs';
-import { CORE_MODULES, EXTERNAL } from '../size-probe-config.mjs';
+import {
+  CORE_MODULES,
+  FEATURE_MODULES,
+  EXTERNAL,
+} from '../size-probe-config.mjs';
 
 // The always-loaded floor: what EVERY route ships, whatever features it uses.
 // This is the property the signals migration has to keep honest. `@preact/signals`
@@ -12,9 +16,17 @@ import { CORE_MODULES, EXTERNAL } from '../size-probe-config.mjs';
 // cost is not a rounding error: it is the whole reactive runtime, on every page,
 // including pages that never read a signal.
 //
-// So the guard is a measurement, not a grep. It bundles the same CORE_MODULES
-// manifest the PR size comment uses, with @preact/signals COUNTED rather than
-// treated as an already-shipped peer, and holds the total under a budget.
+// So the guard is a measurement, not a grep. It bundles the same manifests the
+// PR size comment uses, with @preact/signals COUNTED rather than treated as an
+// already-shipped peer, and holds the total under a budget.
+//
+// TWO manifests, not one. `CORE_MODULES` is not the whole always-loaded floor:
+// size-probe-config.mjs documents `FEATURE_MODULES.runtime` as the set "every
+// route pays on top of core". The module-graph guard this replaced scanned all
+// ~90 source modules, so it would have caught a signal import landing in
+// `boot-client.ts`; a budget over CORE_MODULES alone cannot see that file at
+// all. Nothing in `runtime` imports signals today, and this is what keeps it
+// that way.
 const ROOT = resolve(join(import.meta.dirname, '..', '..'));
 const ISO_DIST = join(ROOT, 'packages/iso/dist');
 // esbuild resolves the synthetic entry's bare specifiers from here; the package
@@ -36,6 +48,10 @@ const EXTERNAL_COUNTING_SIGNALS = EXTERNAL.filter(
 // number and the reason in the commit message. If it is being raised because
 // signals reached core, the fix is the import, not the budget.
 const CORE_BUDGET_BYTES = 6_200;
+// core + `FEATURE_MODULES.runtime`, the real always-loaded floor. Measured at
+// 7,961 B; the headroom matches CORE_BUDGET's (a few hundred bytes for ordinary
+// growth, far under the ~3,300 B a signals import would add).
+const FLOOR_BUDGET_BYTES = 8_400;
 
 describe('always-loaded core size floor', () => {
   it('has a built dist to measure', () => {
@@ -55,6 +71,28 @@ describe('always-loaded core size floor', () => {
       EXTERNAL_COUNTING_SIGNALS
     );
     expect(core).toBeLessThanOrEqual(CORE_BUDGET_BYTES);
+  });
+
+  it('keeps the runtime bucket under budget too', async () => {
+    // `boot-client.js` and friends ship on every route alongside core, so a
+    // signal import there is the same failure as one in core. Budgeted
+    // together rather than separately: what a route actually pays is the sum,
+    // and splitting the budget would let one grow while the other shrank.
+    const floor = await bundleSize(
+      entryFor([...CORE_MODULES, ...FEATURE_MODULES.runtime], ISO_DIST),
+      RESOLVE_DIR,
+      EXTERNAL_COUNTING_SIGNALS
+    );
+    expect(floor).toBeLessThanOrEqual(FLOOR_BUDGET_BYTES);
+  });
+
+  it('would fail if @preact/signals reached the runtime bucket', async () => {
+    const floorWithSignals = await bundleSize(
+      `${entryFor([...CORE_MODULES, ...FEATURE_MODULES.runtime], ISO_DIST)}\nexport * as signals from '@preact/signals';`,
+      RESOLVE_DIR,
+      EXTERNAL_COUNTING_SIGNALS
+    );
+    expect(floorWithSignals).toBeGreaterThan(FLOOR_BUDGET_BYTES);
   });
 
   it('would fail if @preact/signals reached core', async () => {
