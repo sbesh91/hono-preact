@@ -70,7 +70,7 @@ export function makeLiveLoaderHarness<T>() {
   // Captured from inside the tree so `reload()` below can drive the SAME
   // `useReload()` a real consumer would call, exercising the real resubscribe
   // path (`requestReload` -> `runReload` -> `subscribeCollect` ->
-  // `resetCollectSignals`) rather than reaching into internals.
+  // `beginCollectResubscribe`) rather than reaching into internals.
   let capturedReload: (() => void) | null = null;
   function ReloadCapture() {
     capturedReload = useReload().reload;
@@ -122,7 +122,7 @@ export function makeLiveLoaderHarness<T>() {
    * Drive a reload through the SAME `useReload()` a real consumer under the
    * host would call (captured via `<ReloadCapture>`, mounted inside `<Host>`).
    * Runs the real resubscribe path: `requestReload` -> `runReload` ->
-   * `subscribeCollect` -> `resetCollectSignals` -> a fresh `fetch()` call
+   * `subscribeCollect` -> `beginCollectResubscribe` -> a fresh `fetch()` call
    * (so `push` after this lands on the NEW connection, not the old one).
    */
   async function reload(): Promise<void> {

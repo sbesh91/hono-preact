@@ -1,40 +1,99 @@
-import { signal, computed, batch } from '@preact/signals';
+import { signal, computed } from '@preact/signals';
 import type { ReadonlySignal, Signal } from '@preact/signals';
 import type { StreamState, StreamStatus } from '../loader-state.js';
 import { toStreamState } from '../loader-state.js';
 
 /**
- * Fold a retained collect-mode chunk log into a `StreamState<Acc>`,
- * INCREMENTALLY: `index`/`acc` live in this closure (not inside the `computed`
- * callback), so a recompute only reduces the chunks appended since the last
- * recompute, not the whole log again. Total work across the whole stream is
- * therefore O(n), not O(n^2). Each call gets its OWN `index`/`acc`, which is
- * what lets multiple `useData(initial, reduce)` consumers reading the SAME
- * `chunks` array fold independently (one retained log, N independent folds).
- * Called once per `useData()` invocation and memoized by the caller (a fresh
- * call would refold from an empty `index`, losing the "consume the whole
- * retained log on first read" property for a late mount, so callers must
- * create this exactly once and hold the result).
+ * One collect-mode subscription, as a single immutable record.
  *
- * `epoch` is a monotonic generation counter that `appendCollectChunk` bumps
- * every time it empties `chunks` (the first chunk after a resubscribe). Without it, this
- * closure's `index`/`acc` would stay stale across a reset (the old `index`
- * pointing past the new, shorter log, and `acc` still carrying the PRIOR
- * stream's total), silently dropping the new stream's early chunks and
- * corrupting the fold. Each recompute compares `epoch.value` against the last
- * epoch it observed (`seenEpoch`) and, on a mismatch, resets `index`/`acc`
- * BEFORE folding, so a resumed stream folds strictly from scratch. This is
- * checked as an explicit counter rather than inferred from `chunks.length <
- * index`: signal writes inside the truncating append's `batch` coalesce into
- * one recompute, so a reset immediately followed by an append can be observed
- * as a single change with a log whose length is no shorter than before,
- * which a length-based heuristic would miss.
+ * Everything a `useData(initial, reduce)` consumer observes lives here, so the
+ * whole state moves in ONE signal write and is atomic by construction. There is
+ * nothing to `batch`, and no way to publish a half-applied change: a reader
+ * either sees the previous run or the next one.
  *
- * Value-presence is likewise structural: `present` is `index > 0` (AFTER the
- * epoch-reset check), i.e. whether this epoch has folded any chunk yet. A
- * stream that errors before its first chunk therefore reports `present:
- * false` (no fabricated `initial` masquerading as real data), matching the
- * fold-mode path's pre-first-chunk contract in `loader-state.ts`.
+ * A GENERATION is the `chunks` array's identity. Appends push into the same
+ * array; a fresh subscription mints a NEW one. That is the whole mechanism, and
+ * it is why "truncate the log without starting a new generation" cannot be
+ * expressed: truncation IS a new array. The retained-fold reset that used to
+ * need a separate `epoch` counter (plus a paragraph explaining why a
+ * length-based heuristic could not replace it) is now `chunks !== seenChunks`.
+ */
+export type CollectRun = {
+  /**
+   * This run's retained chunks. Appended IN PLACE: copy-on-write per message
+   * made the append O(n) and the stream O(n^2) (20k chunks spent 234 ms purely
+   * copying). `foldStream` reads forward from its own cursor and never retains
+   * a snapshot, and no other reader exists, so a growing array is the accurate
+   * shape. Readers must not mutate it, and must bound their reads by `length`
+   * below rather than by `chunks.length`.
+   */
+  readonly chunks: unknown[];
+  /**
+   * How much of `chunks` this run has PUBLISHED. Not the same as
+   * `chunks.length`: the array is mutated before the record is swapped in, so
+   * bounding a fold by this is what guarantees a reader never reads past what a
+   * writer committed.
+   */
+  readonly length: number;
+  readonly status: StreamStatus;
+  readonly error: Error | null;
+  /**
+   * A resubscribe is in flight and its first chunk has not landed. While set,
+   * the PREVIOUS run's chunks are still being served, so a consumer keeps
+   * folding the last good stream during the reconnect, and keeps it if the
+   * reconnect fails. The first chunk clears this by minting a new generation.
+   */
+  readonly awaitingFirstChunk: boolean;
+};
+
+/**
+ * A live loader's collect-mode state. One signal, because the fields have to
+ * move together and a single immutable record is how that is guaranteed rather
+ * than remembered. Callers get the signal plus the mutators below, so the
+ * transition rules have exactly one implementation.
+ */
+export type CollectSignals = { readonly run: Signal<CollectRun> };
+
+/** The read side: the same run, without the ability to write it. */
+export type CollectView = { readonly run: ReadonlySignal<CollectRun> };
+
+/** A fresh subscription: no chunks, `connecting`, no error. */
+export function createCollectSignals(): CollectSignals {
+  return {
+    run: signal<CollectRun>({
+      chunks: [],
+      length: 0,
+      status: 'connecting',
+      error: null,
+      awaitingFirstChunk: false,
+    }),
+  };
+}
+
+/**
+ * Fold a run's retained chunks into a `StreamState<Acc>`, INCREMENTALLY:
+ * `index`/`acc` live in this closure rather than inside the `computed`, so a
+ * recompute reduces only the chunks appended since the last one. Total work
+ * across a stream is O(n), not O(n^2). Each call gets its own cursor, which is
+ * what lets several `useData(initial, reduce)` consumers fold the SAME retained
+ * chunks independently.
+ *
+ * Called once per `useData()` invocation and memoized by the caller: a fresh
+ * call would refold from an empty cursor, losing the "a late mount consumes the
+ * whole retained log" property that the retention exists for.
+ *
+ * A generation change is detected by the chunks array's IDENTITY. A new
+ * subscription mints a new array, so the cursor and accumulator reset before
+ * folding and a resumed stream folds strictly from scratch instead of
+ * continuing onto the prior stream's total. Identity cannot drift the way the
+ * counter it replaced could, and unlike a `length < index` heuristic it is not
+ * fooled by a truncation that lands in the same update as an append.
+ *
+ * Value-presence is structural: `present` is `index > 0` (AFTER the generation
+ * check), i.e. whether THIS generation has folded anything. A stream that
+ * errors before its first chunk reports `present: false` rather than a
+ * fabricated `initial` masquerading as real data, matching the fold-mode
+ * contract in `loader-state.ts`.
  */
 export function foldStream<Acc>(
   s: CollectView,
@@ -43,183 +102,82 @@ export function foldStream<Acc>(
 ): ReadonlySignal<StreamState<Acc>> {
   let index = 0;
   let acc = initial;
-  let seenEpoch = s.epoch.value;
+  let seenChunks: readonly unknown[] | null = null;
   return computed(() => {
-    if (s.epoch.value !== seenEpoch) {
+    const run = s.run.value;
+    if (run.chunks !== seenChunks) {
       index = 0;
       acc = initial;
-      seenEpoch = s.epoch.value;
+      seenChunks = run.chunks;
     }
-    // `appended` is BOTH the subscription and the bound: it is the length that
-    // was published atomically with the pushes that produced it, so folding to
-    // it can never read past what a writer has committed, even though `chunks` is
-    // a mutable array this fold does not own.
-    const len = s.appended.value;
-    while (index < len) {
-      acc = reduce(acc, s.chunks[index]);
+    while (index < run.length) {
+      acc = reduce(acc, run.chunks[index]);
       index += 1;
     }
     return toStreamState(
-      s.status.value,
+      run.status,
       { present: index > 0, value: acc },
-      s.error.value
+      run.error
     );
   });
 }
 
 /**
- * A live loader's collect-mode state: the retained chunk log plus
- * status/error, as WRITABLE signals. Kept here (not in `use-loader-runner.tsx`
- * / `loader.tsx`) because the four fields have to move ATOMICALLY: every
- * mutator below is a `batch`, and a caller writing the raw signals itself
- * would have to re-derive that pairing at each call site. Callers get
- * pre-built signals plus the mutators, so the atomicity contract has exactly
- * one implementation.
+ * Append one chunk and report the stream `open`.
+ *
+ * The first chunk after a resubscribe starts a NEW generation: a new array, so
+ * every retained fold resets its cursor. That is deferred to here, rather than
+ * done when the resubscribe began, because truncating up front destroyed the
+ * data the reconnect was replacing before finding out whether it could replace
+ * it -- a failed reconnect took the user's fold with it.
  */
-export type CollectSignals = {
-  /**
-   * The retained chunk log: a STABLE array, appended to IN PLACE.
-   *
-   * It is deliberately not a signal. Copy-on-write (`[...chunks, chunk]` per
-   * message) made the append O(n) and the stream O(n^2) overall: 20k chunks
-   * spent 234 ms purely copying, and the discarded intermediate arrays are
-   * their own GC load. Nothing needed those copies. `foldStream` reads the log
-   * forward from its own cursor and never retains a snapshot of it, and no
-   * other reader exists, so a growing array is the accurate shape.
-   *
-   * Readers MUST NOT mutate it, and MUST bound their reads by `appended`
-   * rather than by `chunks.length` -- see `appended`. `CollectSignals` is
-   * internal (nothing reaches it through `hono-preact/internal`), so that
-   * contract is enforceable by review.
-   */
-  readonly chunks: unknown[];
-  /**
-   * `chunks.length`, as a signal: the ONLY notification channel for the log, and
-   * the authoritative length a reader should fold to.
-   *
-   * Both roles belong to one value on purpose. A mutable array cannot notify,
-   * so a separate counter has to; making that counter the fold bound too means
-   * a reader can never observe a length that was not published atomically with
-   * the pushes behind it, so the two cannot drift.
-   */
-  appended: Signal<number>;
-  status: Signal<StreamStatus>;
-  error: Signal<Error | null>;
-  /**
-   * Monotonic generation counter, bumped by the truncating append on the first
-   * chunk of a fresh subscription. Lets a `foldStream` fold
-   * (which retains its own `index`/`acc` closure state) detect a reset and
-   * refold from scratch instead of continuing to fold onto a stale
-   * accumulator. See `foldStream`'s doc comment for why this can't be
-   * inferred from the log's length alone.
-   */
-  epoch: Signal<number>;
-  /**
-   * Set while a resubscribe is in flight, cleared by the first chunk that
-   * arrives on the new connection (see `beginCollectResubscribe`). A plain
-   * field, not a signal: nothing renders from it, it only decides what the
-   * next append does.
-   */
-  pendingTruncate: boolean;
-};
+export function appendCollectChunk(s: CollectSignals, chunk: unknown): void {
+  const run = s.run.peek();
+  if (run.awaitingFirstChunk) {
+    s.run.value = {
+      chunks: [chunk],
+      length: 1,
+      status: 'open',
+      error: null,
+      awaitingFirstChunk: false,
+    };
+    return;
+  }
+  // In place, then publish: the chunk is present before any reader can learn
+  // the length grew.
+  run.chunks.push(chunk);
+  s.run.value = { ...run, length: run.chunks.length, status: 'open' };
+}
 
 /**
- * The read side of `CollectSignals`, as `foldStream` and the loader stream
- * context consume it: everything readonly, including the log. Writers hold the
- * `CollectSignals` shape; readers only ever get this.
+ * Begin a (re)subscription: clear any prior error and mark that the next chunk
+ * starts a new generation. The current run's chunks stay served until it does.
  */
-export type CollectView = {
-  readonly chunks: readonly unknown[];
-  readonly appended: ReadonlySignal<number>;
-  readonly status: ReadonlySignal<StreamStatus>;
-  readonly error: ReadonlySignal<Error | null>;
-  readonly epoch: ReadonlySignal<number>;
-};
-
-/** Fresh collect-mode signals: an empty retained log, `connecting`, no error,
- * epoch 0. */
-export function createCollectSignals(): CollectSignals {
-  return {
-    chunks: [],
-    appended: signal(0),
-    pendingTruncate: false,
-    status: signal<StreamStatus>('connecting'),
-    error: signal<Error | null>(null),
-    epoch: signal(0),
+export function beginCollectResubscribe(s: CollectSignals): void {
+  const run = s.run.peek();
+  s.run.value = {
+    ...run,
+    error: null,
+    awaitingFirstChunk: true,
+    // Report `connecting` ONLY when there is nothing to keep showing. That
+    // status carries no data by contract, so over retained chunks it would
+    // blank the fold for the length of the reconnect and then restore it if the
+    // reconnect failed, which is worse than either outcome. Presence decides,
+    // the same structural rule fold-mode follows one level up (`loader-reload.ts`
+    // moves the phase to `revalidating`, which retains the value, when one is
+    // present and `loading` only when none is).
+    status: run.length === 0 ? 'connecting' : run.status,
   };
 }
 
-/**
- * Append one chunk to the retained log and flip status to `open`, ATOMICALLY
- * (`batch`), so a reader never observes the log grown but status still
- * `connecting` (or vice versa).
- *
- * The push happens BEFORE `appended` is written, so the chunk is in place by
- * the time any reader can learn the length grew.
- */
-export function appendCollectChunk(s: CollectSignals, chunk: unknown): void {
-  if (s.pendingTruncate) {
-    // First chunk of a new subscription: NOW discard the prior connection's
-    // chunks, not when the resubscribe started. Truncating up front meant a
-    // reconnect that never delivered had already destroyed the data it was
-    // replacing, so a failed reconnect took the user's fold down with it.
-    // Deferring it here is what makes a collect stream stale-while-revalidate,
-    // matching what fold-mode's phase already did.
-    s.pendingTruncate = false;
-    s.chunks.length = 0;
-    s.chunks.push(chunk);
-    batch(() => {
-      s.appended.value = 1;
-      // Bump the generation so every retained fold refolds from scratch rather
-      // than continuing onto the prior stream's accumulator.
-      s.epoch.value = s.epoch.value + 1;
-      s.status.value = 'open';
-    });
-    return;
-  }
-  s.chunks.push(chunk);
-  batch(() => {
-    s.appended.value = s.chunks.length;
-    s.status.value = 'open';
-  });
-}
-
-/**
- * Begin a (re)subscription: report `connecting`, clear any prior error, and ARM
- * the truncate rather than performing it.
- *
- * The retained chunks stay readable until the new connection delivers its first
- * chunk, so a consumer keeps folding the last good stream while the reconnect
- * is in flight, and keeps it if the reconnect fails outright. `appendCollectChunk`
- * performs the truncate (and bumps the epoch) when that first chunk lands.
- */
-export function beginCollectResubscribe(s: CollectSignals): void {
-  s.pendingTruncate = true;
-  batch(() => {
-    s.error.value = null;
-    // Report `connecting` ONLY when there is nothing to keep showing. With
-    // chunks retained, `connecting` would blank the data arm (it is the
-    // pre-first-chunk status, so `toStreamState` carries no value on it) and
-    // the fold would vanish for the length of the reconnect, then reappear if
-    // the reconnect failed -- worse than either outcome.
-    //
-    // Leaving the status alone is the same structural rule fold-mode already
-    // follows one level up: `loader-reload.ts` moves the phase to
-    // `revalidating` (which RETAINS the value) when one is present and
-    // `loading` only when none is. Presence decides, in both modes.
-    if (s.appended.value === 0) s.status.value = 'connecting';
-  });
-}
-
-/** Record a collect-mode stream error, atomically. */
+/** Record a stream error, keeping whatever chunks this run has retained. */
 export function setCollectError(s: CollectSignals, error: Error): void {
-  batch(() => {
-    s.error.value = error;
-    s.status.value = 'error';
-  });
+  const run = s.run.peek();
+  s.run.value = { ...run, error, status: 'error' };
 }
 
-/** Mark a collect-mode stream cleanly closed (the generator/response ended). */
+/** Mark the stream cleanly closed (the generator/response ended). */
 export function closeCollectSignals(s: CollectSignals): void {
-  s.status.value = 'closed';
+  const run = s.run.peek();
+  s.run.value = { ...run, status: 'closed' };
 }

@@ -325,7 +325,7 @@ export function useLoaderRunner<T>(
   // here: `beginCollectResubscribe` reports `connecting` and arms the truncate,
   // which the first chunk of the new connection performs. A resubscribing
   // consumer still never folds the prior connection's chunks into the new
-  // stream (the truncate + epoch bump happen before that first chunk is
+  // stream (the delivering chunk mints a new generation before it is
   // appended), but it keeps showing them while the reconnect is in flight, and
   // keeps them if it fails. Mirrors `subscribeFold`, for the non-folding form.
   const subscribeCollect = useCallback(

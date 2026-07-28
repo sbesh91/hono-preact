@@ -24,31 +24,35 @@ import {
 const sum = (acc: number, chunk: unknown) => acc + (chunk as number);
 
 describe('the retained log is appended in place', () => {
-  it('keeps ONE array across every append (no copy-on-write)', () => {
+  it('keeps ONE array across every append (no copy-on-write, one generation)', () => {
     const s = createCollectSignals();
-    const identity = s.chunks;
+    const identity = s.run.value.chunks;
     for (let i = 0; i < 100; i++) appendCollectChunk(s, i);
-    // A regression to `chunks.value = [...chunks.value, chunk]` replaces the
-    // array on every message, which is the O(n^2) this pins shut.
-    expect(s.chunks).toBe(identity);
-    expect(s.chunks.length).toBe(100);
+    // A regression to copy-on-write replaces the array on every message, which
+    // is both the O(n^2) this pins shut AND, now that array identity IS the
+    // generation, a spurious generation per chunk.
+    expect(s.run.value.chunks).toBe(identity);
+    expect(s.run.value.chunks.length).toBe(100);
   });
 
-  it('truncates in place on resubscribe, so a held reference survives', () => {
+  it('mints a NEW array when a resubscribe delivers (a new generation)', () => {
     const s = createCollectSignals();
-    const identity = s.chunks;
+    const first = s.run.value.chunks;
     appendCollectChunk(s, 1);
     beginCollectResubscribe(s);
-    appendCollectChunk(s, 2); // the delivering chunk performs the truncate
-    expect(s.chunks).toBe(identity);
-    expect(s.chunks).toEqual([2]);
+    expect(s.run.value.chunks).toBe(first); // armed, not yet replaced
+
+    appendCollectChunk(s, 2); // the delivering chunk starts the generation
+    expect(s.run.value.chunks).not.toBe(first);
+    expect(s.run.value.chunks).toEqual([2]);
   });
 
-  it('keeps `appended` equal to the log length through every mutator', () => {
-    // `appended` is both the notification and the fold bound, so a drift
-    // between it and the log would either drop chunks or read past them.
+  it('keeps the published length equal to the array length through every mutator', () => {
+    // The run's published `length` is the fold bound, so a drift between it
+    // and the array would either drop chunks or read past them.
     const s = createCollectSignals();
-    const check = () => expect(s.appended.value).toBe(s.chunks.length);
+    const check = () =>
+      expect(s.run.value.length).toBe(s.run.value.chunks.length);
     check();
     appendCollectChunk(s, 'a');
     check();
@@ -58,7 +62,7 @@ describe('the retained log is appended in place', () => {
     check(); // still 2: an armed resubscribe has not dropped anything yet
     appendCollectChunk(s, 'c');
     check(); // now 1: the delivering chunk truncated
-    expect(s.chunks).toEqual(['c']);
+    expect(s.run.value.chunks).toEqual(['c']);
     setCollectError(s, new Error('boom'));
     check();
     closeCollectSignals(s);
@@ -89,7 +93,7 @@ describe('the guarantee the log pays for', () => {
     expect(total.value.data).toBe(30);
     expect(count.value.data).toBe(3);
     // One log, two cursors: the log is not consumed by either fold.
-    expect(s.chunks.length).toBe(3);
+    expect(s.run.value.chunks.length).toBe(3);
   });
 
   it('notifies a subscribed fold on append (the mutable log still pushes)', () => {
@@ -124,12 +128,12 @@ describe('the guarantee the log pays for', () => {
     expect(folded.value.data).toBe(100);
     // NOT 'connecting': that status carries no data, so it would blank the
     // retained fold for the duration of the reconnect.
-    expect(s.status.value).toBe('open');
+    expect(s.run.value.status).toBe('open');
 
     appendCollectChunk(s, 5);
 
-    // 5, not 105: the delivering chunk truncates and bumps the epoch, so the
-    // retained cursor and accumulator both restart.
+    // 5, not 105: the delivering chunk mints a new generation, so the retained
+    // cursor and accumulator both restart.
     expect(folded.value.data).toBe(5);
   });
 

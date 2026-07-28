@@ -6,8 +6,6 @@ import { useComputed } from '@preact/signals';
 // mirrors the existing streaming loader tests (loader-streaming.test.tsx);
 // reuse their chunk-driving helper for the underlying stream source.
 import { makeLiveLoaderHarness } from './helpers/live-harness.js'; // create alongside, factoring the existing streaming test's driver
-import { LoaderStreamContext } from '../contexts.js';
-import { createCollectSignals, setCollectError } from '../loader-signal.js';
 
 afterEach(cleanup);
 
@@ -126,10 +124,11 @@ describe('live useData(initial, reduce)', () => {
   });
 
   // Regression for the review finding: `foldStream`'s `index`/`acc` closure
-  // state never reset when the retained log reset on reload, so a resumed
+  // state never reset when the retained chunks reset on reload, so a resumed
   // stream's early chunks were silently skipped and folded onto the STALE
-  // pre-reload total. Fixed via the `epoch` counter (`resetCollectSignals`
-  // bumps it; `foldStream` detects the bump and refolds from scratch).
+  // pre-reload total. A generation is now the chunks array's IDENTITY: the
+  // first chunk after a resubscribe mints a new array, and `foldStream`
+  // refolds from scratch when it sees one.
   it('a reload resets the fold: the new stream folds from scratch, dropping no chunks', async () => {
     const h = makeLiveLoaderHarness<number>();
     function View() {
@@ -168,33 +167,19 @@ describe('live useData(initial, reduce)', () => {
   // Regression for the review finding: `foldStream` hardcoded `present: true`
   // regardless of whether any chunk had actually folded, so a stream that
   // errors before its first chunk (a cold connect failure) reported
-  // `{ status: 'error', data: initial }` -- a FABRICATED value the caller
-  // never produced. Fixed by gating presence on "has this epoch folded any
-  // chunk" (`index > 0`).
+  // `{ status: 'error', data: initial }` -- a FABRICATED value the caller never
+  // produced. Presence is now gated on "has this generation folded any chunk"
+  // (`index > 0`).
   //
-  // LIMITATION (reported per the task, not papered over): this cannot be
-  // driven end-to-end through `<h.Host>` with a REAL cold connect failure.
-  // Collect-mode's `phase` (the state `loader.tsx` uses to decide `coldError`
-  // routing) never carries a chunk value -- chunks fold only into the
-  // `collect` signals `useData()` reads, never into `phase` -- so a cold
-  // connect error ALWAYS lands `phase` on the tagless `error` variant, and
-  // `LoaderHost` ALWAYS treats that exactly like a single-value loader's cold
-  // error: it renders `errorFallback` INSTEAD OF `children` (unmounting the
-  // `useData()` consumer before it can render anything) or, with none,
-  // rethrows to an outer boundary. Either way no live `useData()` consumer
-  // under a real `<Loader collect>` / `.Boundary` host ever gets a chance to
-  // render mid-cold-error (unlike `.View`'s accumulate mode, whose cold
-  // errors deliberately stay in-view; collect-mode's boundary-style routing
-  // for a COLD failure appears to be intentional, matching `.Boundary`'s
-  // name and its non-`Live` counterpart, and is a separate concern from this
-  // task). So this test drives `LoaderStreamContext`'s REAL production
-  // primitives directly -- `createCollectSignals` / `setCollectError`, the
-  // exact functions `use-loader-runner.tsx` calls -- which is where
-  // `foldStream`'s presence bug actually lives and is fully observable,
-  // without needing a live `<Loader>` host or a parallel fake mechanism.
+  // This drives the REAL host end to end. It could not, once: collect-mode used
+  // to route a cold connect failure to `errorFallback`, which unmounted the
+  // `useData()` consumer before it could render anything, so the test reached
+  // for `createCollectSignals` / `setCollectError` directly instead. Both
+  // reasons are gone -- collect-mode surfaces stream failures in-view like
+  // fold-mode does, and the harness can fail a connect on demand -- so the
+  // detour is no longer worth its explanation.
   it('a cold error (before any chunk) reports NO data, not the initial value', async () => {
     const h = makeLiveLoaderHarness<number>();
-    const signals = createCollectSignals();
     function View() {
       const total = h.loader.useData(0, (acc, n) => acc + n);
       const hasData = 'data' in total.value;
@@ -204,15 +189,18 @@ describe('live useData(initial, reduce)', () => {
         </p>
       );
     }
+
+    h.failNextConnect(new Error('connect refused'));
     render(
-      <LoaderStreamContext.Provider value={signals}>
+      <h.Host>
         <View />
-      </LoaderStreamContext.Provider>
+      </h.Host>
     );
-    expect(screen.getByTestId('v').textContent).toBe('connecting:none');
     await act(async () => {
-      setCollectError(signals, new Error('connect refused'));
+      await new Promise((r) => setTimeout(r, 0));
     });
+
+    // `error:none`, never `error:0`: the caller's `initial` is not data.
     expect(screen.getByTestId('v').textContent).toBe('error:none');
   });
 });
