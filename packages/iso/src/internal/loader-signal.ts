@@ -10,7 +10,7 @@ import { toStreamState } from '../loader-state.js';
  * recompute, not the whole log again. Total work across the whole stream is
  * therefore O(n), not O(n^2). Each call gets its OWN `index`/`acc`, which is
  * what lets multiple `useData(initial, reduce)` consumers reading the SAME
- * `chunks` signal fold independently (one retained log, N independent folds).
+ * `chunks` array fold independently (one retained log, N independent folds).
  * Called once per `useData()` invocation and memoized by the caller (a fresh
  * call would refold from an empty `index`, losing the "consume the whole
  * retained log on first read" property for a late mount, so callers must
@@ -24,7 +24,7 @@ import { toStreamState } from '../loader-state.js';
  * corrupting the fold. Each recompute compares `epoch.value` against the last
  * epoch it observed (`seenEpoch`) and, on a mismatch, resets `index`/`acc`
  * BEFORE folding, so a resumed stream folds strictly from scratch. This is
- * checked as an explicit counter rather than inferred from `log.length <
+ * checked as an explicit counter rather than inferred from `chunks.length <
  * index`: signal writes inside `resetCollectSignals`'s `batch` coalesce into
  * one recompute, so a reset immediately followed by an append can be observed
  * as a single change with a log whose length is no shorter than before,
@@ -52,11 +52,11 @@ export function foldStream<Acc>(
     }
     // `appended` is BOTH the subscription and the bound: it is the length that
     // was published atomically with the pushes that produced it, so folding to
-    // it can never read past what a writer has committed, even though `log` is
+    // it can never read past what a writer has committed, even though `chunks` is
     // a mutable array this fold does not own.
     const len = s.appended.value;
     while (index < len) {
-      acc = reduce(acc, s.log[index]);
+      acc = reduce(acc, s.chunks[index]);
       index += 1;
     }
     return toStreamState(
@@ -80,7 +80,7 @@ export type CollectSignals = {
   /**
    * The retained chunk log: a STABLE array, appended to IN PLACE.
    *
-   * It is deliberately not a signal. Copy-on-write (`[...log, chunk]` per
+   * It is deliberately not a signal. Copy-on-write (`[...chunks, chunk]` per
    * message) made the append O(n) and the stream O(n^2) overall: 20k chunks
    * spent 234 ms purely copying, and the discarded intermediate arrays are
    * their own GC load. Nothing needed those copies. `foldStream` reads the log
@@ -88,13 +88,13 @@ export type CollectSignals = {
    * other reader exists, so a growing array is the accurate shape.
    *
    * Readers MUST NOT mutate it, and MUST bound their reads by `appended`
-   * rather than by `log.length` -- see `appended`. `CollectSignals` is
+   * rather than by `chunks.length` -- see `appended`. `CollectSignals` is
    * internal (nothing reaches it through `hono-preact/internal`), so that
    * contract is enforceable by review.
    */
-  readonly log: unknown[];
+  readonly chunks: unknown[];
   /**
-   * `log.length`, as a signal: the ONLY notification channel for the log, and
+   * `chunks.length`, as a signal: the ONLY notification channel for the log, and
    * the authoritative length a reader should fold to.
    *
    * Both roles belong to one value on purpose. A mutable array cannot notify,
@@ -122,7 +122,7 @@ export type CollectSignals = {
  * `CollectSignals` shape; readers only ever get this.
  */
 export type CollectView = {
-  readonly log: readonly unknown[];
+  readonly chunks: readonly unknown[];
   readonly appended: ReadonlySignal<number>;
   readonly status: ReadonlySignal<StreamStatus>;
   readonly error: ReadonlySignal<Error | null>;
@@ -133,7 +133,7 @@ export type CollectView = {
  * epoch 0. */
 export function createCollectSignals(): CollectSignals {
   return {
-    log: [],
+    chunks: [],
     appended: signal(0),
     status: signal<StreamStatus>('connecting'),
     error: signal<Error | null>(null),
@@ -150,9 +150,9 @@ export function createCollectSignals(): CollectSignals {
  * the time any reader can learn the length grew.
  */
 export function appendCollectChunk(s: CollectSignals, chunk: unknown): void {
-  s.log.push(chunk);
+  s.chunks.push(chunk);
   batch(() => {
-    s.appended.value = s.log.length;
+    s.appended.value = s.chunks.length;
     s.status.value = 'open';
   });
 }
@@ -165,7 +165,7 @@ export function resetCollectSignals(s: CollectSignals): void {
   // Truncate in place: the array identity is the one thing every reader holds,
   // so it has to survive a reset. Emptied before `appended` is published, for
   // the same ordering reason the append pushes first.
-  s.log.length = 0;
+  s.chunks.length = 0;
   batch(() => {
     s.appended.value = 0;
     s.status.value = 'connecting';

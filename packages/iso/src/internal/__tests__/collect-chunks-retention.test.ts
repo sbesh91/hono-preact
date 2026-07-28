@@ -9,7 +9,7 @@
 // copy-on-writing the array". A timing assertion for that is flaky and says
 // nothing about WHY it is fast; the array's identity being stable across every
 // append and reset is the actual invariant, and it is deterministic. A
-// regression to `[...log, chunk]` fails the identity tests immediately.
+// regression to `[...chunks, chunk]` fails the identity tests immediately.
 import { describe, it, expect } from 'vitest';
 import { effect } from '@preact/signals';
 import {
@@ -26,28 +26,28 @@ const sum = (acc: number, chunk: unknown) => acc + (chunk as number);
 describe('the retained log is appended in place', () => {
   it('keeps ONE array across every append (no copy-on-write)', () => {
     const s = createCollectSignals();
-    const identity = s.log;
+    const identity = s.chunks;
     for (let i = 0; i < 100; i++) appendCollectChunk(s, i);
     // A regression to `chunks.value = [...chunks.value, chunk]` replaces the
     // array on every message, which is the O(n^2) this pins shut.
-    expect(s.log).toBe(identity);
-    expect(s.log.length).toBe(100);
+    expect(s.chunks).toBe(identity);
+    expect(s.chunks.length).toBe(100);
   });
 
   it('truncates in place on reset, so a held reference survives', () => {
     const s = createCollectSignals();
-    const identity = s.log;
+    const identity = s.chunks;
     appendCollectChunk(s, 1);
     resetCollectSignals(s);
-    expect(s.log).toBe(identity);
-    expect(s.log.length).toBe(0);
+    expect(s.chunks).toBe(identity);
+    expect(s.chunks.length).toBe(0);
   });
 
   it('keeps `appended` equal to the log length through every mutator', () => {
     // `appended` is both the notification and the fold bound, so a drift
     // between it and the log would either drop chunks or read past them.
     const s = createCollectSignals();
-    const check = () => expect(s.appended.value).toBe(s.log.length);
+    const check = () => expect(s.appended.value).toBe(s.chunks.length);
     check();
     appendCollectChunk(s, 'a');
     check();
@@ -87,7 +87,7 @@ describe('the guarantee the log pays for', () => {
     expect(total.value.data).toBe(30);
     expect(count.value.data).toBe(3);
     // One log, two cursors: the log is not consumed by either fold.
-    expect(s.log.length).toBe(3);
+    expect(s.chunks.length).toBe(3);
   });
 
   it('notifies a subscribed fold on append (the mutable log still pushes)', () => {
