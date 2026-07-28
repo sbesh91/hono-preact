@@ -7,7 +7,11 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { RouteHook } from 'preact-iso';
 import { defineLoader } from '../../define-loader.js';
 import { createLoaderSession } from '../loader-session.js';
-import { buildLoaderReader, type LoaderPhaseOps } from '../loader-readers.js';
+import {
+  buildLoaderReader,
+  selectReaderMode,
+  type LoaderPhaseOps,
+} from '../loader-readers.js';
 
 const LOC = {
   path: '/',
@@ -227,5 +231,115 @@ describe('buildLoaderReader: mode dispatch', () => {
 
     expect(session.bakedDeny?.message).toBe('denied');
     expect(session.sync).toEqual({ present: false });
+  });
+
+  // The one precedence pair the dispatch tests never covered: an SSR preload and
+  // a browser cache entry both available on a first render. The preload has to
+  // win, or a client navigation back to a page whose cache still holds an older
+  // value would render that older value over the freshly server-rendered one.
+  it('gives an SSR preload precedence over a browser cache hit', () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    plantEnvelope('L8', { 'data-loader': JSON.stringify({ n: 99 }) });
+
+    const ref = defineLoader<{ n: number }>(async () => ({ n: 0 }), {
+      __moduleKey: 'm',
+    });
+    ref.cache.set({ n: 1 }, 'k8'); // a stale cache entry for the same key
+    const session = createLoaderSession<{ n: number }>();
+
+    const reader = buildLoaderReader({
+      session,
+      ops: spyOps<{ n: number }>(),
+      loaderRef: ref,
+      location: LOC,
+      locKey: 'k8',
+      id: 'L8',
+      mode: { kind: 'single' },
+    });
+
+    expect(reader.read()).toEqual({ n: 99 });
+    expect(session.sync).toEqual({ present: true, value: { n: 99 } });
+    // Preload-specific bookkeeping the cache reader does not do: the attribute
+    // is marked consumed, and the stale cache entry is overwritten.
+    expect(session.preloadConsumed).toBe(true);
+    expect(ref.cache.get('k8')).toEqual({ n: 99 });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// `selectReaderMode` is pure, so the precedence rule can be read off as a table
+// instead of inferred from which side effects a built reader happened to leave
+// behind. These cover the ordering itself; the dispatch tests above cover what
+// each mode then DOES.
+describe('selectReaderMode: the precedence table', () => {
+  const ref = () =>
+    defineLoader<{ n: number }>(async () => ({ n: 0 }), { __moduleKey: 'm' });
+  // A distinct locKey per case: loaders share a cache, so a key reused across
+  // cases leaks a previous case's entry into this one.
+  const pick = (
+    id: string,
+    loaderRef: ReturnType<typeof ref>,
+    locKey: string,
+    mode: Parameters<typeof selectReaderMode>[0]['mode'] = { kind: 'single' }
+  ) =>
+    selectReaderMode<{ n: number }>({
+      session: createLoaderSession<{ n: number }>(),
+      loaderRef,
+      locKey,
+      id,
+      mode,
+    }).kind;
+
+  it('deny outranks everything, including a streaming mode', () => {
+    plantEnvelope('P1', {
+      'data-loader': JSON.stringify({ n: 1 }),
+      'data-loader-deny': JSON.stringify({ message: 'no' }),
+    });
+    const r = ref();
+    r.cache.set({ n: 2 }, 'p1');
+    expect(pick('P1', r, 'p1', { kind: 'collect' })).toBe('bakedDeny');
+  });
+
+  it('streaming outranks a preload and a cache hit', () => {
+    plantEnvelope('P2', { 'data-loader': JSON.stringify({ n: 1 }) });
+    const r = ref();
+    r.cache.set({ n: 2 }, 'p2');
+    expect(pick('P2', r, 'p2', { kind: 'collect' })).toBe('streaming');
+  });
+
+  it('preload outranks a cache hit', () => {
+    plantEnvelope('P3', { 'data-loader': JSON.stringify({ n: 1 }) });
+    const r = ref();
+    r.cache.set({ n: 2 }, 'p3');
+    expect(pick('P3', r, 'p3')).toBe('preload');
+  });
+
+  it('cache outranks a cold fetch', () => {
+    const r = ref();
+    r.cache.set({ n: 2 }, 'p4');
+    expect(pick('P4', r, 'p4')).toBe('cache');
+  });
+
+  it('falls through to a cold fetch with nothing available', () => {
+    expect(pick('P5', ref(), 'p5')).toBe('cold');
+  });
+
+  it('ignores the SSR envelope after the first render', () => {
+    // `session.reader !== null` means a client navigation: the same <section>
+    // is still mounted carrying a stale attribute, and adopting it would skip
+    // the fetch.
+    plantEnvelope('P6', { 'data-loader': JSON.stringify({ n: 1 }) });
+    const session = createLoaderSession<{ n: number }>();
+    session.reader = { read: () => ({ n: 0 }) };
+    expect(
+      selectReaderMode<{ n: number }>({
+        session,
+        loaderRef: ref(),
+        locKey: 'p6',
+        id: 'P6',
+        mode: { kind: 'single' },
+      }).kind
+    ).toBe('cold');
   });
 });
