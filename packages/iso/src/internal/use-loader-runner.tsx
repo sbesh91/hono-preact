@@ -60,10 +60,11 @@ export type RunnerView<T> =
  * `collect` is streaming yet deliberately takes the SINGLE-VALUE projection,
  * which is not an oversight. A collect host's chunks never enter `phase` (they
  * append to the collect signals that `useData(initial, reduce)` reads off
- * `LoaderStreamContext`), so `phase` only ever holds `loading` or a COLD error
- * there, and a cold error must route to the boundary exactly as a single-value
- * loader's does. Its in-view streaming lifecycle comes from the collect signals,
- * not from here.
+ * `LoaderStreamContext`), and neither do its errors (`setError` routes those to
+ * the collect signals too, so a stream failure is always data on the consumer's
+ * `status`). `phase` therefore only ever holds `loading` here, and this arm is
+ * really "render the children and let the collect signals drive them". The whole
+ * in-view streaming lifecycle comes from those signals, not from here.
  */
 function projectRunnerView<T>(
   mode: LoaderMode,
@@ -220,31 +221,27 @@ export function useLoaderRunner<T>(
   // cold `error` (no value, routes to the boundary). No `?? session.sync.value`
   // value-presence test.
   //
-  // Collect-mode presence is NOT in `phase`. Chunks append to the collect
-  // signals `useData()` reads and never settle into a phase value, so the
-  // structural test below reports "no value" no matter how long the stream ran,
-  // and every collect failure routed here would land on the cold `error` tag.
-  // For a failure that rejects BEFORE any chunk that is right: nothing has been
-  // shown, so `loader.tsx` routes it like a single-value cold error
-  // (`errorFallback` / an outer boundary).
+  // A STREAMING failure is data, not an exception: it belongs on the consumer's
+  // `status`, never on an error boundary. Fold-mode has always worked that way,
+  // and it is what `live-loaders.mdx` promises ("errorFallback does not catch a
+  // stream connect failure"). Collect-mode routes here too, so it does the same:
+  // every collect failure goes in-view via the collect signals, whether it
+  // rejected before the first chunk or after ten minutes of healthy streaming.
   //
-  // For a failure AFTER chunks have arrived it is wrong, and destructively so.
-  // A reconnect that fails ten minutes into a healthy stream arrives here (the
-  // resubscribe promise rejects in `loader-reload.ts`, which is a different
-  // path from a mid-stream error -- that one hits `subscribeCollect`'s own
-  // `onError` and never reaches this function). The retained chunks are still
-  // in memory and still on screen; unwinding to the boundary throws away a fold
-  // the user is looking at over a failure that changed none of the data. So a
-  // WARM collect failure goes in-view via the collect signals instead, exactly
-  // where a mid-stream error goes, and the fold survives.
+  // Both cases used to land on the cold `error` tag, because collect-mode
+  // presence is NOT in `phase` (chunks append to the collect signals that
+  // `useData()` reads and never settle into a phase value), so the structural
+  // test below saw "no value" however long the stream had run. That unwound the
+  // subtree to the boundary: destructive for a warm failure, and for a cold one
+  // it made `StreamState`'s own error arm unreachable in this mode.
   //
-  // Presence is read from the retained chunks for the same reason the phase
-  // test below is structural: `appended` is where a collect stream records that
-  // it has delivered something.
+  // A mid-stream error never reaches this function at all -- `subscribeCollect`'s
+  // own `onError` calls `setCollectError` directly -- so all three collect
+  // failure paths now converge on the same in-view surface.
   const setError = (err: unknown) => {
     const error = toError(err);
     const collect = collectRef.current;
-    if (mode.kind === 'collect' && collect && collect.appended.value > 0) {
+    if (mode.kind === 'collect' && collect) {
       setCollectError(collect, error);
       return;
     }

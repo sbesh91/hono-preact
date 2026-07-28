@@ -59,18 +59,17 @@ describe('collect-mode reconnect failure', () => {
     expect(screen.queryByTestId('total')).not.toBeNull();
   });
 
-  it('still routes a COLD connect failure to the fallback', async () => {
-    // The other half of the contract: with nothing ever delivered there is
-    // nothing to preserve, so the fallback is correct and must not regress into
-    // an empty in-view render.
+  it('surfaces a COLD connect failure IN-VIEW, not to the fallback', async () => {
+    // The other half of the contract. A streaming loader's consumer already has
+    // an error arm (`StreamState`'s `status === 'error'` with no data), which is
+    // where the accumulating `.View` form puts a cold connect failure and what
+    // `live-loaders.mdx` documents: "errorFallback does not catch a stream
+    // connect failure." Collect-mode used to route it to the boundary instead,
+    // which unmounted the subtree and made that error arm unreachable.
     const h = makeLiveLoaderHarness<number>();
     function Total() {
       const s = h.loader.useData(0, (acc, n) => acc + n);
-      return (
-        <p data-testid="total">
-          {s.value.status === 'connecting' ? '-' : String(s.value.data)}
-        </p>
-      );
+      return <p data-testid="status">{s.value.status}</p>;
     }
 
     h.failNextConnect(new Error('never connected'));
@@ -83,6 +82,7 @@ describe('collect-mode reconnect failure', () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    expect(screen.queryByTestId('fallback')).not.toBeNull();
+    expect(screen.queryByTestId('fallback')).toBeNull();
+    expect(screen.getByTestId('status').textContent).toBe('error');
   });
 });
