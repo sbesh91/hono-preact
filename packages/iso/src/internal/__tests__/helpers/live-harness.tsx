@@ -28,8 +28,19 @@ export function makeLiveLoaderHarness<T>() {
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
   let subscriptions = 0;
+  // When set, the NEXT connect attempt rejects instead of opening a stream.
+  // Lets a test reproduce a reconnect that fails after a healthy stream, which
+  // is a different path from a mid-stream error (that one arrives on the open
+  // connection's `onError`; this one rejects the subscribe promise itself).
+  let failNext: Error | null = null;
 
   const fetchMock = vi.fn().mockImplementation(() => {
+    if (failNext) {
+      const err = failNext;
+      failNext = null;
+      subscriptions += 1;
+      return Promise.reject(err);
+    }
     subscriptions += 1;
     const stream = new ReadableStream<Uint8Array>({
       start(ctrl) {
@@ -66,12 +77,19 @@ export function makeLiveLoaderHarness<T>() {
     return null;
   }
 
-  function Host({ children }: { children: ComponentChildren }) {
+  function Host({
+    children,
+    errorFallback,
+  }: {
+    children: ComponentChildren;
+    errorFallback?: ComponentChildren;
+  }) {
     return (
       <LocationProvider>
         <Loader
           loader={loader}
           mode={{ kind: 'collect' }}
+          errorFallback={errorFallback}
           location={{ path: '/', pathParams: {}, searchParams: {} } as never}
         >
           <ReloadCapture />
@@ -117,11 +135,17 @@ export function makeLiveLoaderHarness<T>() {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
+  /** Make the next connect attempt reject (a failed (re)connect). */
+  function failNextConnect(err = new Error('connect failed')): void {
+    failNext = err;
+  }
+
   return {
     Host,
     loader,
     push,
     reload,
+    failNextConnect,
     subscriptionCount: () => subscriptions,
   };
 }

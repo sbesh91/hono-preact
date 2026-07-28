@@ -34,7 +34,7 @@ import {
   appendCollectChunk,
   closeCollectSignals,
   createCollectSignals,
-  resetCollectSignals,
+  beginCollectResubscribe,
   setCollectError,
   type CollectSignals,
 } from './loader-signal.js';
@@ -220,17 +220,34 @@ export function useLoaderRunner<T>(
   // cold `error` (no value, routes to the boundary). No `?? session.sync.value`
   // value-presence test.
   //
-  // This is ALSO how a collect-mode COLD connect error (one that rejects
-  // before the first chunk) reaches the host: `phase` never carries a chunk
-  // value in collect-mode (chunks only ever append to the `collect` signals
-  // `useData()` reads, never into `phase`), so this always lands on the cold
-  // `error` tag, and `loader.tsx` routes it exactly like a single-value
-  // loader's cold error (`errorFallback` / an outer boundary), NOT in-view via
-  // `useData()`'s `StreamState`. A MID-stream collect error is different: it
-  // never reaches this function (`subscribeCollect`'s own `onError` calls
-  // `setCollectError` directly), so it stays in-view without touching `phase`.
+  // Collect-mode presence is NOT in `phase`. Chunks append to the collect
+  // signals `useData()` reads and never settle into a phase value, so the
+  // structural test below reports "no value" no matter how long the stream ran,
+  // and every collect failure routed here would land on the cold `error` tag.
+  // For a failure that rejects BEFORE any chunk that is right: nothing has been
+  // shown, so `loader.tsx` routes it like a single-value cold error
+  // (`errorFallback` / an outer boundary).
+  //
+  // For a failure AFTER chunks have arrived it is wrong, and destructively so.
+  // A reconnect that fails ten minutes into a healthy stream arrives here (the
+  // resubscribe promise rejects in `loader-reload.ts`, which is a different
+  // path from a mid-stream error -- that one hits `subscribeCollect`'s own
+  // `onError` and never reaches this function). The retained chunks are still
+  // in memory and still on screen; unwinding to the boundary throws away a fold
+  // the user is looking at over a failure that changed none of the data. So a
+  // WARM collect failure goes in-view via the collect signals instead, exactly
+  // where a mid-stream error goes, and the fold survives.
+  //
+  // Presence is read from the retained chunks for the same reason the phase
+  // test below is structural: `appended` is where a collect stream records that
+  // it has delivered something.
   const setError = (err: unknown) => {
     const error = toError(err);
+    const collect = collectRef.current;
+    if (mode.kind === 'collect' && collect && collect.appended.value > 0) {
+      setCollectError(collect, error);
+      return;
+    }
     setPhase((p) => {
       const current = resolveCurrentValue(p, session.sync);
       return current.present
@@ -307,15 +324,17 @@ export function useLoaderRunner<T>(
     [mode, session, applyChunk, loaderRef, id]
   );
 
-  // (Re)subscribe the collect-mode stream: reset the retained log (a fresh
-  // subscription starts a fresh log; a resubscribing consumer should not see
-  // the PRIOR connection's chunks folded in) and open a stream that appends
-  // every chunk via `applyCollectChunk`. Mirrors `subscribeFold` above, for the
-  // collect (non-folding) form.
+  // (Re)subscribe the collect-mode stream. The retained chunks are NOT dropped
+  // here: `beginCollectResubscribe` reports `connecting` and arms the truncate,
+  // which the first chunk of the new connection performs. A resubscribing
+  // consumer still never folds the prior connection's chunks into the new
+  // stream (the truncate + epoch bump happen before that first chunk is
+  // appended), but it keeps showing them while the reconnect is in flight, and
+  // keeps them if it fails. Mirrors `subscribeFold`, for the non-folding form.
   const subscribeCollect = useCallback(
     (signal: AbortSignal): Promise<T> => {
       const c = collectRef.current;
-      if (c) resetCollectSignals(c);
+      if (c) beginCollectResubscribe(c);
       return runLoader<T>(loaderRef, locationRef.current, id, signal, {
         onChunk: (value) => applyCollectChunk(value),
         onError: (err) => {

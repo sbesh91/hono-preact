@@ -15,7 +15,7 @@ import { effect } from '@preact/signals';
 import {
   createCollectSignals,
   appendCollectChunk,
-  resetCollectSignals,
+  beginCollectResubscribe,
   setCollectError,
   closeCollectSignals,
   foldStream,
@@ -34,13 +34,14 @@ describe('the retained log is appended in place', () => {
     expect(s.chunks.length).toBe(100);
   });
 
-  it('truncates in place on reset, so a held reference survives', () => {
+  it('truncates in place on resubscribe, so a held reference survives', () => {
     const s = createCollectSignals();
     const identity = s.chunks;
     appendCollectChunk(s, 1);
-    resetCollectSignals(s);
+    beginCollectResubscribe(s);
+    appendCollectChunk(s, 2); // the delivering chunk performs the truncate
     expect(s.chunks).toBe(identity);
-    expect(s.chunks.length).toBe(0);
+    expect(s.chunks).toEqual([2]);
   });
 
   it('keeps `appended` equal to the log length through every mutator', () => {
@@ -53,10 +54,11 @@ describe('the retained log is appended in place', () => {
     check();
     appendCollectChunk(s, 'b');
     check();
-    resetCollectSignals(s);
-    check();
+    beginCollectResubscribe(s);
+    check(); // still 2: an armed resubscribe has not dropped anything yet
     appendCollectChunk(s, 'c');
-    check();
+    check(); // now 1: the delivering chunk truncated
+    expect(s.chunks).toEqual(['c']);
     setCollectError(s, new Error('boom'));
     check();
     closeCollectSignals(s);
@@ -110,16 +112,38 @@ describe('the guarantee the log pays for', () => {
     expect(seen.length).toBeGreaterThan(1);
   });
 
-  it('refolds from scratch after a reset instead of continuing the old total', () => {
+  it('refolds from scratch once a resubscribe delivers, not before', () => {
     const s = createCollectSignals();
     const folded = foldStream(s, 0, sum);
     appendCollectChunk(s, 100);
     expect(folded.value.data).toBe(100);
 
-    resetCollectSignals(s);
+    // Armed but not yet delivered: the prior stream stays folded and on screen.
+    // This is what makes a failed reconnect non-destructive.
+    beginCollectResubscribe(s);
+    expect(folded.value.data).toBe(100);
+    // NOT 'connecting': that status carries no data, so it would blank the
+    // retained fold for the duration of the reconnect.
+    expect(s.status.value).toBe('open');
+
     appendCollectChunk(s, 5);
 
-    // 5, not 105: the epoch bump resets the retained cursor and accumulator.
+    // 5, not 105: the delivering chunk truncates and bumps the epoch, so the
+    // retained cursor and accumulator both restart.
     expect(folded.value.data).toBe(5);
+  });
+
+  it('keeps the prior stream when a resubscribe never delivers', () => {
+    // The reconnect-failure shape, at the store level: armed, then an error
+    // instead of a chunk. Nothing was discarded, so the fold survives.
+    const s = createCollectSignals();
+    const folded = foldStream(s, 0, sum);
+    appendCollectChunk(s, 7);
+    appendCollectChunk(s, 3);
+    beginCollectResubscribe(s);
+    setCollectError(s, new Error('reconnect refused'));
+
+    expect(folded.value.data).toBe(10);
+    expect(folded.value.status).toBe('error');
   });
 });

@@ -16,8 +16,8 @@ import { toStreamState } from '../loader-state.js';
  * retained log on first read" property for a late mount, so callers must
  * create this exactly once and hold the result).
  *
- * `epoch` is a monotonic generation counter that `resetCollectSignals` bumps
- * every time it empties `chunks` (a reload / resubscribe). Without it, this
+ * `epoch` is a monotonic generation counter that `appendCollectChunk` bumps
+ * every time it empties `chunks` (the first chunk after a resubscribe). Without it, this
  * closure's `index`/`acc` would stay stale across a reset (the old `index`
  * pointing past the new, shorter log, and `acc` still carrying the PRIOR
  * stream's total), silently dropping the new stream's early chunks and
@@ -25,7 +25,7 @@ import { toStreamState } from '../loader-state.js';
  * epoch it observed (`seenEpoch`) and, on a mismatch, resets `index`/`acc`
  * BEFORE folding, so a resumed stream folds strictly from scratch. This is
  * checked as an explicit counter rather than inferred from `chunks.length <
- * index`: signal writes inside `resetCollectSignals`'s `batch` coalesce into
+ * index`: signal writes inside the truncating append's `batch` coalesce into
  * one recompute, so a reset immediately followed by an append can be observed
  * as a single change with a log whose length is no shorter than before,
  * which a length-based heuristic would miss.
@@ -106,14 +106,21 @@ export type CollectSignals = {
   status: Signal<StreamStatus>;
   error: Signal<Error | null>;
   /**
-   * Monotonic generation counter, bumped by `resetCollectSignals` on every
-   * fresh subscription (initial mount or a reload). Lets a `foldStream` fold
+   * Monotonic generation counter, bumped by the truncating append on the first
+   * chunk of a fresh subscription. Lets a `foldStream` fold
    * (which retains its own `index`/`acc` closure state) detect a reset and
    * refold from scratch instead of continuing to fold onto a stale
    * accumulator. See `foldStream`'s doc comment for why this can't be
    * inferred from the log's length alone.
    */
   epoch: Signal<number>;
+  /**
+   * Set while a resubscribe is in flight, cleared by the first chunk that
+   * arrives on the new connection (see `beginCollectResubscribe`). A plain
+   * field, not a signal: nothing renders from it, it only decides what the
+   * next append does.
+   */
+  pendingTruncate: boolean;
 };
 
 /**
@@ -135,6 +142,7 @@ export function createCollectSignals(): CollectSignals {
   return {
     chunks: [],
     appended: signal(0),
+    pendingTruncate: false,
     status: signal<StreamStatus>('connecting'),
     error: signal<Error | null>(null),
     epoch: signal(0),
@@ -150,6 +158,25 @@ export function createCollectSignals(): CollectSignals {
  * the time any reader can learn the length grew.
  */
 export function appendCollectChunk(s: CollectSignals, chunk: unknown): void {
+  if (s.pendingTruncate) {
+    // First chunk of a new subscription: NOW discard the prior connection's
+    // chunks, not when the resubscribe started. Truncating up front meant a
+    // reconnect that never delivered had already destroyed the data it was
+    // replacing, so a failed reconnect took the user's fold down with it.
+    // Deferring it here is what makes a collect stream stale-while-revalidate,
+    // matching what fold-mode's phase already did.
+    s.pendingTruncate = false;
+    s.chunks.length = 0;
+    s.chunks.push(chunk);
+    batch(() => {
+      s.appended.value = 1;
+      // Bump the generation so every retained fold refolds from scratch rather
+      // than continuing onto the prior stream's accumulator.
+      s.epoch.value = s.epoch.value + 1;
+      s.status.value = 'open';
+    });
+    return;
+  }
   s.chunks.push(chunk);
   batch(() => {
     s.appended.value = s.chunks.length;
@@ -157,20 +184,30 @@ export function appendCollectChunk(s: CollectSignals, chunk: unknown): void {
   });
 }
 
-/** Reset for a fresh subscription (initial mount or a reload): empty log,
- * `connecting`, no error, epoch bumped so any retained `foldStream` closure
- * refolds from scratch instead of continuing onto the prior stream's
- * accumulator (see `foldStream`'s doc comment). */
-export function resetCollectSignals(s: CollectSignals): void {
-  // Truncate in place: the array identity is the one thing every reader holds,
-  // so it has to survive a reset. Emptied before `appended` is published, for
-  // the same ordering reason the append pushes first.
-  s.chunks.length = 0;
+/**
+ * Begin a (re)subscription: report `connecting`, clear any prior error, and ARM
+ * the truncate rather than performing it.
+ *
+ * The retained chunks stay readable until the new connection delivers its first
+ * chunk, so a consumer keeps folding the last good stream while the reconnect
+ * is in flight, and keeps it if the reconnect fails outright. `appendCollectChunk`
+ * performs the truncate (and bumps the epoch) when that first chunk lands.
+ */
+export function beginCollectResubscribe(s: CollectSignals): void {
+  s.pendingTruncate = true;
   batch(() => {
-    s.appended.value = 0;
-    s.status.value = 'connecting';
     s.error.value = null;
-    s.epoch.value = s.epoch.value + 1;
+    // Report `connecting` ONLY when there is nothing to keep showing. With
+    // chunks retained, `connecting` would blank the data arm (it is the
+    // pre-first-chunk status, so `toStreamState` carries no value on it) and
+    // the fold would vanish for the length of the reconnect, then reappear if
+    // the reconnect failed -- worse than either outcome.
+    //
+    // Leaving the status alone is the same structural rule fold-mode already
+    // follows one level up: `loader-reload.ts` moves the phase to
+    // `revalidating` (which RETAINS the value) when one is present and
+    // `loading` only when none is. Presence decides, in both modes.
+    if (s.appended.value === 0) s.status.value = 'connecting';
   });
 }
 
