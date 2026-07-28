@@ -250,6 +250,21 @@ function ActivityHeader() {
 
 `useData(initial, reduce)` returns a `ReadonlySignal<StreamState<Acc>>`, the same discriminated union `.View`'s render function receives; read `.value` and switch on `.value.status`. A component that mounts after chunks have already arrived still folds the full retained log, so a late mount never misses earlier chunks. This is the same `.Boundary` + `useData` pattern the single-value form uses; see [Server Loaders](/docs/loaders#loaderusedata-and-loaderboundary).
 
+### Which form to reach for
+
+The two consumption forms differ in what they keep, and on a long stream that difference is the whole decision.
+
+|                                          | Keeps                                                           | Reach for it when                                      |
+| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------ |
+| `.View(render, { initial, reduce })`     | One accumulator. Constant memory, however long the stream runs. | One consumer folds the stream.                         |
+| `.Boundary` + `useData(initial, reduce)` | Every chunk, for the life of the subscription.                  | Several components fold the same stream their own way. |
+
+`.Boundary` retains the chunks because that is the only way a component mounting at minute ten can arrive at the same answer as one that mounted at minute zero. Each consumer folds forward from its own cursor, so folding is cheap no matter how many consumers there are, but **the log itself grows with the stream and is released only when the subscription resets** (a reload, or the component unmounting).
+
+For a bounded stream (a progressive result set, a job's progress events) that is exactly what you want. For an endless one (a live feed that runs as long as the tab is open) with a single consumer, prefer `.View`, which never accumulates a log at all.
+
+We do not truncate the log for you, and that is deliberate: a fold is arbitrary user code, so dropping chunks from underneath it would quietly produce a wrong answer rather than an error. A running total would simply be too small, with nothing to indicate it.
+
 ### Type exports
 
 ```ts

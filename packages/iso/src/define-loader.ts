@@ -682,14 +682,7 @@ function makeLoaderRef(
     }
     const resultRef = useRef<ReadonlySignal<StreamState<Acc>> | null>(null);
     if (resultRef.current === null) {
-      resultRef.current = foldStream(
-        ctx.chunks,
-        ctx.status,
-        ctx.error,
-        ctx.epoch,
-        initial,
-        reduce
-      );
+      resultRef.current = foldStream(ctx, initial, reduce);
     }
     return resultRef.current;
   }
