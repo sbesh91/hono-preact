@@ -228,9 +228,24 @@ export type { MetaOptions, LinkOptions, ScriptOptions } from 'hoofd/preact';
 // directly.
 //
 // NOT side-effect free. @preact/signals ships no `sideEffects` field and, at
-// import, runs an effect and wraps several `preact.options` hooks (it also
-// installs a `Component.prototype.shouldComponentUpdate`, which early-returns
-// for components holding no signal subscriptions, so semantics are preserved).
+// import, runs an effect and wraps several `preact.options` hooks.
+//
+// It also installs a `Component.prototype.shouldComponentUpdate` that
+// shallow-props-memoizes any component holding a signal subscription or a
+// `useComputed` -- and `loader.useData()` calls `useComputed` internally, so
+// merely calling it arms the memoization. This comment used to say the sCU
+// "early-returns for components holding no signal subscriptions, so semantics
+// are preserved"; the early-return is real but the conclusion was wrong, since
+// after the always-on migration almost every component HAS a subscription.
+//
+// Measured, not assumed: context changes, new-identity props, `children`, local
+// `useState` and signal writes all still propagate. The one thing the shallow
+// compare cannot see is a prop object MUTATED IN PLACE, which then does not
+// re-render -- the same hazard `memo()` has always had, now on by default.
+// Documented for users in `apps/site/src/pages/docs/signals.mdx` ("Props are
+// compared shallowly"). Disabling the sCU is a one-liner and the whole suite
+// passes without it, so this is a deliberate keep, not an inherited constraint.
+//
 // Whether re-exporting it costs an app that never touches a signal is therefore
 // BUNDLER-DEPENDENT: it tree-shakes to ~66 B under Rollup/Vite (what a consumer
 // app actually uses) and to ~3,020 B under esbuild. The library is reached

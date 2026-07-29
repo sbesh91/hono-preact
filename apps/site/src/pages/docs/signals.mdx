@@ -163,6 +163,35 @@ TypeScript catches the ordinary mistakes here (reading a field that lives on the
 
 **One copy, please.** `@preact/signals` keeps its bookkeeping in module state, so two copies in one app fail quietly: a computed in one copy never hears about a signal from the other. Import the primitives from `hono-preact` rather than adding `@preact/signals` to your own dependencies, and you get the copy the framework already dedupes.
 
+## Props are compared shallowly
+
+Reading a signal changes how a component decides to re-render, and it is worth knowing about because it is on by default rather than something you opt into.
+
+A component that touches a signal gets memoized on its props: when its parent re-renders, it only re-renders if a prop changed by `===`, or if one of its own signals did. That is usually a free win. Calling `loader.useData()` is enough to turn it on, whether or not you read the result.
+
+Everything you would expect to update still updates: a new prop value, a changed context, different `children`, local `useState`, a signal write. The one thing a shallow comparison cannot see is an object you changed **in place**:
+
+```tsx
+const model = { title: 'draft' };
+
+function Title({ m }) {
+  const t = tick.value; // touches a signal, so props are compared
+  return <h1>{m.title}</h1>;
+}
+
+// Elsewhere:
+model.title = 'published'; // same object, new contents
+forceParentRerender(); // <Title> does NOT update: `m` is === what it was
+```
+
+Give it a new object instead, and it updates as you would expect:
+
+```tsx
+setModel({ ...model, title: 'published' });
+```
+
+If you have written Preact or React with `memo()`, this is the same rule you already follow, applied automatically. Data that arrives from a loader, an action, or a room is new on every update, so it is unaffected; this only comes up for state you own and mutate yourself.
+
 ## What it costs
 
 `@preact/signals` is about 3.3 KB gzipped, and any app using loaders, actions or realtime ships it. It is a one-time cost, not a per-feature one: adding actions to an app that already has loaders does not pay for it again. An app that uses none of the data layer does not ship it at all.

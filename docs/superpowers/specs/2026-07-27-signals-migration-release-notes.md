@@ -213,6 +213,31 @@ own test suite did not have one, which is how the class survived review.
 
 ---
 
+## One behaviour change that is not a type change
+
+Importing `@preact/signals` installs a `Component.prototype.shouldComponentUpdate`, so **a
+component that touches a signal is memoized on its props**: when its parent re-renders, it
+re-renders only if a prop changed by `===` or one of its own signals did. Calling
+`loader.useData()` is enough to arm it, read or not.
+
+Nothing you would expect to propagate stops propagating. Measured on 2.9.4, not assumed: context
+changes, new-identity props, `children`, local `useState` and signal writes all still re-render.
+The single exception is a prop object mutated IN PLACE:
+
+```tsx
+model.title = 'published';  // same object, new contents
+forceParentRerender();      // a signal-touching child does NOT update
+```
+
+This is the hazard `memo()` has always had, now on by default. It is a real difference from the
+previous release, where nothing was memoized, so it is listed here even though it is not a type
+change and the compiler cannot see it. Loader, action and room data is new on every update and is
+unaffected; this only reaches state you own and mutate yourself.
+
+We keep the optimisation rather than disabling it (a one-liner, and the suite passes either way)
+because the framework dedupes `@preact/signals` to one copy, so switching it off would also switch
+it off for an app that imported the library directly and expects it.
+
 ## `hono-preact/internal`
 
 Two subscribe-callback exports are replaced by the signals they wrapped:
