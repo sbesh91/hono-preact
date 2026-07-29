@@ -250,7 +250,13 @@ export interface LoaderRef<T, Live extends boolean = false> {
    *   underlying stream independently.
    *
    * Either form: read `.value` in render; a binding updates without the
-   * loader host re-rendering. Called inside a `<Loader>` / `.View` host.
+   * loader host re-rendering.
+   *
+   * HOSTS: the single-value form reads any non-accumulating host (`.Boundary`,
+   * or a `.View(render)` render function). The live form needs `.Boundary`
+   * specifically -- it folds the retained chunk log, which only that host
+   * keeps. A `.View(render, { initial, reduce })` host hands its render
+   * function the folded state directly and retains no log.
    *
    * The live arm memoizes the FIRST render's `reduce`/`initial` (like the
    * single-value arm memoizes its derived signal): a fresh inline `reduce` or
@@ -442,10 +448,9 @@ function getSharedCaches(): SharedCacheMap {
 }
 
 /**
- * The cold arm `toSingleValueState` reports for the two shapes a single-value
- * `useData()` can never legitimately observe. Module-level so the projection
- * returns a STABLE reference: a `computed` recompute that lands here hands back
- * the same object, and a memoized consumer sees no change.
+ * The cold arm for the `null` routing signal below. Module-level so the
+ * projection returns a STABLE reference: a `computed` recompute that lands here
+ * hands back the same object, and a memoized consumer sees no change.
  */
 const COLD_LOADING: LoaderState<unknown> = { status: 'loading' };
 
@@ -453,30 +458,34 @@ const COLD_LOADING: LoaderState<unknown> = { status: 'loading' };
  * Project `LoaderDataContext`'s value down to the single-value `LoaderState`
  * half, for `useData()`'s no-arg arm.
  *
- * The `null` fallback IS unreachable defense: `null` is the cold-error routing
- * signal, and `loader.tsx` renders the `errorFallback` instead of the children,
- * so no mounted consumer sees it.
+ * `null` is unreachable defense: it is the cold-error routing signal, and
+ * `loader.tsx` renders the `errorFallback` instead of the children, so no
+ * mounted consumer sees it.
  *
- * The `StreamState` fallback is NOT. One host reaches it: a NON-streaming
- * loader consumed with `accumulate` (`{ kind: 'fold' }` per
- * `internal/loader-mode.ts`, pinned as supported by
- * `internal/__tests__/loader-mode.test.ts`). That host projects a `StreamState`,
- * while the no-arg `useData()` routes here by branching on the loader's own
- * shape rather than the host's mode, so `isLoaderState` rejects `connecting`
- * and the consumer sits on `COLD_LOADING` permanently.
+ * A `StreamState` is NOT unreachable, and is a real user mistake rather than an
+ * internal one. One host produces it: a NON-streaming loader consumed with
+ * `accumulate` (`{ kind: 'fold' }` per `internal/loader-mode.ts`, a supported
+ * host pinned by `loader-accumulate.test.tsx`). That host folds chunks into an
+ * accumulator of the CALLER's type, while `useData()` on a non-streaming ref is
+ * typed `ReadonlySignal<LoaderState<Serialize<T>>>` -- `Acc` is unrelated to
+ * `Serialize<T>` and `StreamState` is not `LoaderState`, so there is no honest
+ * value to return. Returning a fabricated `{ status: 'loading' }` (what this
+ * did before) leaves the consumer on a skeleton that never resolves, with
+ * nothing in the console to explain it.
  *
- * That is a real defect, inherited rather than introduced here: the merge base
- * threw a sharp error for this case and the umbrella replaced the throw with a
- * silent `?? { status: 'loading' }` behind an unsound cast. Restoring a throw is
- * the right end state and belongs in its own change, not behind a comment
- * claiming the case cannot happen. Tracked on #349.
- *
- * Reporting the cold `loading` arm keeps the return type honest (no fabricated
- * value); the data-bearing path returns the context value BY REFERENCE, so a
- * memoized consumer stays stable.
+ * So: throw, and name the fix. An accumulating host's state is read through
+ * `.View(render, { initial, reduce })`, which receives it directly.
  */
 function toSingleValueState(s: LoaderData): LoaderState<unknown> {
-  return s !== null && isLoaderState(s) ? s : COLD_LOADING;
+  if (s === null) return COLD_LOADING;
+  if (isLoaderState(s)) return s;
+  throw new Error(
+    'loader.useData() was called under an accumulating host. A host given ' +
+      '`accumulate` folds chunks into your own accumulator, which `useData()` ' +
+      'cannot type or return. Read that state with ' +
+      '`loader.View(render, { initial, reduce })`, whose render function ' +
+      'receives it directly.'
+  );
 }
 
 /**
@@ -677,7 +686,11 @@ function makeLoaderRef(
     const ctx = useContext(LoaderStreamContext);
     if (!ctx) {
       throw new Error(
-        'live loader.useData(initial, reduce) must be called inside a `<Loader>` / `.View` host.'
+        'live loader.useData(initial, reduce) must be called inside a ' +
+          '`loader.Boundary` host. A `.View(render, { initial, reduce })` host ' +
+          'folds the stream into ONE accumulator and retains no chunk log, so ' +
+          'it cannot serve a second, independent fold; its render function ' +
+          'already receives the folded state.'
       );
     }
     const resultRef = useRef<ReadonlySignal<StreamState<Acc>> | null>(null);
