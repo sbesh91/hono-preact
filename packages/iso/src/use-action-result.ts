@@ -80,13 +80,20 @@ function projectActionResult<TPayload, TResult>(
  * only re-evaluates when a TRACKED signal changes, so `stub` is mirrored into
  * tracked signals below rather than merely captured -- a call site that swaps
  * actions (`mode === 'create' ? createTodo : updateTodo`) must not keep
- * reporting the previous action's result. The SSR context value is still a
- * plain capture: it is set once per page render and never changes after.
+ * reporting the previous action's result. The context value is mirrored for the
+ * same reason: `ActionResultContext` is a PUBLIC export, so an app can provide
+ * it on the client and update it, and a plain capture would pin this reader to
+ * whatever was provided on the mount render.
  */
 export function useActionResult<TPayload = unknown, TResult = unknown>(
   stub?: ActionRef<TPayload, TResult, never>
 ): ReadonlySignal<ActionResult<TPayload, TResult>> {
-  const ssr = useContext(ActionResultContext);
+  // Mirrored, not captured. A same-reference write is a no-op (signals dedupe
+  // by `===`), so the SSR case -- one value for the whole page render -- costs
+  // nothing, while a client-side provider update is actually followed.
+  const ssrValue = useContext(ActionResultContext);
+  const ssr = useSignal(ssrValue);
+  ssr.value = ssrValue;
   // Mirror the stub's IDENTITY (two primitive strings, so a fresh object
   // literal per render is a no-op write) into tracked signals. The computed
   // below is created once (`useComputed` is `useMemo(..., [])`) and only
@@ -116,7 +123,7 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
       : null;
     // Client store wins when populated: a JS-on submit has produced a result.
     // SSR context is the fallback for the PE deny re-render path (no JS state).
-    const source = client ?? ssr;
+    const source = client ?? ssr.value;
     if (!source) return null;
     if (
       ref &&

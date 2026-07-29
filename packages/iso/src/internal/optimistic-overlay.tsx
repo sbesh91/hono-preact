@@ -85,8 +85,18 @@ export function OptimisticOverlay<T, A>({
   //    invalid value itself.
   //  - Cold first load with nothing pending: nothing to project, so the genuine
   //    `loading` / `connecting` arm passes through unchanged.
+  //
+  // When the projection did not change the data (nothing pending, so `reduce`
+  // returned the base untouched) the HOST's own arm is re-provided by
+  // reference. Spreading a fresh `{...ctx, data: projected}` there publishes a
+  // new object with identical contents, and `LoaderDataProvider`'s signal
+  // compares by identity, so every `loader.useData()` consumer below would be
+  // woken for nothing -- disabling the granularity this data layer exists for,
+  // across the whole optimistic subtree.
   const arm: ConsumptionState = isDataBearing(ctx)
-    ? { ...ctx, data: projected }
+    ? projected === ctx.data
+      ? ctx
+      : { ...ctx, data: projected }
     : pending.length > 0
       ? { status: 'revalidating', data: projected }
       : ctx;
