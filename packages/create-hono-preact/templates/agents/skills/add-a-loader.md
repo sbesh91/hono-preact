@@ -10,8 +10,10 @@
   `export type`s). The Vite plugin rewrites the client's import of `serverLoaders` into a
   client-safe data handle, so secrets and server-only helpers must stay inside the loader
   body, never at module top level where they would be inlined into the client bundle.
-- The component reads the data with `<loader>.useData()` inside a `<loader>.View(...)`
-  wrapper. There is no `useLoaderData` hook.
+- The component reads the data through `<loader>.View(render)`, whose render function
+  receives the `LoaderState` union directly. A descendant inside that view can read the
+  same data with `<loader>.useData()`, which returns a `ReadonlySignal` -- read `.value`.
+  There is no `useLoaderData` hook.
 
 ## Steps
 
@@ -41,7 +43,17 @@
    `LoaderState` union. `data` reads straight off the union (it is absent only in the
    cold `loading` arm, so a truthy check doubles as the loading guard); reach for
    `status` when you need to tell `revalidating` or `error` apart. Descendants that
-   need the same data inside the view can call `.useData()`:
+   need the same data inside the view can call `.useData()`, which hands back a
+   `ReadonlySignal` of that same union:
+
+   ```tsx
+   function RenderedAt() {
+     const state = serverLoaders.default.useData();
+     // `.value` is required: `useData()` returns a signal, not the state.
+     return <small>{state.value.data?.renderedAt}</small>;
+   }
+   ```
+
 
    ```tsx
    import { definePage } from 'hono-preact';
@@ -63,8 +75,8 @@
 
 ## Verify
 
-- Run `pnpm typecheck`. The shape from `useData()` is inferred from the loader's return;
-  destructuring a field the loader does not return fails here.
+- Run `pnpm typecheck`. The shape from `useData().value` is inferred from the loader's
+  return; destructuring a field the loader does not return fails here.
 - Run `pnpm dev`, open the page, and confirm the data renders.
 - In devtools Network, confirm no server-only value (a secret, a DB handle) appears in the
   client payload.
@@ -80,6 +92,10 @@
   client fetches are none of those.
 - Casting the loader data. Let inference flow from the loader's return; do not annotate or
   cast `useData()`.
+- Forgetting `.value` on `useData()`. It returns a signal, so `const { data } =
+  loader.useData()` compiles in JS and yields `undefined`; under TypeScript it is a type
+  error pointing at the destructure rather than the missing `.value`. Write
+  `loader.useData().value`, or hold the signal and read `.value` where you use it.
 - Top-level secrets. A secret imported at the top of `.server.ts` can be inlined into the
   client. Keep it inside the loader body.
 

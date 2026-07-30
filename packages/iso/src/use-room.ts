@@ -122,17 +122,13 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
   /** One member's entry as a reactive value. `.value` changes only when THAT
    * member's presence changes, so a row bound to `member(id)` re-renders alone.
    *
-   * The binding is STABLE: hold it across joins, presence updates, leaves and
-   * reconnect snapshots. An id that is absent now yields a binding that goes
-   * live when that id joins, and one whose member leaves goes to `undefined`
-   * rather than going quiet. Holding it is the point, and it is what makes the
-   * per-member granularity real.
+   * The same signal is returned for a given id every time, for the room's
+   * lifetime, so it is safe either to hold the binding as a prop or to call
+   * `member(id)` again on a later render -- both subscribe identically.
    *
-   * Do NOT re-read `member(id)` fresh on every render to work around staleness.
-   * That was necessary before the roster wrote through stable cells, and it
-   * silently discards the subscription each render: a test written that way
-   * passes against a store that renders departed members forever, which is
-   * exactly how this defect survived twelve existing assertions. */
+   * An id that is absent now yields a binding that goes live when that id
+   * joins, and one whose member leaves goes to `undefined` rather than going
+   * quiet, so a row can be rendered before its member arrives. */
   member: (
     id: string
   ) => ReadonlySignal<PresenceMember<State<R> | undefined> | undefined>;

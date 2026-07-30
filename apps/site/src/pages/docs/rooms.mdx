@@ -166,9 +166,9 @@ export default function Board() {
 }
 ```
 
-Hold the binding `member(id)` gives you. It stays valid across joins, presence updates, leaves, and reconnects: an id that has not joined yet yields a binding that goes live when it does, and a member who leaves takes their binding to `undefined` rather than leaving it frozen on their last position. Passing it down as a prop, as above, is the point.
+The binding stays valid across joins, presence updates, leaves, and reconnects: an id that has not joined yet yields a binding that goes live when it does, and a member who leaves takes their binding to `undefined` rather than leaving it frozen on their last position. So a row can be rendered before its member arrives, and survives them leaving.
 
-Calling `member(id)` again on every render works too, but it throws away the subscription each time and you lose the granularity you came for. Reach for it once, per row.
+You get the same signal back every time you ask for a given id, so passing the binding down as a prop and calling `member(id)` again on a later render behave identically. Pick whichever reads better.
 
 Both are worth it when the roster is large or presence updates are frequent. Below that, `members` is simpler and there is nothing wrong with it.
 

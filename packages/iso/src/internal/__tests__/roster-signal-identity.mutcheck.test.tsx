@@ -6,8 +6,11 @@
 // the reactive it got back. Every assertion in signal-roster.test.ts re-calls
 // `member(id)` FRESH after each mutation, so it can never observe a broken
 // identity. These tests hold the binding across the mutation, which is what
-// the rooms docs tell a consumer to do ("Hold the binding `member(id)` gives
-// you... Reach for it once, per row").
+// makes them discriminate: under the original defect a FRESH `member(id)` read
+// returned the newly-allocated cell and looked correct, so only a held binding
+// could observe the old one going stale. (Against the fixed store both spellings
+// work, since `member(id)` returns the same cached cell -- so this is a property
+// of the TEST, not advice to users.)
 //
 // The end-to-end block below holds the binding in a ref inside the row, rather
 // than relying on a list helper that never re-invokes the child closure. That
@@ -158,6 +161,23 @@ describe('P1-2 store level: a HELD member binding survives roster mutation', () 
     store.leave('a');
     store.upsert('a', 5);
     expect(held.value).toEqual({ id: 'a', state: 5 });
+  });
+
+  // R15: the JSDoc used to warn that re-reading `member(id)` "silently discards
+  // the subscription each render". It does not -- the same cell is returned every
+  // time -- and the warning sent readers to restructure working code. This pins
+  // the property the corrected doc now states, so the claim cannot drift back.
+  it('returns the SAME signal for an id every time it is asked', () => {
+    const store = createSignalRoster<number>();
+    store.upsert('a', 1);
+    const first = store.member('a');
+    expect(store.member('a')).toBe(first);
+    store.upsert('a', 2);
+    expect(store.member('a')).toBe(first);
+    expect(first.value).toEqual({ id: 'a', state: 2 });
+    // True for an id that has never been present, too.
+    const ghost = store.member('nobody');
+    expect(store.member('nobody')).toBe(ghost);
   });
 
   it('members[] does not surface a departed member after leave', () => {
