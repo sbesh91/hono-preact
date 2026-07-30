@@ -258,9 +258,30 @@ export interface LoaderRef<T, Live extends boolean = false> {
    * keeps. A `.View(render, { initial, reduce })` host hands its render
    * function the folded state directly and retains no log.
    *
-   * The live arm memoizes the FIRST render's `reduce`/`initial` (like the
-   * single-value arm memoizes its derived signal): a fresh inline `reduce` or
-   * `initial` passed on a later render of the same call site is not re-read.
+   * REDUCERS MUST NOT CLOSE OVER CHANGING STATE. The live arm memoizes the
+   * FIRST render's `reduce` and `initial`; a fresh inline arrow passed on a
+   * later render is discarded. So a reducer that captures a prop --
+   * `(acc, tick) => acc + tick.qty * rate` -- keeps folding with the `rate` it
+   * captured at mount, and every chunk arriving after `rate` changes is folded
+   * at the stale value. Nothing throws; the number is just wrong, until the
+   * component unmounts.
+   *
+   * Keep the reducer a pure function of `(acc, chunk)`. If a fold genuinely
+   * depends on changing state, fold the raw chunks into an accumulator that
+   * does not, and apply the state where you RENDER the result instead:
+   *
+   * ```tsx
+   * const qty = ticker.useData(0, (acc, tick) => acc + tick.qty); // pure
+   * return <p>{qty.value.data * rate}</p>;                        // state here
+   * ```
+   *
+   * The pin is deliberate. Honouring a changed reducer means refolding the
+   * whole retained log, and because an inline arrow is a fresh reference on
+   * every render that refold would run on every render: measured at 5,000
+   * chunks it is 12,502,500 reducer calls against 5,000, i.e. the O(n^2) the
+   * collect-mode log was restructured to remove. Applying the new reducer only
+   * to later chunks is cheap but yields a value that is part old-behaviour and
+   * part new, which is harder to reason about than consistent staleness.
    */
   useData: Live extends true
     ? <Acc>(
@@ -679,6 +700,17 @@ function makeLoaderRef(
   // it through the caller's `reduce`, memoized once per call site so the fold
   // stays incremental (O(n) over the stream) and a late mount still consumes
   // the whole retained log (`foldStream` in `loader-signal.ts` owns the fold).
+  //
+  // The memo PINS the first render's `reduce`/`initial`, so a reducer that
+  // closes over changing state silently keeps folding with the captured value.
+  // That is a known trade, decided rather than overlooked (#349 R6): the two
+  // alternatives were measured and both are worse. Refolding the log to honour
+  // a new reducer runs on EVERY render (an inline arrow is a fresh reference
+  // each time) -- 12,502,500 reducer calls against 5,000 at a 5,000-chunk
+  // stream, the exact O(n^2) collect-mode was restructured to remove. Applying
+  // the new reducer to later chunks only stays linear but mixes old and new
+  // behaviour in one accumulator. The contract is documented on `useData`'s
+  // JSDoc and in `live-loaders.mdx`: keep the reducer pure in (acc, chunk).
   function readLiveDataSignal<Acc>(
     initial: Acc,
     reduce: (acc: Acc, chunk: unknown) => Acc

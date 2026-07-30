@@ -252,6 +252,25 @@ function ActivityHeader() {
 
 `useData(initial, reduce)` returns a `ReadonlySignal<StreamState<Acc>>`, the same discriminated union `.View`'s render function receives; read `.value` and switch on `.value.status`. A component that mounts after chunks have already arrived still folds the full retained log, so a late mount never misses earlier chunks. This is the same `.Boundary` + `useData` pattern the single-value form uses; see [Server Loaders](/docs/loaders#loaderusedata-and-loaderboundary).
 
+### Keep the reducer pure
+
+Write `reduce` as a function of `(acc, chunk)` and nothing else. The fold is created on the first render and reused for the life of the subscription, so a reducer that closes over a prop or piece of state keeps using the value it captured then:
+
+```tsx
+// WRONG: `rate` is captured once. Ticks arriving after the user switches
+// currency are still folded at the old rate, and the total is quietly wrong.
+const total = ticker.useData(0, (acc, tick) => acc + tick.qty * rate);
+```
+
+Fold the raw numbers instead, and apply the changing part where you render:
+
+```tsx
+const qty = ticker.useData(0, (acc, tick) => acc + tick.qty); // pure
+return <p>{qty.value.data * rate}</p>; // rate applied here
+```
+
+Nothing warns you about the first version, which is why it is worth knowing. We keep the fold pinned on purpose: honouring a new reducer means re-folding every chunk received so far, and since an inline arrow is a new function on every render that re-fold would happen on every render too. On a long stream that is quadratic work for a value that was already correct.
+
 ### Which form to reach for
 
 The two consumption forms differ in what they keep, and on a long stream that difference is the whole decision.
