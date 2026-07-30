@@ -27,10 +27,19 @@ function _liveProbes() {
   // union, whose data-carrying arms expose the caller's Acc.
   live.View<number[]>(
     (s) => {
+      // Pins the PUBLIC status vocabulary. `reconnecting` was added for a
+      // resubscribe over already-delivered chunks (#349 R4/R5); it belongs here
+      // because this assertion is what makes such an addition a deliberate,
+      // reviewed change to the surface rather than a silent one.
       expectTypeOf(s.status).toEqualTypeOf<
-        'connecting' | 'open' | 'closed' | 'error'
+        'connecting' | 'open' | 'closed' | 'reconnecting' | 'error'
       >();
-      if (s.status === 'open' || s.status === 'closed') {
+      // `reconnecting` is data-bearing, like `open` / `closed`.
+      if (
+        s.status === 'open' ||
+        s.status === 'closed' ||
+        s.status === 'reconnecting'
+      ) {
         expectTypeOf(s.data).toEqualTypeOf<number[]>();
       }
       return null;
