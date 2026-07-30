@@ -457,6 +457,12 @@ export function useLoaderRunner<T>(
   // value-presence is the phase's variant tag / `session.sync`'s `present` flag
   // throughout. `projectRunnerView` above owns the per-mode dispatch;
   // `loader.tsx` only ROUTES the result and never re-projects it.
+  // Single-value and fold hosts only, deliberately. Collect-mode chunks never
+  // enter `phase`, so this is structurally false there, and making it reactive
+  // would mean THIS host subscribing to the collect run -- the re-render collect
+  // mode exists to avoid (see `collectRef` above). A collect consumer branches
+  // on its own `StreamState.status`, which now reports `reconnecting` while a
+  // resubscribe is in flight and re-renders only that consumer (#349 R5).
   const reloading = phase.tag === 'revalidating';
 
   const view: RunnerView<T> = projectRunnerView(

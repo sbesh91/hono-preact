@@ -213,6 +213,22 @@ own test suite did not have one, which is how the class survived review.
 
 ---
 
+## `StreamStatus` gains `reconnecting`
+
+`StreamState` has a new arm, `{ status: 'reconnecting'; data: T }`, reported while a live loader
+consumed under `.Boundary` + `useData(initial, reduce)` resubscribes over chunks it already
+delivered. The arm CARRIES data, so the last good fold stays on screen for the duration.
+
+Additive, with one caveat: an EXHAUSTIVE `switch` over `StreamStatus` that has no `default` will
+now fail to compile until it handles the new member. That is the intended outcome -- the alternative
+was a status the framework could not express, which is what let a reconnect after a failure strand
+a cleared error and report a fabricated one.
+
+`useReload().reloading` stays `false` for these consumers on purpose. It lives on the loader host,
+and making it follow a live stream would re-render that host on stream activity, which is what
+collect-mode exists to avoid. Branch on `status === 'reconnecting'` and only the component reading
+it updates.
+
 ## One behaviour change that is not a type change
 
 Importing `@preact/signals` installs a `Component.prototype.shouldComponentUpdate`, so **a

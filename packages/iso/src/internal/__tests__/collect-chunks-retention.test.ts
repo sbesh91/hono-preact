@@ -126,9 +126,11 @@ describe('the guarantee the log pays for', () => {
     // This is what makes a failed reconnect non-destructive.
     beginCollectResubscribe(s);
     expect(folded.value.data).toBe(100);
-    // NOT 'connecting': that status carries no data, so it would blank the
-    // retained fold for the duration of the reconnect.
-    expect(s.run.value.status).toBe('open');
+    // `reconnecting`, not `connecting` (which carries no data and would blank
+    // the retained fold) and no longer the previous status either: holding that
+    // was the F3 shortcut this replaced, and it left an author nothing to branch
+    // on. See collect-reconnecting-status.test.ts.
+    expect(s.run.value.status).toBe('reconnecting');
 
     appendCollectChunk(s, 5);
 

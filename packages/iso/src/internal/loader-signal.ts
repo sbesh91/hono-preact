@@ -188,14 +188,17 @@ export function beginCollectResubscribe(s: CollectSignals): void {
     ...run,
     error: null,
     awaitingFirstChunk: true,
-    // Report `connecting` ONLY when there is nothing to keep showing. That
-    // status carries no data by contract, so over retained chunks it would
-    // blank the fold for the length of the reconnect and then restore it if the
-    // reconnect failed, which is worse than either outcome. Presence decides,
-    // the same structural rule fold-mode follows one level up (`loader-reload.ts`
-    // moves the phase to `revalidating`, which retains the value, when one is
-    // present and `loading` only when none is).
-    status: run.length === 0 ? 'connecting' : run.status,
+    // Presence decides which arm, the same structural rule fold-mode follows
+    // one level up (`loader-reload.ts` moves the phase to `revalidating`, which
+    // retains the value, when one is present and `loading` only when none is).
+    //
+    // With chunks retained this is `reconnecting`, NOT the previous status.
+    // Holding the previous status was the F3 shortcut for "keep the fold on
+    // screen", and it cost two things: an author had nothing to branch on
+    // during the reconnect, and after a failure `status` stayed `error` while
+    // `error` was cleared here, so `toStreamState` fabricated a placeholder
+    // over the user's real diagnostic (#349 R4/R5).
+    status: run.length === 0 ? 'connecting' : 'reconnecting',
   };
 }
 
