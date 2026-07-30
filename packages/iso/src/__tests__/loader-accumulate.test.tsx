@@ -93,3 +93,47 @@ describe('non-streaming loader + accumulate: client', () => {
     expect(captured!.view.state.data).toEqual([41]);
   });
 });
+
+// R8, fold-mode half. The aliasing guard `foldStream` got for collect-mode
+// applies to this engine too: `subscribeFold` resets with
+// `session.acc = mode.initial`, so a reducer that mutates its accumulator and
+// returns it makes that reset restore an object it has already filled, and the
+// next stream folds onto the last one.
+describe('non-streaming loader + accumulate: a mutating reducer is rejected', () => {
+  it('surfaces the mutation as a stream error, not a silent duplication', async () => {
+    const ref = defineLoader<number>(async () => 41);
+    const mutating = {
+      initial: [] as unknown,
+      reduce: (acc: unknown, chunk: unknown) => {
+        (acc as number[]).push(chunk as number);
+        return acc;
+      },
+    };
+    type Captured = ReturnType<typeof useLoaderRunner<number>>;
+    let captured: Captured;
+    function Probe() {
+      captured = useLoaderRunner<number>(
+        ref,
+        LOC,
+        'acc-mutating',
+        resolveLoaderMode(mutating, false)
+      );
+      return null;
+    }
+
+    render(<Probe />);
+
+    // The fold runs in `buildStreamingReader`'s `.then`, whose `.catch` routes a
+    // throw into the loader's own error channel. So the guard surfaces the way
+    // any other stream failure does -- in-view, named -- rather than crashing
+    // the render or silently duplicating history on the next reconnect.
+    await waitFor(() => {
+      if (captured!.view.kind !== 'render') throw new Error('expected render');
+      expect(captured!.view.state.status).toBe('error');
+    });
+    if (captured!.view.kind !== 'render') throw new Error('expected render');
+    const state = captured!.view.state;
+    if (state.status !== 'error') throw new Error('expected error');
+    expect(state.error.message).toMatch(/must not mutate its accumulator/);
+  });
+});

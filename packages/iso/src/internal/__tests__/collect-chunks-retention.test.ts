@@ -151,3 +151,65 @@ describe('the guarantee the log pays for', () => {
     expect(folded.value.status).toBe('error');
   });
 });
+
+// R8: a reducer that MUTATES its accumulator and returns it aliases the
+// caller's `initial`, so the generation reset (`acc = initial`) restores an
+// object the reducer has already filled. The fold then appends the new stream
+// onto the old one, duplicating history on every reconnect and growing without
+// bound.
+//
+// The shape is detectable in O(1): a mutating reducer is exactly the one that
+// returns the object it was handed. Detected on the FIRST fold, so it fails
+// before any corruption is observable rather than at the reconnect that would
+// expose it.
+describe('a mutating reducer is rejected, not silently corrupted', () => {
+  it('throws on a reducer that pushes into and returns its accumulator', () => {
+    const s = createCollectSignals();
+    const folded = foldStream<string[]>(s, [], (acc, line) => {
+      (acc as string[]).push(line as string);
+      return acc as string[];
+    });
+    appendCollectChunk(s, 'a');
+    expect(() => folded.value).toThrow(/mutat/i);
+  });
+
+  it('names the fix in the message', () => {
+    const s = createCollectSignals();
+    const folded = foldStream<number[]>(s, [], (acc, n) => {
+      (acc as number[]).push(n as number);
+      return acc as number[];
+    });
+    appendCollectChunk(s, 1);
+    let message = '';
+    try {
+      folded.value;
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    // A user hitting this needs the remedy, not just the diagnosis.
+    expect(message).toMatch(/return a new/i);
+  });
+
+  it('leaves a pure reducer alone, including one returning a primitive', () => {
+    const s = createCollectSignals();
+    const total = foldStream(s, 0, sum);
+    const list = foldStream<readonly number[]>(s, [], (acc, n) => [
+      ...(acc as number[]),
+      n as number,
+    ]);
+    appendCollectChunk(s, 5);
+    appendCollectChunk(s, 6);
+    expect(total.value.data).toBe(11);
+    expect(list.value.data).toEqual([5, 6]);
+  });
+
+  it('does not fire for a primitive `initial`, which cannot be mutated', () => {
+    // `(acc) => acc` returns its input, but a number cannot be corrupted by it,
+    // so flagging it would be a false positive on a legal (if degenerate) fold.
+    const s = createCollectSignals();
+    const folded = foldStream<number>(s, 0, (acc) => acc as number);
+    appendCollectChunk(s, 1);
+    expect(() => folded.value).not.toThrow();
+    expect(folded.value.data).toBe(0);
+  });
+});

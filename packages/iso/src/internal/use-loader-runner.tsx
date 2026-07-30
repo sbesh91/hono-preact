@@ -271,7 +271,33 @@ export function useLoaderRunner<T>(
           applyCollectChunk(chunk);
           return;
         case 'fold':
-          session.acc = mode.reduce(session.acc, chunk);
+          {
+            const next = mode.reduce(session.acc, chunk);
+            // Same aliasing guard as collect-mode's `foldStream`, for the other
+            // engine. A reducer that mutates its accumulator and returns it
+            // aliases `mode.initial`, so the resubscribe reset
+            // (`session.acc = mode.initial`, below) hands back an object the
+            // reducer already filled and the next stream folds onto the last
+            // one. Detected only when the accumulator IS `initial` -- the first
+            // chunk of a generation -- and only for a non-primitive, which
+            // cannot be corrupted this way.
+            if (
+              session.acc === mode.initial &&
+              next === mode.initial &&
+              typeof mode.initial === 'object' &&
+              mode.initial !== null
+            ) {
+              throw new Error(
+                'An accumulating loader `reduce` must not mutate its ' +
+                  'accumulator: this one returned the same object it was ' +
+                  'given. The fold restarts from `initial` on a reconnect, so ' +
+                  'a mutated `initial` would carry the previous stream into ' +
+                  'the next one and duplicate it. Return a new accumulator ' +
+                  'instead (`[...acc, chunk]`, `{ ...acc }`).'
+              );
+            }
+            session.acc = next;
+          }
           // A fresh `success` object per chunk; streaming already re-renders.
           // The accumulator is `unknown` by design (erased-ref boundary), so
           // reading it as `T` here is the ONE sanctioned cast (not a

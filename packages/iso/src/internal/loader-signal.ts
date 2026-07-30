@@ -111,7 +111,36 @@ export function foldStream<Acc>(
       seenChunks = run.chunks;
     }
     while (index < run.length) {
-      acc = reduce(acc, run.chunks[index]);
+      const next = reduce(acc, run.chunks[index]);
+      // A reducer that MUTATES its accumulator and returns it aliases the
+      // caller's `initial`, so the generation reset above (`acc = initial`)
+      // hands back an object the reducer has already filled: the new stream
+      // folds onto the old one and history duplicates on every reconnect,
+      // growing without bound.
+      //
+      // That reducer is exactly the one that returns the object it was handed,
+      // so the FIRST fold of a generation detects it in O(1). Checked here
+      // rather than at the reset that would expose it, so the failure lands on
+      // the reducer that caused it instead of on a reconnect minutes later.
+      //
+      // Only for a non-primitive `initial`: a number or string cannot be
+      // corrupted this way, and `(acc) => acc` over one is a legal (if
+      // pointless) fold that must not be rejected.
+      if (
+        index === 0 &&
+        next === initial &&
+        typeof initial === 'object' &&
+        initial !== null
+      ) {
+        throw new Error(
+          'A live loader `reduce` must not mutate its accumulator: this one ' +
+            'returned the same object it was given. The fold restarts from ' +
+            '`initial` on a reconnect, so a mutated `initial` would carry the ' +
+            'previous stream into the next one and duplicate it. Return a new ' +
+            'accumulator instead (`[...acc, chunk]`, `{ ...acc }`).'
+        );
+      }
+      acc = next;
       index += 1;
     }
     return toStreamState(
