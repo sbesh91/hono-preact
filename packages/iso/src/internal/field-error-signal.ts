@@ -126,3 +126,33 @@ export function createFieldErrorStore(): FieldErrorStore {
     all,
   };
 }
+
+/**
+ * The store a consumer gets OUTSIDE a `<Form>`: no fields, no errors, ever.
+ *
+ * Deliberately not a `createFieldErrorStore()`. That store's `fieldError(name)`
+ * get-or-creates a signal on read and keeps it in a closed-over Map, which is
+ * right when a field's errors may arrive later -- and wrong here, because
+ * nothing ever writes to this one. As the context DEFAULT it also lives at
+ * module scope, shared by every SSR request in a long-lived worker isolate, so
+ * reading it was an unbounded leak for any page whose field names come from the
+ * request (`items.0.email`, `items.1.email`, ...). See #349 R10.
+ *
+ * Since no field can ever differ from any other, one shared signal serves them
+ * all and a read allocates nothing. The array it carries is FROZEN: sharing it
+ * is what makes the store free, and freezing is what keeps that safe, since a
+ * caller mutating one field's messages would otherwise be mutating every
+ * field's. `createFieldErrorStore` allocates per field and needs no such guard.
+ */
+const NO_MESSAGES: readonly string[] = Object.freeze([]);
+const NO_MESSAGES_SIGNAL = signal<readonly string[]>(NO_MESSAGES);
+const NO_FIELDS: FieldErrorsMap = Object.freeze({});
+const NO_FIELDS_SIGNAL = signal<FieldErrorsMap>(NO_FIELDS);
+
+export const INERT_FIELD_ERROR_STORE: FieldErrorStore = {
+  // A `<Form>` writes to its OWN store; nothing routes writes here. Accepting
+  // and ignoring the call keeps the type honest without pretending to store.
+  setAll() {},
+  fieldError: () => NO_MESSAGES_SIGNAL,
+  all: NO_FIELDS_SIGNAL,
+};

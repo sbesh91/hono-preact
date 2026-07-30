@@ -1,5 +1,5 @@
 import { createContext } from 'preact';
-import { createFieldErrorStore } from './field-error-signal.js';
+import { INERT_FIELD_ERROR_STORE } from './field-error-signal.js';
 import type { FieldErrorStore } from './field-error-signal.js';
 
 export type { FieldErrorStore, FieldErrorsMap } from './field-error-signal.js';
@@ -13,12 +13,14 @@ export type { FieldErrorStore, FieldErrorsMap } from './field-error-signal.js';
  * this consumer. `useFieldErrors()` (no name) reads `all.value`, the whole
  * map, and subscribes to every field.
  *
- * The default (outside a `<Form>`) is an inert store that nothing ever
- * writes to, so `fieldError(name).value` is always `[]` and `all.value` is
- * always `{}`.
+ * The default (outside a `<Form>`) is `INERT_FIELD_ERROR_STORE`: nothing ever
+ * writes to it, so `fieldError(name).value` is always `[]` and `all.value` is
+ * always `{}`. It also ALLOCATES nothing per field, which matters because this
+ * default lives at module scope and is therefore shared by every SSR request in
+ * a worker isolate.
  */
 export const FieldErrorsContext = createContext<FieldErrorStore>(
-  createFieldErrorStore()
+  INERT_FIELD_ERROR_STORE
 );
 
 /**
