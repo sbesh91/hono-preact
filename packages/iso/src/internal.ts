@@ -13,6 +13,16 @@
 // lives on the separate `/internal/runtime` door, not here.)
 
 export { Loader } from './internal/loader.js';
+// `Loader`'s `mode` prop is required, so the type and the resolver that builds it
+// have to be reachable from the same entry point: without these a consumer of
+// this subpath could not construct the prop at all (#349 R12). `resolveLoaderMode`
+// is what `.Boundary` / `.View` use, so a direct `<Loader>` gets the same
+// derivation rather than guessing a literal.
+export {
+  resolveLoaderMode,
+  type LoaderMode,
+  type AccumulateOptions,
+} from './internal/loader-mode.js';
 export { Envelope } from './internal/envelope.js';
 export { RouteBoundary } from './internal/route-boundary.js';
 export { OptimisticOverlay } from './internal/optimistic-overlay.js';

@@ -256,29 +256,31 @@ it off for an app that imported the library directly and expects it.
 
 ## `hono-preact/internal`
 
-Two subscribe-callback exports are replaced by the signals they wrapped:
+This subpath carries no semver guarantee, but it is the one `optimistic-ui.mdx` tells users to
+import `OptimisticOverlay` from, so anything reachable there is worth listing.
 
-| Was | Is |
-|---|---|
-| `subscribeFormSubmit(cb)` | `pendingSignal` |
-| `subscribeLastActionResult(cb)` | `lastActionResultSignal` |
+| Was | Is | Migration |
+|---|---|---|
+| `subscribeFormSubmit(cb)` | `pendingSignal` | Read `pendingSignal.value`, or drop the subscription and let a `useComputed` track it. |
+| `subscribeLastActionResult(cb)` | `lastActionResultSignal` | Same shape. |
+| `LoaderDataContext: Context<LoaderState \| StreamState \| null>` | `Context<ReadonlySignal<LoaderData> \| null>` | Add `.value`: `useContext(LoaderDataContext)?.value`. |
+| `<Loader>`'s `accumulate?` | `mode` (required) | Pass `resolveLoaderMode(accumulate, isStreaming)`, now exported alongside `LoaderMode` from this subpath. |
 
-And `LoaderDataContext` changes shape:
+The two subscribe exports are a straight rename: the store they wrapped is a signal now, so the
+callback registry they existed to provide has no remaining purpose.
 
-```diff
--Context<LoaderState<unknown> | StreamState<unknown> | null>
-+Context<ReadonlySignal<LoaderData> | null>
-```
+`LoaderDataContext` is the more interesting one. There used to be TWO loader-data channels, a state
+context and a signal context, which is how `<OptimisticOverlay>` came to re-provide only one of
+them and stop working entirely while its own test suite stayed green. There is one channel now, and
+it carries a signal.
 
-There used to be two loader-data channels (a state context and a signal
-context), which is how `<OptimisticOverlay>` came to re-provide only one of them
-and stop working entirely while its own test suite stayed green. There is one
-channel now.
-
-These are `internal` exports, so most apps see nothing. They are listed because
-they are reachable and because at least one released component consumed them.
-
----
+**`<Loader>`'s `mode` was unusable, and that is fixed here rather than merely documented.** It became
+required, but `LoaderMode` was exported from neither `hono-preact` nor `hono-preact/internal`, so a
+TypeScript consumer of this subpath could not construct the prop at all -- and a JS consumer (or a
+stale-typed one) got `TypeError: Cannot read properties of undefined (reading 'kind')` on both the
+SSR and hydrate paths, i.e. a 500 rather than the loader's own error fallback. `resolveLoaderMode`
+and `LoaderMode` are now exported from `hono-preact/internal`, so the prop can be built the same way
+`.Boundary` and `.View` build it.
 
 ## Additive
 
