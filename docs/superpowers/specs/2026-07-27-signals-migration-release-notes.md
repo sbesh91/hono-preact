@@ -112,6 +112,11 @@ also exposes that signal directly, as `signal`, so a caller that hands it to a
 child gets the same leaf-level updates the primitive offers, and a caller that
 never reads `value` is no longer subscribed at all.
 
+Because `value` is an accessor with no setter now, `result.value = x` throws a
+`TypeError` under ESM's strict mode; it previously assigned silently and did
+nothing useful. TypeScript reports it too (`value` is `readonly`), so this
+reaches you only from untyped code or a suppressed error.
+
 **This hook also has a runtime requirement that did not exist before.** `base`
 must be a stable reference across renders. The hook now tracks it reactively, so
 a `base` built fresh on every render, an inline `?? []` fallback, an inline

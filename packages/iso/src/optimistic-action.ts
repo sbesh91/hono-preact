@@ -107,8 +107,12 @@ export function useOptimisticAction<TPayload, TResult, TBase, TChunk = never>(
     __action: stub.__action,
     useAction: stub.useAction,
     ...action,
-    // Declared AFTER `...action` so the spread cannot flatten the getter back
-    // into a snapshot.
+    // Written as a getter in THIS literal, and never spread in from another
+    // object. A spread EVALUATES accessors, so `{ ...somethingHoldingValue }`
+    // would turn `value` back into a one-shot snapshot and silently un-track
+    // every reader of it. That, not the ordering, is the invariant to keep:
+    // `...action` above cannot collide with `value` at all, since
+    // `UseActionResult` is `mutate` / `pending` / `error` / `data`.
     get value() {
       return signal.value;
     },
