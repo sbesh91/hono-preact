@@ -259,7 +259,9 @@ describe('the matcher discriminates', () => {
     // appears nowhere, so it passed under any matcher: replacing the code
     // extraction with raw page text left it green.
     const rooms = readFileSync(resolve(docsDir, 'rooms.mdx'), 'utf8');
-    const proseOnly = /reactive and updates on every join/.test(rooms);
+    const proseOnly = /updates on every join, leave, or presence change/.test(
+      rooms
+    );
     expect(proseOnly).toBe(true);
     // "join" is in that sentence and in no UseRoomResult code span.
     expect(documented('UseRoomResult', 'join')).toBe(false);

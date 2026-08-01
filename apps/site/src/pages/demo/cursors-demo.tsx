@@ -60,7 +60,7 @@ const CursorsDemo: FunctionComponent = () => {
     []
   );
 
-  const others = room.members.filter((m) => m.id !== room.self?.id);
+  const others = room.members.value.filter((m) => m.id !== room.self.value?.id);
 
   return (
     <div class="grid min-h-screen place-items-center bg-background px-4">
@@ -82,8 +82,8 @@ const CursorsDemo: FunctionComponent = () => {
           />
           <span>
             {room.status === 'open' ? 'Connected' : 'Connecting...'} &middot;{' '}
-            {room.members.length}{' '}
-            {room.members.length === 1 ? 'member' : 'members'} in room
+            {room.members.value.length}{' '}
+            {room.members.value.length === 1 ? 'member' : 'members'} in room
           </span>
         </div>
 
@@ -127,9 +127,10 @@ const CursorsDemo: FunctionComponent = () => {
           ))}
         </div>
 
-        {room.self && (
+        {room.self.value && (
           <p class="text-xs text-muted">
-            You are <code class="font-mono">{room.self.id.slice(0, 8)}</code>
+            You are{' '}
+            <code class="font-mono">{room.self.value.id.slice(0, 8)}</code>
           </p>
         )}
 

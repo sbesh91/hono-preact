@@ -125,7 +125,7 @@ describe('useRoom granularity through the hook', () => {
 
     function SelfView({ room }: { room: RoomHook }) {
       selfRenders();
-      return <p data-testid="self">{String(room.self?.state?.x)}</p>;
+      return <p data-testid="self">{String(room.self.value?.state?.x)}</p>;
     }
     function Sibling({ room }: { room: RoomHook }) {
       siblingRenders();
@@ -181,7 +181,7 @@ describe('useRoom granularity through the hook', () => {
       const r = useRoom(room, { presence: { x: 0 } });
       // Reading `members` subscribes to the whole roster (coarse), so this
       // updates on any member change.
-      return <p data-testid="count">{r.members.length}</p>;
+      return <p data-testid="count">{r.members.value.length}</p>;
     }
 
     render(<Counter />);

@@ -9,6 +9,7 @@
 //   - and the same inference holds for bare `defineRoom(channel, handler)` and
 //     for `route.room(channel, handler)`.
 import { expectTypeOf } from 'vitest';
+import type { ReadonlySignal } from '@preact/signals';
 import { defineRoom } from '../define-room.js';
 import { defineChannel } from '../define-channel.js';
 import { defineServerMiddleware } from '../define-middleware.js';
@@ -127,11 +128,14 @@ function _useRoomMethodProbe() {
   // undefined (a room with no presence() seed, or before a member's first
   // presence frame), so the roster state type is `State | undefined`. self is
   // also optional (undefined until the first snapshot arrives).
+  // T3: every roster read is a signal, so the type says what it does. A bare
+  // `ReadonlyArray` here was a reactive value wearing an inert type, and an
+  // imperative consumer reading it outside render got a dead snapshot.
   expectTypeOf(result.members).toEqualTypeOf<
-    ReadonlyArray<PresenceMember<ChatState | undefined>>
+    ReadonlySignal<ReadonlyArray<PresenceMember<ChatState | undefined>>>
   >();
   expectTypeOf(result.self).toEqualTypeOf<
-    PresenceMember<ChatState | undefined> | undefined
+    ReadonlySignal<PresenceMember<ChatState | undefined> | undefined>
   >();
   // No client broadcast on the result (fan-out is server-mediated).
   // @ts-expect-error useRoom result has no `broadcast`

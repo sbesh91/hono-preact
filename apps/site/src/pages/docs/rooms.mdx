@@ -1,6 +1,6 @@
 # Rooms & Presence
 
-Rooms give you multi-connection fan-out over WebSockets with a built-in presence roster. A room is a `Channel`-keyed group: every connection that joins the same channel key sees each other's messages (via server-mediated broadcast) and each other's presence state. The roster (`members`) is reactive on the client and updates whenever anyone joins, leaves, or changes their presence.
+Rooms give you multi-connection fan-out over WebSockets with a built-in presence roster. A room is a `Channel`-keyed group: every connection that joins the same channel key sees each other's messages (via server-mediated broadcast) and each other's presence state. The roster (`members`) is a signal on the client and updates whenever anyone joins, leaves, or changes their presence.
 
 Rooms are the right tool when you need multiple clients to talk to each other and you want to track who is connected. For server-to-client-only data streams, use [Realtime Channels](/docs/realtime) or [Live Loaders](/docs/live-loaders). For a private duplex channel to one client, use [WebSockets](/docs/websockets).
 
@@ -10,7 +10,7 @@ Three pieces cooperate:
 
 1. **Define a channel** with `defineChannel`. The channel name pattern (e.g. `room/:roomId`) sets the room key and types the params that flow into the server handler.
 2. **Define a room** with `defineRoom(channel, handler)` inside a `serverRooms` export in a `.server` module. The handler receives a `RoomConnection` that can send to one client, broadcast to others, and update presence.
-3. **Join from the client** with `serverRooms.<name>.useRoom({ key })` or the free `useRoom(ref, opts)` form. The hook returns a reactive `members` roster, a `send` function, and `setPresence` for updating this client's state.
+3. **Join from the client** with `serverRooms.<name>.useRoom({ key })` or the free `useRoom(ref, opts)` form. The hook returns a `members` roster signal, a `send` function, and `setPresence` for updating this client's state.
 
 Rooms ride the same `/__sockets` WebSocket transport as typed sockets and inherit the same guard composition: app `use`, then route-node `use`, then the room's own `use`. Fan-out is server-mediated: the client `send`s a message and the room's `onMessage` decides whether to call `conn.broadcast`.
 
@@ -97,7 +97,7 @@ export default function Board() {
   function handleMouseMove(e: MouseEvent) {
     const pos = { x: e.clientX, y: e.clientY };
     // Update this client's presence in the roster.
-    setPresence({ ...pos, name: self?.state?.name ?? 'Me' });
+    setPresence({ ...pos, name: self.value?.state?.name ?? 'Me' });
     // Notify others of the new position.
     send(pos);
   }
@@ -108,7 +108,7 @@ export default function Board() {
       style="position:relative;width:100%;height:400px"
     >
       <p>Status: {status}</p>
-      {members.map((m) => (
+      {members.value.map((m) => (
         <div
           key={m.id}
           style={`position:absolute;left:${m.state?.x}px;top:${m.state?.y}px`}
@@ -121,11 +121,20 @@ export default function Board() {
 }
 ```
 
-`members` is reactive and updates on every join, leave, or presence change. `self` is this client's own roster entry, derived from the roster (it is `undefined` until the first server snapshot arrives). Incoming messages from other members go to `onMessage`; they do not trigger a re-render.
+`members`, `memberIds`, `member(id)` and `self` are all signals: read `.value` and that component subscribes. `members.value` updates on every join, leave, or presence change. `self.value` is this client's own roster entry, `undefined` until the first server snapshot arrives. Incoming messages from other members go to `onMessage`; they do not trigger a re-render.
+
+Reading `.value` during render is the common case, and it is what subscribes your component. To drive something imperatively instead (a canvas layer, a chart, any non-Preact widget), subscribe rather than reading in an effect:
+
+```tsx
+// Runs on every roster change, for as long as the component is mounted.
+useEffect(() => members.subscribe((roster) => drawAvatars(roster)), []);
+```
+
+A plain `useEffect` that _reads_ `members.value` in its body sees the roster once and never again: an effect body is not a tracking context, so nothing subscribes. Use `.subscribe()` (above) or `useSignalEffect`, both of which do.
 
 ## Per-member updates
 
-`members` gives you the whole roster, and reading it re-renders your component whenever anything about anyone changes. For a handful of cursors that is exactly what you want. For a roster of fifty, one person moving their mouse re-renders all fifty rows.
+`members.value` gives you the whole roster, and reading it re-renders your component whenever anything about anyone changes. For a handful of cursors that is exactly what you want. For a roster of fifty, one person moving their mouse re-renders all fifty rows.
 
 `memberIds` and `member(id)` split that apart. `memberIds` changes only when someone joins or leaves. `member(id)` changes only when that one member's presence changes. Bind a row to one member and only that row re-renders:
 
@@ -170,7 +179,7 @@ The binding stays valid across joins, presence updates, leaves, and reconnects: 
 
 You get the same signal back every time you ask for a given id, so passing the binding down as a prop and calling `member(id)` again on a later render behave identically. Pick whichever reads better.
 
-Both are worth it when the roster is large or presence updates are frequent. Below that, `members` is simpler and there is nothing wrong with it.
+Both are worth it when the roster is large or presence updates are frequent. Below that, `members.value` is simpler and there is nothing wrong with it.
 
 [Signals](/docs/signals) covers the reactive value these return, including the two mistakes that do not produce a compile error.
 
@@ -347,10 +356,10 @@ Returns:
 | ------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `send`        | `(msg) => void`                                              | Send a message to the server. Queued if not yet open.                                                                                                                                        |
 | `setPresence` | `(state) => void`                                            | Publish this client's presence state to the roster.                                                                                                                                          |
-| `members`     | `ReadonlyArray<PresenceMember<State>>`                       | The presence roster, reactive.                                                                                                                                                               |
+| `members`     | `ReadonlySignal<ReadonlyArray<PresenceMember<State>>>`       | The presence roster. Read `.value`; changes on any join, leave or presence update.                                                                                                           |
 | `memberIds`   | `ReadonlySignal<readonly string[]>`                          | Membership ids. Changes on join and leave only. Read `.value`.                                                                                                                               |
 | `member`      | `(id) => ReadonlySignal<PresenceMember<State> \| undefined>` | One member's entry. Changes only when THAT member changes, so a row bound to it re-renders alone. `undefined` when the id is not in the room. See [Per-member updates](#per-member-updates). |
-| `self`        | `PresenceMember<State> \| undefined`                         | This client's own roster entry. `undefined` until the first snapshot arrives.                                                                                                                |
+| `self`        | `ReadonlySignal<PresenceMember<State> \| undefined>`         | This client's own roster entry. Read `.value`; `undefined` until the first snapshot arrives.                                                                                                 |
 | `status`      | `SocketStatus`                                               | Reactive connection status (`'connecting'`, `'open'`, `'reconnecting'`, `'closing'`, `'closed'`).                                                                                            |
 | `close`       | `(code?, reason?) => void`                                   | Close the connection. Suppresses reconnect.                                                                                                                                                  |
 | `closeInfo`   | `SocketCloseInfo \| undefined`                               | The last close event's `code`, `reason`, and `wasClean`.                                                                                                                                     |

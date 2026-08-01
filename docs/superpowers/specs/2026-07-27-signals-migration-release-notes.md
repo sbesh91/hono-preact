@@ -35,6 +35,7 @@ is in `2026-07-26-v0.13-release-notes.md`. Both land in the same release.
 | `FieldErrorsMap` | Compiler-caught | Messages are `readonly string[]`. Copy before sorting or reversing. |
 | `LoaderDataContext` (`hono-preact/internal`) | Compiler-caught | Now holds a signal. |
 | `subscribeFormSubmit` / `subscribeLastActionResult` (`hono-preact/internal`) | Compiler-caught | Gone. Use `pendingSignal` / `lastActionResultSignal`. |
+| `useRoom().members` / `.self` | **Mixed** | Add `.value`. Compiler-caught if you call an array method or read a field; **silent** if you only read `.length` off `members`, or tested `self` for truthiness (a signal is always truthy). |
 | `preact` peer range | Install-time | Now `>=10.25.0`. |
 
 **Silent** means it compiles and behaves differently. **Compiler-caught** means
@@ -283,6 +284,37 @@ and `LoaderMode` are now exported from `hono-preact/internal`, so the prop can b
 `.Boundary` and `.View` build it.
 
 ## Additive
+
+### `useRoom().members` and `.self` are signals
+
+They were a `ReadonlyArray` and a plain entry; they are now
+`ReadonlySignal<...>`, matching `memberIds` and `member(id)`, which were signals
+already. Add `.value`:
+
+```diff
+-{members.map((m) => <Row key={m.id} member={m} />)}
++{members.value.map((m) => <Row key={m.id} member={m} />)}
+
+-{self?.state?.name}
++{self.value?.state?.name}
+```
+
+**Why this changed rather than staying an array.** The array was reactive but
+did not say so. Reading it during render subscribed your component and worked;
+reading it from a `useEffect` returned a snapshot that never updated again,
+because an effect body is not a tracking context and the hook no longer
+re-renders its host on presence frames. There was no compile error and no
+warning, and the type offered nothing to subscribe to. As a signal it is honest,
+and the imperative path exists:
+
+```tsx
+useEffect(() => members.subscribe((roster) => drawAvatars(roster)), []);
+```
+
+**Watch the silent cases.** `members.value.length` is compiler-caught, but
+`members.length` on a signal is `undefined` rather than an error at runtime if
+you are on plain JS, and `if (self)` is now always true because a signal is an
+object. Test `self.value`.
 
 - **`useRoom` gains `memberIds` and `member(id)`.** `memberIds.value` changes on
   join/leave only; `member(id).value` changes only when that member's presence

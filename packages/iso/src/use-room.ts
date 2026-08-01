@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { Serialize } from './internal/serialize.js';
 import {
   SOCKETS_RPC_PATH,
@@ -20,6 +20,7 @@ import {
   createSignalRoster,
   type RosterStore,
 } from './internal/roster-signal.js';
+import { useComputed, useSignal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 
 // Re-export the shared lifecycle types so consumers can name them off useRoom.
@@ -113,9 +114,14 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
   send: (msg: Incoming<R>) => void;
   /** Publish this client's presence state to the roster. */
   setPresence: (state: State<R>) => void;
-  /** The presence roster, reactive. State may be undefined for rooms with no
-   * presence() seed (void-state rooms). */
-  members: ReadonlyArray<PresenceMember<State<R> | undefined>>;
+  /** The presence roster as a reactive value; changes on any join, leave or
+   * presence update. Read `.value`. State may be undefined for rooms with no
+   * presence() seed (void-state rooms).
+   *
+   * Reading `.value` during render subscribes that component to the WHOLE
+   * roster, so it re-renders when anything about anyone changes. Bind
+   * `member(id)` per row instead when the roster is large. */
+  members: ReadonlySignal<ReadonlyArray<PresenceMember<State<R> | undefined>>>;
   /** Membership ids as a reactive value; changes on join/leave only. Read
    * `.value`. */
   memberIds: ReadonlySignal<readonly string[]>;
@@ -132,8 +138,10 @@ export type UseRoomResult<R extends AnyRoomRefShape> = {
   member: (
     id: string
   ) => ReadonlySignal<PresenceMember<State<R> | undefined> | undefined>;
-  /** This client's own roster entry, derived from the snapshot `self` id. */
-  self?: PresenceMember<State<R> | undefined>;
+  /** This client's own roster entry as a reactive value, derived from the
+   * snapshot `self` id. Read `.value`; it is `undefined` until the first
+   * server snapshot arrives. */
+  self: ReadonlySignal<PresenceMember<State<R> | undefined> | undefined>;
   status: SocketStatus;
   close: (code?: number, reason?: string) => void;
   closeInfo?: SocketCloseInfo;
@@ -166,7 +174,9 @@ export function useRoom<R extends AnyRoomRefShape>(
 ): UseRoomResult<R> {
   const opts = args[0];
   // The self id from the latest snapshot; `self` is derived from the store.
-  const [selfId, setSelfId] = useState<string | undefined>(undefined);
+  // A signal, not state: `self` derives from it, and writing it must not
+  // re-render the `useRoom` host any more than a presence frame does.
+  const selfId = useSignal<string | undefined>(undefined);
 
   // The granular, signal-backed roster store. Created once per hook instance.
   const storeRef = useRef<RosterStore<State<R> | undefined> | null>(null);
@@ -223,7 +233,7 @@ export function useRoom<R extends AnyRoomRefShape>(
       // subtree from re-rendering on every update. `setSelfId` still fires
       // (rare, on snapshot).
       if (env.t === 'snapshot') {
-        setSelfId(env.self);
+        selfId.value = env.self;
         store.snapshot(env.members);
         return;
       }
@@ -266,34 +276,33 @@ export function useRoom<R extends AnyRoomRefShape>(
     [sendRaw]
   );
 
-  // Keep the latest self id reachable from the result getters without forcing a
-  // `useRoom` re-render: `selfId` only changes via `setSelfId` (on snapshot),
-  // which re-renders anyway, so this ref is current whenever it matters.
-  const selfIdRef = useRef(selfId);
-  selfIdRef.current = selfId;
+  // `self` derives from the snapshot's self id and that member's own signal, so
+  // a self presence echo notifies a `self` reader without re-rendering
+  // `useRoom`. Relies on the server seeding self into the roster before the
+  // snapshot (room-engine `joinPresence` precedes `roster`), so `member(sid)`
+  // resolves to a real signal.
+  const self = useComputed(() => {
+    const sid = selfId.value;
+    return sid === undefined ? undefined : store.member(sid).value;
+  });
 
-  // `members` and `self` are lazy getters that read the store's signals when
-  // the CONSUMER accesses them, so a coarse `members` consumer subscribes to
-  // the whole roster (updates on any change) while a component that reads
-  // only `member(id)` does not re-render on other members.
+  // Every roster read is a SIGNAL, so the type says what it does. `members`,
+  // `memberIds` and `member(id)` now behave identically: reading `.value` in a
+  // tracking context subscribes that reader, and outside one the signal is
+  // still there to `.subscribe()` from.
+  //
+  // `members` was a lazy getter returning the array itself (review round 3, T3).
+  // That read subscribed a consumer during render, but an imperative consumer
+  // reading it in a `useEffect` got a dead snapshot and no way to notice: the
+  // type said `ReadonlyArray`, so nothing suggested there was anything to
+  // subscribe to, and `useRoom` no longer re-renders on presence frames.
   return {
     send,
     setPresence,
-    get members() {
-      return store.members.value;
-    },
+    members: store.members,
     memberIds: store.memberIds,
     member: store.member,
-    get self() {
-      const sid = selfIdRef.current;
-      if (sid === undefined) return undefined;
-      // Subscribes the consumer to self's OWN signal, so a self presence echo
-      // re-renders a `self` reader without re-rendering useRoom. Relies on the
-      // server seeding self into the roster before the snapshot (room-engine
-      // joinPresence precedes roster), so `member(sid)` resolves to a real
-      // signal.
-      return store.member(sid).value;
-    },
+    self,
     status: lifecycle.status,
     close: lifecycle.close,
     closeInfo: lifecycle.closeInfo,

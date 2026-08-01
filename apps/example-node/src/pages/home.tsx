@@ -134,14 +134,17 @@ const CursorsDemo: FunctionComponent = () => {
     [room]
   );
 
-  const others = room.members.filter((m) => m.id !== room.self?.id);
+  const others = room.members.value.filter((m) => m.id !== room.self.value?.id);
 
   return (
     <div>
       <h2>Live cursors ({room.status})</h2>
       <p>
-        Members: {room.members.length} (you are{' '}
-        {room.self ? `member ${room.self.id.slice(0, 6)}` : 'connecting...'})
+        Members: {room.members.value.length} (you are{' '}
+        {room.self.value
+          ? `member ${room.self.value.id.slice(0, 6)}`
+          : 'connecting...'}
+        )
       </p>
       <div
         style={{
