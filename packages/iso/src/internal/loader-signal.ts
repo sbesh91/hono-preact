@@ -70,31 +70,6 @@ export function createCollectSignals(): CollectSignals {
   };
 }
 
-/**
- * Fold a run's retained chunks into a `StreamState<Acc>`, INCREMENTALLY:
- * `index`/`acc` live in this closure rather than inside the `computed`, so a
- * recompute reduces only the chunks appended since the last one. Total work
- * across a stream is O(n), not O(n^2). Each call gets its own cursor, which is
- * what lets several `useData(initial, reduce)` consumers fold the SAME retained
- * chunks independently.
- *
- * Called once per `useData()` invocation and memoized by the caller: a fresh
- * call would refold from an empty cursor, losing the "a late mount consumes the
- * whole retained log" property that the retention exists for.
- *
- * A generation change is detected by the chunks array's IDENTITY. A new
- * subscription mints a new array, so the cursor and accumulator reset before
- * folding and a resumed stream folds strictly from scratch instead of
- * continuing onto the prior stream's total. Identity cannot drift the way the
- * counter it replaced could, and unlike a `length < index` heuristic it is not
- * fooled by a truncation that lands in the same update as an append.
- *
- * Value-presence is structural: `present` is `index > 0` (AFTER the generation
- * check), i.e. whether THIS generation has folded anything. A stream that
- * errors before its first chunk reports `present: false` rather than a
- * fabricated `initial` masquerading as real data, matching the fold-mode
- * contract in `loader-state.ts`.
- */
 /** A value a reducer could mutate in place. Written as a predicate rather than
  * a cast so the narrowing carries into the fingerprint helpers. Arrays satisfy
  * it too: an array's own keys are its indices. */
@@ -162,7 +137,7 @@ export type AccumulatorGuard = {
  */
 export function createAccumulatorGuard(
   initial: unknown,
-  message: string
+  host: AccumulatorHost
 ): AccumulatorGuard {
   const container = isMutableContainer(initial) ? initial : null;
   const before = container === null ? null : fingerprintOf(container);
@@ -170,11 +145,62 @@ export function createAccumulatorGuard(
     check(handedToReduce) {
       if (container === null || before === null) return;
       if (handedToReduce !== initial) return;
-      if (hasMutated(container, before)) throw new Error(message);
+      if (hasMutated(container, before)) throw new Error(mutationMessage(host));
     },
   };
 }
 
+/** Which engine is reporting, so the message names the host the caller used. */
+export type AccumulatorHost = 'live' | 'accumulating';
+
+/**
+ * The explanation is DEV/SSR-only (#338): a production client build gets the
+ * one-line diagnosis, since the fix is for whoever is building the app and
+ * shipping the prose costs every visitor bytes on a loader path.
+ *
+ * The long strings live HERE rather than at the two call sites, which pass a
+ * short discriminant instead. Passing the message as an argument would keep it
+ * referenced at the call site no matter what the gate resolves to, so it would
+ * never tree-shake, which is exactly the trap `use-entry.ts` documents.
+ */
+function mutationMessage(host: AccumulatorHost): string {
+  const subject = host === 'live' ? 'A live loader' : 'An accumulating loader';
+  return typeof import.meta.env === 'undefined' ||
+    import.meta.env.SSR ||
+    import.meta.env.DEV
+    ? `${subject} \`reduce\` must not mutate its accumulator: this one ` +
+        'modified `initial` in place. The fold restarts from `initial` on a ' +
+        'reconnect, so the previous stream would carry into the next one and ' +
+        'duplicate it. Return a new accumulator instead (`[...acc, chunk]`, ' +
+        '`{ ...acc }`).'
+    : `${subject} \`reduce\` must not mutate its accumulator.`;
+}
+
+/**
+ * Fold a run's retained chunks into a `StreamState<Acc>`, INCREMENTALLY:
+ * `index`/`acc` live in this closure rather than inside the `computed`, so a
+ * recompute reduces only the chunks appended since the last one. Total work
+ * across a stream is O(n), not O(n^2). Each call gets its own cursor, which is
+ * what lets several `useData(initial, reduce)` consumers fold the SAME retained
+ * chunks independently.
+ *
+ * Called once per `useData()` invocation and memoized by the caller: a fresh
+ * call would refold from an empty cursor, losing the "a late mount consumes the
+ * whole retained log" property that the retention exists for.
+ *
+ * A generation change is detected by the chunks array's IDENTITY. A new
+ * subscription mints a new array, so the cursor and accumulator reset before
+ * folding and a resumed stream folds strictly from scratch instead of
+ * continuing onto the prior stream's total. Identity cannot drift the way the
+ * counter it replaced could, and unlike a `length < index` heuristic it is not
+ * fooled by a truncation that lands in the same update as an append.
+ *
+ * Value-presence is structural: `present` is `index > 0` (AFTER the generation
+ * check), i.e. whether THIS generation has folded anything. A stream that
+ * errors before its first chunk reports `present: false` rather than a
+ * fabricated `initial` masquerading as real data, matching the fold-mode
+ * contract in `loader-state.ts`.
+ */
 export function foldStream<Acc>(
   s: CollectView,
   initial: Acc,
@@ -183,14 +209,7 @@ export function foldStream<Acc>(
   let index = 0;
   let acc = initial;
   let seenChunks: readonly unknown[] | null = null;
-  const guard = createAccumulatorGuard(
-    initial,
-    'A live loader `reduce` must not mutate its accumulator: this one ' +
-      'modified `initial` in place. The fold restarts from `initial` on a ' +
-      'reconnect, so the previous stream would carry into the next one and ' +
-      'duplicate it. Return a new accumulator instead (`[...acc, chunk]`, ' +
-      '`{ ...acc }`).'
-  );
+  const guard = createAccumulatorGuard(initial, 'live');
   return computed(() => {
     const run = s.run.value;
     if (run.chunks !== seenChunks) {

@@ -500,12 +500,20 @@ const COLD_LOADING: LoaderState<unknown> = { status: 'loading' };
 function toSingleValueState(s: LoaderData): LoaderState<unknown> {
   if (s === null) return COLD_LOADING;
   if (isLoaderState(s)) return s;
+  // The throw is unconditional, the explanation is not (#338): a production
+  // client build gets the locator alone. Read `import.meta.env` INSIDE the
+  // function and inline, never via a helper taking the message as an argument,
+  // or the long string stays referenced and never tree-shakes.
   throw new Error(
-    'loader.useData() was called under an accumulating host. A host given ' +
-      '`accumulate` folds chunks into your own accumulator, which `useData()` ' +
-      'cannot type or return. Read that state with ' +
-      '`loader.View(render, { initial, reduce })`, whose render function ' +
-      'receives it directly.'
+    typeof import.meta.env === 'undefined' ||
+      import.meta.env.SSR ||
+      import.meta.env.DEV
+      ? 'loader.useData() was called under an accumulating host. A host given ' +
+          '`accumulate` folds chunks into your own accumulator, which `useData()` ' +
+          'cannot type or return. Read that state with ' +
+          '`loader.View(render, { initial, reduce })`, whose render function ' +
+          'receives it directly.'
+      : 'loader.useData() was called under an accumulating host.'
   );
 }
 
@@ -718,11 +726,15 @@ function makeLoaderRef(
     const ctx = useContext(LoaderStreamContext);
     if (!ctx) {
       throw new Error(
-        'live loader.useData(initial, reduce) must be called inside a ' +
-          '`loader.Boundary` host. A `.View(render, { initial, reduce })` host ' +
-          'folds the stream into ONE accumulator and retains no chunk log, so ' +
-          'it cannot serve a second, independent fold; its render function ' +
-          'already receives the folded state.'
+        typeof import.meta.env === 'undefined' ||
+          import.meta.env.SSR ||
+          import.meta.env.DEV
+          ? 'live loader.useData(initial, reduce) must be called inside a ' +
+              '`loader.Boundary` host. A `.View(render, { initial, reduce })` host ' +
+              'folds the stream into ONE accumulator and retains no chunk log, so ' +
+              'it cannot serve a second, independent fold; its render function ' +
+              'already receives the folded state.'
+          : 'live loader.useData(initial, reduce) must be called inside a `loader.Boundary` host.'
       );
     }
     const resultRef = useRef<ReadonlySignal<StreamState<Acc>> | null>(null);

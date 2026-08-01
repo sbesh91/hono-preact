@@ -274,11 +274,7 @@ export function useLoaderRunner<T>(
     () =>
       createAccumulatorGuard(
         mode.kind === 'fold' ? mode.initial : undefined,
-        'An accumulating loader `reduce` must not mutate its accumulator: ' +
-          'this one modified `initial` in place. The fold restarts from ' +
-          '`initial` on a reconnect, so the previous stream would carry into ' +
-          'the next one and duplicate it. Return a new accumulator instead ' +
-          '(`[...acc, chunk]`, `{ ...acc }`).'
+        'accumulating'
       ),
     [mode]
   );

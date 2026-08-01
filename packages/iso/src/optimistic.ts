@@ -58,7 +58,14 @@ export function useOptimistic<TBase, TPayload>(
     // be a fresh reference each time (e.g. an inline literal) even with an
     // empty queue, which is a synchronous render loop: write -> subscribed
     // component re-renders -> `base` is a new reference again -> write ...
-    const current = queue.value;
+    // `peek`, not `.value`: this runs during render, so a tracked read would
+    // subscribe the CALLING component to the queue and re-render it on the next
+    // dispatch. That is precisely the granularity a caller gives up when it
+    // holds the returned signal and passes it to a leaf instead of reading it
+    // (review round 3, T6). Every other non-tracking read in the data layer
+    // already uses `peek` (`action-result-store`, `form-submit-store`, all of
+    // `loader-signal`); this was the outlier.
+    const current = queue.peek();
     const filtered = current.filter((e) => e.status !== 'ready');
     if (filtered.length !== current.length) {
       queue.value = filtered;
