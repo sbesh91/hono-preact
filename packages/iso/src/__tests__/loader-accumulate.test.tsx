@@ -137,3 +137,48 @@ describe('non-streaming loader + accumulate: a mutating reducer is rejected', ()
     expect(state.error.message).toMatch(/must not mutate its accumulator/);
   });
 });
+
+// T2, fold-mode half. The identity-based guard rejected an ordinary filtering
+// reducer whose first chunk does not match; only an actual mutation of
+// `initial` should be rejected.
+describe('non-streaming loader + accumulate: a filtering reducer is legal', () => {
+  it('folds normally when the first chunk is filtered out', async () => {
+    const ref = defineLoader<number>(async () => 41);
+    const filtering = {
+      initial: [] as unknown,
+      reduce: (acc: unknown, chunk: unknown) =>
+        (chunk as number) % 2 === 0
+          ? [...(acc as number[]), chunk as number]
+          : acc,
+    };
+    type Captured = ReturnType<typeof useLoaderRunner<number>>;
+    let captured: Captured;
+    function Probe() {
+      captured = useLoaderRunner<number>(
+        ref,
+        LOC,
+        'acc-filtering',
+        resolveLoaderMode(filtering, false)
+      );
+      return null;
+    }
+
+    render(<Probe />);
+
+    // Wait for `open`, which is only reached AFTER the chunk has been folded.
+    // Waiting on `not.toBe('error')` instead would pass on the FIRST render at
+    // `connecting`, before `reduce` has run at all, and so would pass against a
+    // guard that rejects every filtering reducer. (It did; the mutation check
+    // caught it.)
+    await waitFor(() => {
+      if (captured!.view.kind !== 'render') throw new Error('expected render');
+      expect(captured!.view.state.status).toBe('open');
+    });
+    if (captured!.view.kind !== 'render') throw new Error('expected render');
+    const state = captured!.view.state;
+    if (state.status !== 'open') throw new Error('expected open');
+    // 41 is odd, so `reduce` returned the `[]` it was handed: the exact shape
+    // the old guard mistook for a mutation. The empty fold IS the observation.
+    expect(state.data).toEqual([]);
+  });
+});

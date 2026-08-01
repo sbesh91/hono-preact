@@ -95,6 +95,86 @@ export function createCollectSignals(): CollectSignals {
  * fabricated `initial` masquerading as real data, matching the fold-mode
  * contract in `loader-state.ts`.
  */
+/** A value a reducer could mutate in place. Written as a predicate rather than
+ * a cast so the narrowing carries into the fingerprint helpers. Arrays satisfy
+ * it too: an array's own keys are its indices. */
+function isMutableContainer(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null;
+}
+
+/** A shallow content fingerprint: own keys, in order, and their values. */
+type Fingerprint = {
+  readonly keys: readonly string[];
+  readonly values: readonly unknown[];
+};
+
+function fingerprintOf(v: Record<string, unknown>): Fingerprint {
+  const keys = Object.keys(v);
+  return { keys, values: keys.map((k) => v[k]) };
+}
+
+function hasMutated(v: Record<string, unknown>, f: Fingerprint): boolean {
+  const keys = Object.keys(v);
+  if (keys.length !== f.keys.length) return true;
+  for (let i = 0; i < keys.length; i++) {
+    if (keys[i] !== f.keys[i] || v[keys[i]] !== f.values[i]) return true;
+  }
+  return false;
+}
+
+export type AccumulatorGuard = {
+  /** Call immediately AFTER `reduce`, passing the accumulator that was handed
+   * TO it. Throws when the reducer mutated the caller's `initial`. */
+  check(handedToReduce: unknown): void;
+};
+
+/**
+ * Rejects a reducer that mutates the caller's `initial` in place.
+ *
+ * Both fold engines reset with `acc = initial` on a resubscribe, so a reducer
+ * that fills `initial` makes that reset restore an object already holding the
+ * previous stream: the next stream folds onto the last one and history
+ * duplicates on every reconnect, growing without bound.
+ *
+ * **Why a fingerprint and not identity.** The original guard (R8) asked whether
+ * `reduce` returned the object it was handed. That flags a mutating reducer,
+ * but it equally flags an ordinary FILTERING one:
+ *
+ *     (acc, ev) => ev.type === 'tick' ? [...acc, ev] : acc
+ *
+ * whose first chunk is a heartbeat. It returns `acc` untouched, which is
+ * correct and common, and the guard threw at it (review round 3, T2). Identity
+ * cannot separate the two; only whether `initial` still holds what it held can.
+ * So the check compares `initial` against a fingerprint taken before any fold.
+ *
+ * That is also strictly stronger: it catches a reducer that mutates `initial`
+ * and returns a COPY (`acc.push(c); return [...acc]`), which the identity check
+ * missed entirely.
+ *
+ * Scoped to the window where `reduce` is actually handed `initial`, which is
+ * the aliasing hazard: once the accumulator diverges, the reducer no longer has
+ * `initial` to corrupt unless it captured it separately, which is out of scope.
+ * Cost is O(own keys of `initial`) per chunk in that window, and `initial` is
+ * `[]` or `{}` in every documented use, so in practice O(1) on the first chunk.
+ *
+ * A primitive `initial` cannot be corrupted this way, so it is never guarded and
+ * `(acc) => acc` over a number stays legal.
+ */
+export function createAccumulatorGuard(
+  initial: unknown,
+  message: string
+): AccumulatorGuard {
+  const container = isMutableContainer(initial) ? initial : null;
+  const before = container === null ? null : fingerprintOf(container);
+  return {
+    check(handedToReduce) {
+      if (container === null || before === null) return;
+      if (handedToReduce !== initial) return;
+      if (hasMutated(container, before)) throw new Error(message);
+    },
+  };
+}
+
 export function foldStream<Acc>(
   s: CollectView,
   initial: Acc,
@@ -103,6 +183,14 @@ export function foldStream<Acc>(
   let index = 0;
   let acc = initial;
   let seenChunks: readonly unknown[] | null = null;
+  const guard = createAccumulatorGuard(
+    initial,
+    'A live loader `reduce` must not mutate its accumulator: this one ' +
+      'modified `initial` in place. The fold restarts from `initial` on a ' +
+      'reconnect, so the previous stream would carry into the next one and ' +
+      'duplicate it. Return a new accumulator instead (`[...acc, chunk]`, ' +
+      '`{ ...acc }`).'
+  );
   return computed(() => {
     const run = s.run.value;
     if (run.chunks !== seenChunks) {
@@ -111,35 +199,9 @@ export function foldStream<Acc>(
       seenChunks = run.chunks;
     }
     while (index < run.length) {
+      const handed = acc;
       const next = reduce(acc, run.chunks[index]);
-      // A reducer that MUTATES its accumulator and returns it aliases the
-      // caller's `initial`, so the generation reset above (`acc = initial`)
-      // hands back an object the reducer has already filled: the new stream
-      // folds onto the old one and history duplicates on every reconnect,
-      // growing without bound.
-      //
-      // That reducer is exactly the one that returns the object it was handed,
-      // so the FIRST fold of a generation detects it in O(1). Checked here
-      // rather than at the reset that would expose it, so the failure lands on
-      // the reducer that caused it instead of on a reconnect minutes later.
-      //
-      // Only for a non-primitive `initial`: a number or string cannot be
-      // corrupted this way, and `(acc) => acc` over one is a legal (if
-      // pointless) fold that must not be rejected.
-      if (
-        index === 0 &&
-        next === initial &&
-        typeof initial === 'object' &&
-        initial !== null
-      ) {
-        throw new Error(
-          'A live loader `reduce` must not mutate its accumulator: this one ' +
-            'returned the same object it was given. The fold restarts from ' +
-            '`initial` on a reconnect, so a mutated `initial` would carry the ' +
-            'previous stream into the next one and duplicate it. Return a new ' +
-            'accumulator instead (`[...acc, chunk]`, `{ ...acc }`).'
-        );
-      }
+      guard.check(handed);
       acc = next;
       index += 1;
     }

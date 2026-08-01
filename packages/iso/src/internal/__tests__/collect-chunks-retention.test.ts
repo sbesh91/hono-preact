@@ -215,3 +215,62 @@ describe('a mutating reducer is rejected, not silently corrupted', () => {
     expect(folded.value.data).toBe(0);
   });
 });
+
+// T2 (review round 3): the guard above keyed on `next === initial`, which a
+// MUTATING reducer and an ordinary FILTERING one both satisfy on the first
+// chunk of a generation. Identity alone cannot tell them apart; only whether
+// `initial` was actually mutated can.
+describe('T2: a filtering reducer that passes its accumulator through is legal', () => {
+  it('does not throw when the first chunk of a generation is filtered out', () => {
+    const s = createCollectSignals();
+    // The canonical shape: keep `tick` frames, drop everything else. The stream
+    // opens with a heartbeat, so `reduce` returns the `[]` it was handed.
+    const folded = foldStream<readonly string[]>(s, [], (acc, ev) =>
+      (ev as string).startsWith('tick')
+        ? [...(acc as string[]), ev as string]
+        : (acc as string[])
+    );
+    appendCollectChunk(s, 'hello');
+    expect(() => folded.value).not.toThrow();
+    expect(folded.value.data).toEqual([]);
+  });
+
+  it('still folds correctly once matching chunks arrive', () => {
+    const s = createCollectSignals();
+    const folded = foldStream<readonly string[]>(s, [], (acc, ev) =>
+      (ev as string).startsWith('tick')
+        ? [...(acc as string[]), ev as string]
+        : (acc as string[])
+    );
+    appendCollectChunk(s, 'hello');
+    appendCollectChunk(s, 'tick-1');
+    appendCollectChunk(s, 'noise');
+    appendCollectChunk(s, 'tick-2');
+    expect(folded.value.data).toEqual(['tick-1', 'tick-2']);
+  });
+});
+
+// The fingerprint check is strictly stronger than the identity check it
+// replaced, not merely narrower: this reducer corrupts `initial` and then
+// returns a COPY, so `next !== initial` and the old guard let it through.
+describe('T2: mutation is detected however the reducer returns', () => {
+  it('rejects a reducer that mutates `initial` but returns a copy', () => {
+    const s = createCollectSignals();
+    const folded = foldStream<readonly number[]>(s, [], (acc, n) => {
+      (acc as number[]).push(n as number);
+      return [...(acc as number[])];
+    });
+    appendCollectChunk(s, 1);
+    expect(() => folded.value).toThrow(/must not mutate/);
+  });
+
+  it('rejects an in-place field update on an object `initial`', () => {
+    const s = createCollectSignals();
+    const folded = foldStream<{ total: number }>(s, { total: 0 }, (acc, n) => {
+      (acc as { total: number }).total += n as number;
+      return acc as { total: number };
+    });
+    appendCollectChunk(s, 5);
+    expect(() => folded.value).toThrow(/must not mutate/);
+  });
+});

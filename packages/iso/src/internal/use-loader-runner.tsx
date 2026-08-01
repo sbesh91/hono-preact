@@ -36,6 +36,7 @@ import {
   createCollectSignals,
   beginCollectResubscribe,
   setCollectError,
+  createAccumulatorGuard,
   type CollectSignals,
 } from './loader-signal.js';
 
@@ -264,6 +265,24 @@ export function useLoaderRunner<T>(
   // so a streaming reload re-folds through `reduce` rather than overwriting the
   // accumulator with a raw chunk. Exhaustive on the mode union: a new mode
   // cannot be added without deciding what a chunk does here.
+  // One guard per fold host, fingerprinting `initial` BEFORE any chunk folds.
+  // Must not be built per chunk: a fingerprint taken after a mutation already
+  // happened would match, and the guard would never fire. `mode` is pinned by
+  // `useStableLoaderMode`, so this is built once. A non-fold host guards
+  // `undefined`, a primitive, which makes `check` a no-op.
+  const foldGuard = useMemo(
+    () =>
+      createAccumulatorGuard(
+        mode.kind === 'fold' ? mode.initial : undefined,
+        'An accumulating loader `reduce` must not mutate its accumulator: ' +
+          'this one modified `initial` in place. The fold restarts from ' +
+          '`initial` on a reconnect, so the previous stream would carry into ' +
+          'the next one and duplicate it. Return a new accumulator instead ' +
+          '(`[...acc, chunk]`, `{ ...acc }`).'
+      ),
+    [mode]
+  );
+
   const applyChunk = useCallback(
     (chunk: unknown) => {
       switch (mode.kind) {
@@ -272,30 +291,14 @@ export function useLoaderRunner<T>(
           return;
         case 'fold':
           {
+            // Same mutation guard as collect-mode's `foldStream`, sharing one
+            // implementation. The resubscribe reset below
+            // (`session.acc = mode.initial`) restores an object the reducer has
+            // already filled if it mutated `initial`, so the next stream folds
+            // onto the last one.
+            const handed = session.acc;
             const next = mode.reduce(session.acc, chunk);
-            // Same aliasing guard as collect-mode's `foldStream`, for the other
-            // engine. A reducer that mutates its accumulator and returns it
-            // aliases `mode.initial`, so the resubscribe reset
-            // (`session.acc = mode.initial`, below) hands back an object the
-            // reducer already filled and the next stream folds onto the last
-            // one. Detected only when the accumulator IS `initial` -- the first
-            // chunk of a generation -- and only for a non-primitive, which
-            // cannot be corrupted this way.
-            if (
-              session.acc === mode.initial &&
-              next === mode.initial &&
-              typeof mode.initial === 'object' &&
-              mode.initial !== null
-            ) {
-              throw new Error(
-                'An accumulating loader `reduce` must not mutate its ' +
-                  'accumulator: this one returned the same object it was ' +
-                  'given. The fold restarts from `initial` on a reconnect, so ' +
-                  'a mutated `initial` would carry the previous stream into ' +
-                  'the next one and duplicate it. Return a new accumulator ' +
-                  'instead (`[...acc, chunk]`, `{ ...acc }`).'
-              );
-            }
+            foldGuard.check(handed);
             session.acc = next;
           }
           // A fresh `success` object per chunk; streaming already re-renders.
@@ -316,7 +319,7 @@ export function useLoaderRunner<T>(
         }
       }
     },
-    [mode, session, applyCollectChunk]
+    [mode, session, applyCollectChunk, foldGuard]
   );
 
   // (Re)subscribe a FOLD-mode stream: reset the accumulator to `initial` and
