@@ -108,7 +108,7 @@ constructed; read `.pending`.
 The dispatch function is unchanged. `useOptimisticAction` keeps working at the
 call site: `value` is now a lazy getter over the signal, so reading it during
 render subscribes the component exactly as the previous snapshot did. The hook
-also exposes the signal itself as `valueSignal`, so a caller that hands it to a
+also exposes that signal directly, as `signal`, so a caller that hands it to a
 child gets the same leaf-level updates the primitive offers, and a caller that
 never reads `value` is no longer subscribed at all.
 
