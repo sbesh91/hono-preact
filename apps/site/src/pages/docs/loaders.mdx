@@ -269,9 +269,12 @@ See [Streaming](/docs/streaming) and [Live Loaders](/docs/live-loaders) for the 
 
 ```tsx
 function HeaderWithSummary() {
-  const state = serverLoaders.summary.useData();
-  if (!state.value.data) return <Skeleton />;
-  return <h1>{state.value.data.title}</h1>;
+  const { status, data } = serverLoaders.summary.useData().value;
+  // Narrow on `status`, the discriminant. Testing `data` for presence looks
+  // equivalent and is not: a loader that legitimately resolves to `0`, `''` or
+  // `null` would render the skeleton forever on a settled `success`.
+  if (status !== 'success') return <Skeleton />;
+  return <h1>{data.title}</h1>;
 }
 
 function Header() {

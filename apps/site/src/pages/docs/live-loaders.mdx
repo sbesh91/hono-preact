@@ -216,12 +216,22 @@ The `connecting` arm declares `data?: never`, so `data` is readable on the un-na
 
 `StreamStatus` values:
 
-| Value          | Meaning                                                       |
-| -------------- | ------------------------------------------------------------- |
-| `'connecting'` | SSR or pre-hydration; the first chunk has not arrived yet.    |
-| `'open'`       | At least one chunk has arrived; the stream is active.         |
-| `'closed'`     | The generator returned normally; no more chunks are expected. |
-| `'error'`      | The stream errored. `error` holds the cause.                  |
+| Value            | Meaning                                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `'connecting'`   | SSR or pre-hydration; the first chunk has not arrived yet.                                                                  |
+| `'open'`         | At least one chunk has arrived; the stream is active.                                                                       |
+| `'reconnecting'` | A `reload()` resubscribe is in flight and the previous fold is STILL PRESENT. `data` is the last good value, not `initial`. |
+| `'closed'`       | The generator returned normally; no more chunks are expected.                                                               |
+| `'error'`        | The stream errored. `error` holds the cause.                                                                                |
+
+`reconnecting` is the arm that keeps a reload from blanking the screen: it carries `data`, so a view that was showing a fold keeps showing it while the resubscribe is in flight. That means a two-way test is wrong:
+
+```diff
+-{s.value.status === 'open' ? <Feed data={s.value.data} /> : <Spinner />}
++{s.value.status === 'connecting' ? <Spinner /> : <Feed data={s.value.data} />}
+```
+
+The first replaces a live fold with a spinner on every `reload()`, which is exactly what `reconnecting` exists to prevent. Narrow on the arm that has no data, not on the one that does.
 
 ### `loader.useData(initial, reduce)` and `loader.Boundary` (collect-mode)
 

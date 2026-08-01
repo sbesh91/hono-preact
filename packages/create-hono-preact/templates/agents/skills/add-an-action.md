@@ -80,12 +80,15 @@
 
 - Hand-rolling a POST route instead of `defineAction`. You lose the typed payload, the
   envelope, and progressive enhancement.
-- Reading a raw `Response`. Read the outcome via `useActionResult()`; its `kind` is
-  `'success' | 'deny' | 'error'`.
+- Reading a raw `Response`. Read the outcome via `useActionResult()`, which returns a
+  signal: `result.value?.kind` is `'success' | 'deny' | 'error'`.
 - Relying on client JS for the form to work at all. It must function without JS; only the
   enhancements (pending state, no full reload) need JS.
-- Ignoring the deny/error branch. Handle `result.kind === 'deny'` / `'error'` and show
-  `result.message`.
+- Ignoring the deny/error branch. Handle `result.value?.kind === 'deny'` / `'error'` and
+  show `result.value.message`.
+- Forgetting `.value`. `useActionResult()` and `useFormStatus()` return signals, so
+  `result.kind` is `undefined` and `if (result)` is always true (a signal is an object).
+  Read `result.value` and `status.value.pending`.
 
 ## Reference
 
