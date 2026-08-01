@@ -181,3 +181,98 @@ describe('useActionResult', () => {
     expect(renders.host).toBe(hostBefore);
   });
 });
+
+// T1 (review round 3). `defineAction` attaches `__module`/`__action` only when
+// the Vite `moduleKeyPlugin` injected them (`action.ts:152-153` guards both with
+// `!== undefined`), so a stub from an unprocessed module carries NEITHER.
+//
+// The hooks derived a `ref` from those two fields and then keyed every decision
+// off `ref`, which collapses "no stub was passed" and "a stub was passed but has
+// no identity" into the same branch. The first legitimately means "any action";
+// the second must mean "nothing", because the caller named an action and we
+// cannot tell which. On `main` the identity guard tested `stub` (the object), so
+// this returned null.
+describe('T1: a stub with no injected identity matches NOTHING', () => {
+  it("does not adopt another action's result", () => {
+    setLastActionResult('pages/other.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Task deleted',
+      submittedPayload: {},
+    });
+    // A stub object, but the plugin never rewrote it.
+    const unrewritten = {} as { __module: string; __action: string };
+    const { container } = render(<Reader stub={unrewritten} />);
+    // Under the defect this rendered the OTHER action's deny message: a signup
+    // form showing "Task deleted".
+    expect(container.textContent).toBe('null');
+    clearLastActionResult('pages/other.server', 'submit');
+  });
+
+  it('CONTROL: no stub at all still reports the most recent result', () => {
+    // The no-stub fallback is a designed feature ("the last action result on
+    // this page"), so the fix must not break it. This is what stops the test
+    // above from passing against a hook that simply returns null always.
+    setLastActionResult('pages/other.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Task deleted',
+      submittedPayload: {},
+    });
+    const { container } = render(<Reader />);
+    expect(container.textContent).toContain('Task deleted');
+    clearLastActionResult('pages/other.server', 'submit');
+  });
+
+  it('CONTROL: a properly keyed stub still matches its own result', () => {
+    setLastActionResult('pages/foo.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Name required',
+      submittedPayload: {},
+    });
+    const { container } = render(
+      <Reader stub={{ __module: 'pages/foo.server', __action: 'submit' }} />
+    );
+    expect(container.textContent).toContain('Name required');
+  });
+});
+
+// The mirror has to FOLLOW the stub, including when it appears or disappears.
+// `<Form action={mode === 'edit' ? updateTodo : undefined}>` is the shape: a
+// reader that latched `given` at mount keeps answering for the wrong branch,
+// and in the no-stub-then-unrewritten-stub direction that is the T1 leak again.
+describe('T1: the any-action fallback follows a stub that appears or vanishes', () => {
+  it('stops reporting another action once an unkeyed stub is supplied', () => {
+    setLastActionResult('pages/other.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Task deleted',
+      submittedPayload: {},
+    });
+    const { container, rerender } = render(<Reader />);
+    // No stub: the designed any-action fallback.
+    expect(container.textContent).toContain('Task deleted');
+
+    const unrewritten = {} as { __module: string; __action: string };
+    rerender(<Reader stub={unrewritten} />);
+    expect(container.textContent).toBe('null');
+    clearLastActionResult('pages/other.server', 'submit');
+  });
+
+  it('resumes the any-action fallback when the stub goes away', () => {
+    setLastActionResult('pages/other.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Task deleted',
+      submittedPayload: {},
+    });
+    const unrewritten = {} as { __module: string; __action: string };
+    const { container, rerender } = render(<Reader stub={unrewritten} />);
+    expect(container.textContent).toBe('null');
+
+    rerender(<Reader />);
+    expect(container.textContent).toContain('Task deleted');
+    clearLastActionResult('pages/other.server', 'submit');
+  });
+});

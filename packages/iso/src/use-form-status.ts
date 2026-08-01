@@ -1,7 +1,8 @@
-import { useComputed, useSignal } from '@preact/signals';
+import { useComputed } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 import type { ActionRef } from './action.js';
 import { pendingSignal, pickIsPending } from './internal/form-submit-store.js';
+import { useStubKey } from './internal/use-stub-key.js';
 import { isBrowser } from './is-browser.js';
 
 export type FormStatus = { pending: boolean };
@@ -26,26 +27,14 @@ const PENDING: FormStatus = Object.freeze({ pending: true });
 export function useFormStatus<TPayload = unknown, TResult = unknown>(
   stub?: ActionRef<TPayload, TResult, never>
 ): ReadonlySignal<FormStatus> {
-  // Mirror the stub's IDENTITY (two primitive strings, so a fresh object
-  // literal per render is a no-op write) into tracked signals. The computed
-  // below is created once (`useComputed` is `useMemo(..., [])`) and only
-  // re-evaluates when a TRACKED signal changes, so a plain closure capture of
-  // `stub` would pin this reader to the action passed on the mount render: a
-  // `<Form action={mode === 'create' ? createTodo : updateTodo}>` that flips
-  // `mode` would keep reporting the previous action's pending state. Same
-  // pattern, and the same reason, as `useOptimistic`'s `base`.
-  const stubModule = useSignal<string | undefined>(stub?.__module);
-  const stubAction = useSignal<string | undefined>(stub?.__action);
-  stubModule.value = stub?.__module;
-  stubAction.value = stub?.__action;
+  const stubKey = useStubKey(stub);
 
   return useComputed(() => {
-    const module = stubModule.value;
-    const action = stubAction.value;
-    const ref =
-      module !== undefined && action !== undefined
-        ? { __module: module, __action: action }
-        : undefined;
+    const { ref, unmatchable } = stubKey.value;
+    // No identity to match, so no submission can be attributed to this stub.
+    // Falling through would report `pending` whenever ANY form on the page is
+    // submitting (review round 3, T1).
+    if (unmatchable) return IDLE;
     return isBrowser() && pickIsPending(pendingSignal.value, ref)
       ? PENDING
       : IDLE;

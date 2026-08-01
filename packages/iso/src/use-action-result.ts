@@ -10,6 +10,7 @@ import {
 import { isBrowser } from './is-browser.js';
 import type { ActionRef } from './action.js';
 import type { Serialize } from './internal/serialize.js';
+import { useStubKey } from './internal/use-stub-key.js';
 import type { DenyCode } from './outcomes.js';
 
 export type ActionResult<TPayload, TResult> =
@@ -94,15 +95,7 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   const ssrValue = useContext(ActionResultContext);
   const ssr = useSignal(ssrValue);
   ssr.value = ssrValue;
-  // Mirror the stub's IDENTITY (two primitive strings, so a fresh object
-  // literal per render is a no-op write) into tracked signals. The computed
-  // below is created once (`useComputed` is `useMemo(..., [])`) and only
-  // re-evaluates when a tracked signal changes, so a plain closure capture of
-  // `stub` would pin this reader to the action passed on the mount render.
-  const stubModule = useSignal<string | undefined>(stub?.__module);
-  const stubAction = useSignal<string | undefined>(stub?.__action);
-  stubModule.value = stub?.__module;
-  stubAction.value = stub?.__action;
+  const stubKey = useStubKey(stub);
 
   // Two-stage projection. The inner computed yields the STORED ENTRY, whose
   // identity the store preserves across writes keyed to other actions, so
@@ -112,12 +105,12 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
   // would bump the computed's version on every store write (a fresh literal is
   // never `===` the previous one) and re-render every binding on the page.
   const entry = useComputed(() => {
-    const module = stubModule.value;
-    const action = stubAction.value;
-    const ref =
-      module !== undefined && action !== undefined
-        ? { __module: module, __action: action }
-        : undefined;
+    const { ref, unmatchable } = stubKey.value;
+    // A stub was passed but carries no identity, so nothing can honestly be
+    // attributed to it. Without this, `ref` is `undefined` and the lookup falls
+    // through to the any-action branch, handing this reader whatever unrelated
+    // action wrote last (review round 3, T1).
+    if (unmatchable) return null;
     const client = isBrowser()
       ? pickLastActionResult(lastActionResultSignal.value, ref)
       : null;
