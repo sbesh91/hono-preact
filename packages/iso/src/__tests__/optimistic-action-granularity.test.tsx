@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-// `useOptimisticAction` used to read its internal `signal.value` eagerly in
+// `useOptimisticAction` used to read its internal `valueSignal.value` eagerly in
 // the hook body, which subscribed the HOST to the optimistic queue whether or
 // not the host ever rendered the projection, and left no signal for a caller to
-// hand a leaf. `value` is now a lazy getter over the exposed `signal`, so
+// hand a leaf. `value` is now a lazy getter over the exposed `valueSignal`, so
 // the subscription follows the read.
 //
 // These are render-counted rather than assertion-on-output, because the whole
@@ -36,7 +36,7 @@ describe('useOptimisticAction render granularity', () => {
       });
       // Dispatch through the brand so no network is involved.
       add = result[OPTIMISTIC_BRAND].addOptimistic;
-      projection = result.signal;
+      projection = result.valueSignal;
       // `result.value` is deliberately NEVER read.
       return null;
     }
@@ -81,7 +81,7 @@ describe('useOptimisticAction render granularity', () => {
     expect(seen).toEqual(['Alien', 'Dune']);
   });
 
-  it('re-renders only the leaf when `signal` is handed down', async () => {
+  it('re-renders only the leaf when `valueSignal` is handed down', async () => {
     let hostRenders = 0;
     let leafRenders = 0;
     let leafSaw: string[] = [];
@@ -100,7 +100,7 @@ describe('useOptimisticAction render granularity', () => {
         apply: (cur, p) => [...cur, p.title],
       });
       add = result[OPTIMISTIC_BRAND].addOptimistic;
-      return <Leaf items={result.signal} />;
+      return <Leaf items={result.valueSignal} />;
     }
 
     render(<Host base={['Alien']} />);

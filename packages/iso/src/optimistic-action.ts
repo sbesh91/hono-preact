@@ -48,11 +48,11 @@ export type UseOptimisticActionResult<TPayload, TResult, TBase> = ActionRef<
     /**
      * The current projection: `base` with every in-flight payload applied.
      *
-     * A lazy getter over {@link UseOptimisticActionResult.signal}, so the
+     * A lazy getter over {@link UseOptimisticActionResult.valueSignal}, so the
      * subscription follows the READ. A component that reads this during render
      * is tracked and re-renders on every queue change, which is what every
      * existing call site relies on. A component that never reads it (one that
-     * only calls `mutate`, or hands `signal` to a leaf) is not subscribed
+     * only calls `mutate`, or hands `valueSignal` to a leaf) is not subscribed
      * at all.
      */
     readonly value: TBase;
@@ -60,7 +60,7 @@ export type UseOptimisticActionResult<TPayload, TResult, TBase> = ActionRef<
      * The same projection as a signal. Hand this to a leaf and only the leaf
      * re-renders on a dispatch; the component that owns the action does not.
      */
-    readonly signal: ReadonlySignal<TBase>;
+    readonly valueSignal: ReadonlySignal<TBase>;
     readonly [OPTIMISTIC_BRAND]: OptimisticBinding<TPayload, TBase>;
   };
 
@@ -77,15 +77,15 @@ export function useOptimisticAction<TPayload, TResult, TBase, TChunk = never>(
   const { base, apply, onSuccess, onError, transition, ...actionOpts } =
     options;
   // `useOptimistic` returns a `ReadonlySignal<TBase>` (Phase 3), and it is
-  // deliberately NOT read here. An eager `signal.value` in this hook body
+  // deliberately NOT read here. An eager `valueSignal.value` in this hook body
   // subscribes the host unconditionally -- including a host that only calls
   // `mutate` and never renders the projection -- because Preact's signals
   // integration auto-tracks any `.value` read during a function component's
   // render. That spends the whole granularity the signal exists to provide.
   // The lazy getter on `value` below moves the subscription to the READ, so a
   // host that renders the projection behaves exactly as before and one that
-  // hands `signal` to a leaf keeps its own renders.
-  const [signal, addOptimistic] = useOptimistic(base, apply, {
+  // hands `valueSignal` to a leaf keeps its own renders.
+  const [valueSignal, addOptimistic] = useOptimistic(base, apply, {
     transition,
   });
 
@@ -114,9 +114,9 @@ export function useOptimisticAction<TPayload, TResult, TBase, TChunk = never>(
     // `...action` above cannot collide with `value` at all, since
     // `UseActionResult` is `mutate` / `pending` / `error` / `data`.
     get value() {
-      return signal.value;
+      return valueSignal.value;
     },
-    signal,
+    valueSignal,
     [OPTIMISTIC_BRAND]: { apply, addOptimistic },
   };
 }

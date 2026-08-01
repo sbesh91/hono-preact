@@ -42,13 +42,13 @@ const Movies = ({ loaderData }) => {
 
 `value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `addMovie.value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: 'auto'`), `addMovie.value` reflects real server data with no visual gap.
 
-The returned object is stub-compatible: pass it to `<Form action={addMovie}>` for declarative form submission, or call `addMovie.mutate(payload)` for programmatic invocation. Both paths participate in the optimistic queue. Access `addMovie.pending`, `addMovie.error`, and `addMovie.data` to read the mutation status and result, and `addMovie.signal` when you want the update to land in a child instead of here (see below).
+The returned object is stub-compatible: pass it to `<Form action={addMovie}>` for declarative form submission, or call `addMovie.mutate(payload)` for programmatic invocation. Both paths participate in the optimistic queue. Access `addMovie.pending`, `addMovie.error`, and `addMovie.data` to read the mutation status and result, and `addMovie.valueSignal` when you want the update to land in a child instead of here (see below).
 
 ### Narrowing re-renders
 
 Reading `addMovie.value` during render subscribes that component, so it re-renders whenever the projection changes. That is usually what you want: the component showing the list is the component that changes.
 
-When the component that owns the action also renders something expensive, hand the list off to a child and give it `addMovie.signal` instead:
+When the component that owns the action also renders something expensive, hand the list off to a child and give it `addMovie.valueSignal` instead:
 
 ```tsx
 const MovieList = ({ movies }) => (
@@ -68,7 +68,7 @@ const Movies = ({ loaderData }) => {
 
   return (
     <>
-      <MovieList movies={addMovie.signal} />
+      <MovieList movies={addMovie.valueSignal} />
       <ExpensiveChart data={loaderData.stats} />
       <Form action={addMovie}>
         <input name="title" placeholder="Title" />
@@ -81,7 +81,7 @@ const Movies = ({ loaderData }) => {
 
 Now a dispatch re-renders `MovieList` and nothing else. `Movies` never reads `.value`, so it never subscribes, and `ExpensiveChart` stays put.
 
-`signal` is a `ReadonlySignal<TBase>` holding the same projection as `value` (see [Signals](/docs/signals)). Reach for it when the surrounding render is worth skipping. `value` is simpler, and fine everywhere else.
+`valueSignal` is a `ReadonlySignal<TBase>` holding the same projection as `value` (see [Signals](/docs/signals)). Reach for it when the surrounding render is worth skipping. `value` is simpler, and fine everywhere else.
 
 ### Options
 
