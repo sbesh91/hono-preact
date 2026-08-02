@@ -402,7 +402,9 @@ Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still 
 
 `mutate` and `<Form>` submit both manage their in-flight request lifetime automatically.
 
-**Unmount aborts the request.** If a component that called `mutate` unmounts while the request is in flight, the fetch is aborted. The abort is quiet: no error state is written, no `onError` fires. This prevents "setState after unmount" warnings without any cleanup code in the component.
+**Unmount aborts the request.** If a component that called `mutate` unmounts while the request is in flight, the fetch is aborted. No error outcome is recorded, so nothing surfaces through `useActionResult`. `onError` does still fire, with an abort error: an optimistic wrapper needs it to revert its pending entry rather than strand it as permanently in-flight. Guard on `err.name === 'AbortError'` if your handler should skip cancellations.
+
+Aborting is a client-side cancellation, not a rollback. The request may already have reached the server and committed, so treat an aborted mutation as unknown rather than failed, and let the next loader read settle it.
 
 `<Form>` submit works the same way: unmounting the form while a submit is in flight aborts the underlying fetch.
 

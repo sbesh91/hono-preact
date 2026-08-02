@@ -555,7 +555,11 @@ Pass `'auto'` to invalidate the current page's loader only. Use `loader.invalida
 
 ## Caching navigation results
 
-Every loader gets its own cache automatically. Repeated navigations to the same route (with the same cache key) hit the cache and skip the RPC call. To clear the cache:
+Every loader gets its own cache automatically. It holds the most recent result, and it is read when a loader mounts: leaving a route and coming back to the same cache key skips the RPC call.
+
+Two limits are worth knowing, because both are easy to assume away. The cache holds **one entry per loader**, so visiting a second key evicts the first. And it is read only on a loader's **first render**, so changing params without leaving the route (`/movies/1` to `/movies/2` under `/movies/:id`) refetches every time, including back to a key you just visited. Neither is a deliberate policy; see [#360](https://github.com/sbesh91/hono-preact/issues/360).
+
+To clear the cache:
 
 ```ts
 serverLoaders.default.invalidate();

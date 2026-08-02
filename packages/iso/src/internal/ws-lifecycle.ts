@@ -237,6 +237,13 @@ export function useWsLifecycle(config: WsLifecycleConfig): WsLifecycle {
     }
 
     userClosedRef.current = false;
+    // A fresh budget for a fresh lifecycle. `retryCountRef` otherwise resets
+    // only in `onopen`, so once the budget is spent it stays spent for the
+    // ref's lifetime: toggling `enabled` off and on again (the documented way
+    // to recover a dead connection) re-ran this effect with the counter still
+    // at `maxRetries`, so the retry branch was false on the first close and the
+    // recovery attempt got exactly one connect with no retries behind it.
+    retryCountRef.current = 0;
     connect();
 
     return () => {
