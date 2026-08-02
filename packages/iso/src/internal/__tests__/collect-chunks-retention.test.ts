@@ -274,3 +274,78 @@ describe('T2: mutation is detected however the reducer returns', () => {
     expect(() => folded.value).toThrow(/must not mutate/);
   });
 });
+
+describe('an unchanged fold does not wake its consumers', () => {
+  // `toStreamState` is a pure constructor, so it mints a fresh object per call.
+  // A `computed`'s only dedupe is `===` on the produced value, so without an
+  // explicit comparison every chunk woke every consumer even when the fold
+  // produced identical data. A FILTERING reducer is the case that exposes it:
+  // it returns `acc` untouched for a chunk it drops, so a heartbeat-heavy
+  // stream re-rendered everything on every heartbeat while showing nothing new.
+  //
+  // Counted with `effect` rather than rendered, because the leak is invisible
+  // in output: the right data was on screen, just recomputed for nothing.
+  const isTick = (c: unknown): c is { type: 'tick' } =>
+    typeof c === 'object' && c !== null && 'type' in c && c.type === 'tick';
+  const keepTicks = (acc: unknown[], chunk: unknown): unknown[] =>
+    isTick(chunk) ? [...acc, chunk] : acc;
+
+  it('does not notify when a dropped chunk leaves the accumulator unchanged', () => {
+    const s = createCollectSignals();
+    const folded = foldStream<unknown[]>(s, [], keepTicks);
+    let wakes = 0;
+    const stop = effect(() => {
+      folded.value;
+      wakes++;
+    });
+
+    appendCollectChunk(s, { type: 'tick' });
+    const afterTick = wakes;
+
+    appendCollectChunk(s, { type: 'heartbeat' });
+    appendCollectChunk(s, { type: 'heartbeat' });
+
+    expect(wakes).toBe(afterTick);
+    stop();
+  });
+
+  it('CONTROL: a chunk the reducer KEEPS still notifies', () => {
+    // Stops the test above from passing against a fold that stopped notifying
+    // anyone at all, which would "dedupe" perfectly and be useless.
+    const s = createCollectSignals();
+    const folded = foldStream<unknown[]>(s, [], keepTicks);
+    let wakes = 0;
+    const stop = effect(() => {
+      folded.value;
+      wakes++;
+    });
+    const before = wakes;
+
+    appendCollectChunk(s, { type: 'tick' });
+
+    expect(wakes).toBeGreaterThan(before);
+    expect(folded.value.data).toHaveLength(1);
+    stop();
+  });
+
+  it('still notifies when the STATUS moves but the data does not', () => {
+    // The comparison covers `status`, so a reconnect over an unchanged fold
+    // stays observable. That is the whole point of `reconnecting` being its own
+    // arm (#349 R4/R5), and a data-only dedupe would swallow it.
+    const s = createCollectSignals();
+    const folded = foldStream<unknown[]>(s, [], keepTicks);
+    appendCollectChunk(s, { type: 'tick' });
+    let wakes = 0;
+    const stop = effect(() => {
+      folded.value;
+      wakes++;
+    });
+    const before = wakes;
+
+    beginCollectResubscribe(s);
+
+    expect(wakes).toBeGreaterThan(before);
+    expect(folded.value.status).toBe('reconnecting');
+    stop();
+  });
+});

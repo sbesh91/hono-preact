@@ -177,6 +177,27 @@ function mutationMessage(host: AccumulatorHost): string {
 }
 
 /**
+ * Structural equality over the three fields a `StreamState` can carry.
+ *
+ * `toStreamState` is a pure constructor: it builds a fresh object every call,
+ * which is correct for a constructor and fatal for a `computed`, whose only
+ * dedupe is `===` on the produced value. Without this, a fold emits a new
+ * object identity on every chunk and wakes every consumer even when nothing
+ * they can read has changed. Comparing here rather than memoizing inside
+ * `toStreamState` keeps the constructor pure for its other callers.
+ */
+function sameStreamState<T>(a: StreamState<T>, b: StreamState<T>): boolean {
+  if (a.status !== b.status) return false;
+  // `data` is uniformly readable on the bare union (cold arms declare
+  // `data?: never`), so this needs no narrow.
+  if (a.data !== b.data) return false;
+  // The re-test of `b` is what narrows it for the compiler; `a.status ===
+  // b.status` above already guarantees it.
+  if (a.status === 'error') return b.status === 'error' && a.error === b.error;
+  return true;
+}
+
+/**
  * Fold a run's retained chunks into a `StreamState<Acc>`, INCREMENTALLY:
  * `index`/`acc` live in this closure rather than inside the `computed`, so a
  * recompute reduces only the chunks appended since the last one. Total work
@@ -209,6 +230,13 @@ export function foldStream<Acc>(
   let index = 0;
   let acc = initial;
   let seenChunks: readonly unknown[] | null = null;
+  // The last state this fold PUBLISHED. Held so an unchanged fold republishes
+  // the same object and `computed` can dedupe it (see `sameStreamState`). A
+  // filtering `reduce` is the case that needs it: `(acc, ev) => ev.type ===
+  // 'tick' ? [...acc, ev] : acc` returns `acc` untouched on a heartbeat, so
+  // there is nothing new to show, and without this every consumer re-rendered
+  // on every heartbeat anyway.
+  let last: StreamState<Acc> | null = null;
   const guard = createAccumulatorGuard(initial, 'live');
   return computed(() => {
     const run = s.run.value;
@@ -224,11 +252,14 @@ export function foldStream<Acc>(
       acc = next;
       index += 1;
     }
-    return toStreamState(
+    const state = toStreamState(
       run.status,
       { present: index > 0, value: acc },
       run.error
     );
+    if (last !== null && sameStreamState(last, state)) return last;
+    last = state;
+    return state;
   });
 }
 
