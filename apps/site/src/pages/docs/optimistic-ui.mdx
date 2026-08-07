@@ -85,17 +85,17 @@ Now a dispatch re-renders `MovieList` and nothing else. `Movies` never reads `.v
 
 ### Options
 
-| Option       | Type                             | Description                                                                                             |
-| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `base`       | `TBase`                          | The base value (typically loader data) the projection layers over. Pass a stable reference (see below). |
-| `apply`      | `(current, payload) => TBase`    | Reducer that produces the next projection                                                               |
-| `invalidate` | `'auto' \| LoaderRef<unknown>[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed (see below).              |
-| `onSuccess`  | `(data) => void`                 | Called after a successful mutation. Snapshot is internal; not exposed here.                             |
-| `onError`    | `(err) => void`                  | Called after a failed mutation. The optimistic entry is reverted automatically before this fires.       |
+| Option       | Type                             | Description                                                                                       |
+| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `base`       | `TBase`                          | The base value (typically loader data) the projection layers over.                                |
+| `apply`      | `(current, payload) => TBase`    | Reducer that produces the next projection                                                         |
+| `invalidate` | `'auto' \| LoaderRef<unknown>[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed (see below).        |
+| `onSuccess`  | `(data) => void`                 | Called after a successful mutation. Snapshot is internal; not exposed here.                       |
+| `onError`    | `(err) => void`                  | Called after a failed mutation. The optimistic entry is reverted automatically before this fires. |
 
 Other `useAction` options (`onChunk`) pass through.
 
-`base` must be a stable reference across renders (the real data itself). The projection tracks it reactively, so a value built fresh on every render, an inline `?? []` when the loader field is missing, an inline `.filter(...)`, or a spread, re-derives the projection every render and, because your component binds the returned value, re-renders in a loop. Give the loader field a stable empty default, or memoize the expression, before passing it.
+`base` is compared by contents, not by reference, so you can build it inline. An `?? []` for a missing loader field, an inline `.filter(...)`, or a spread all hand the hook a fresh value every render, and none of them re-derive the projection unless the entries actually changed. The comparison is one level deep: a change nested inside an entry counts as a change, so you get an extra render rather than a stale one.
 
 ### Why no `invalidate: false`?
 

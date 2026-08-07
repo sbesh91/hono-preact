@@ -117,18 +117,18 @@ Because `value` is an accessor with no setter now, `result.value = x` throws a
 nothing useful. TypeScript reports it too (`value` is `readonly`), so this
 reaches you only from untyped code or a suppressed error.
 
-**This hook also has a runtime requirement that did not exist before.** `base`
-must be a stable reference across renders. The hook now tracks it reactively, so
-a `base` built fresh on every render, an inline `?? []` fallback, an inline
-`.filter(...)`, or a spread, re-derives the projection every render; because a
-consumer binds the returned signal, that is a re-render loop. Give the loader
-field a stable empty default, or memoize the expression, before passing it:
+`base` needs no special handling. The hook tracks it reactively, but compares it
+by CONTENTS rather than by reference, so the expressions that are natural to
+write inline are safe to pass inline:
 
-```diff
--const [items] = useOptimistic(data?.movies ?? [], apply);
-+const movies = data?.movies ?? EMPTY; // module-level `const EMPTY = []`
-+const [items] = useOptimistic(movies, apply);
+```tsx
+const [items] = useOptimistic(data?.movies ?? [], apply);
 ```
+
+Rebuilding the container every render is inert; only a real change to the
+entries re-derives the projection and wakes the consumers bound to it. The
+comparison is one level deep, so a change nested inside an entry reads as a
+change, which is the safe direction: an extra render, never a stale one.
 
 ---
 

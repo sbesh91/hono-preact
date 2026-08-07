@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'preact/hooks';
 import { useComputed, useSignal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
+import { shallowEqual } from './internal/shallow-equal.js';
 
 type Status = 'active' | 'ready';
 type Entry<TPayload> = { id: number; payload: TPayload; status: Status };
@@ -25,12 +26,12 @@ export type UseOptimisticOptions = {
  * result as a `ReadonlySignal<TBase>`, plus a `dispatch` that enqueues one
  * optimistic update (returning a handle to `settle` or `revert` it).
  *
- * `base` MUST be a stable reference across renders (the real data, e.g. a
- * loader value): the hook tracks it reactively, so passing a NEW reference on
- * every render (a fresh `?? []`, an inline `.filter(...)` or spread) makes the
- * value re-derive every render and, because a consumer binds the returned
- * signal, re-render in a loop. Memoize such an expression (or keep the fallback
- * stable) before passing it as `base`.
+ * `base` is compared by CONTENTS, not by reference (`shallowEqual`), so the
+ * expressions an author reaches for first are safe to pass inline: a fresh
+ * `data?.movies ?? []`, an inline `.filter(...)`, a spread. Rebuilding the
+ * container every render is inert; only a real change to the entries publishes.
+ * A nested change (`[{...}]` whose inner object was rebuilt) reads as a change,
+ * since the comparison is one level deep.
  */
 export function useOptimistic<TBase, TPayload>(
   base: TBase,
@@ -40,31 +41,32 @@ export function useOptimistic<TBase, TPayload>(
   const queue = useSignal<Entry<TPayload>[]>([]);
   // Holds `base` as a tracked signal, not just the plain closure capture
   // below, so the value computed (which reads `baseState.value`) re-derives
-  // when `base` changes even while the queue is idle. Written every render
-  // (see below); @preact/signals dedupes a same-reference write, so an
-  // unchanged `base` is a no-op and a changed `base` notifies exactly once.
+  // when `base` changes even while the queue is idle. Written only from the
+  // changed branch below, never unconditionally: a signal write always
+  // notifies, and @preact/signals dedupes on REFERENCE, which is the one thing
+  // an inline `?? []` does not hold still.
   const baseState = useSignal<TBase>(base);
-  baseState.value = base;
   const lastBaseRef = useRef(base);
   const idRef = useRef(0);
   const transitionRef = useRef(options?.transition === true);
   transitionRef.current = options?.transition === true;
 
-  if (!Object.is(lastBaseRef.current, base)) {
-    // Guard the write: only touch the signal when the filter actually drops
-    // a `ready` entry. A signal write always notifies (unlike the old plain
-    // ref, which silently tolerated a no-op reassignment), so an unconditional
-    // write here would re-notify on every render whose `base` prop happens to
-    // be a fresh reference each time (e.g. an inline literal) even with an
-    // empty queue, which is a synchronous render loop: write -> subscribed
-    // component re-renders -> `base` is a new reference again -> write ...
+  // Contents, not identity. Reference equality here republished an unchanged
+  // `base` on every render that rebuilt it inline, waking every consumer bound
+  // to the projection, and it dropped settled `ready` entries at the same time,
+  // both for a `base` that had not actually moved.
+  if (!shallowEqual(lastBaseRef.current, base)) {
+    baseState.value = base;
+    // Only touch the queue when the filter actually drops a `ready` entry: a
+    // signal write always notifies, unlike the plain ref this replaced, which
+    // silently tolerated a no-op reassignment.
+    //
     // `peek`, not `.value`: this runs during render, so a tracked read would
     // subscribe the CALLING component to the queue and re-render it on the next
     // dispatch. That is precisely the granularity a caller gives up when it
-    // holds the returned signal and passes it to a leaf instead of reading it
-    // (review round 3, T6). Every other non-tracking read in the data layer
-    // already uses `peek` (`action-result-store`, `form-submit-store`, all of
-    // `loader-signal`); this was the outlier.
+    // holds the returned signal and passes it to a leaf instead of reading it.
+    // Every other non-tracking read in the data layer already uses `peek`
+    // (`action-result-store`, `form-submit-store`, all of `loader-signal`).
     const current = queue.peek();
     const filtered = current.filter((e) => e.status !== 'ready');
     if (filtered.length !== current.length) {
