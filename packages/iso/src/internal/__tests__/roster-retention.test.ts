@@ -109,3 +109,59 @@ describe('roster retention', () => {
     expect(roster.retainedCellCount()).toBe(0);
   });
 });
+
+describe('roster snapshot granularity', () => {
+  it('does not touch memberIds when a reconnect snapshot repeats the roster', () => {
+    const roster = createSignalRoster<State>();
+    const list = [
+      { id: 'a', state: { x: 1 } },
+      { id: 'b', state: { x: 2 } },
+    ];
+    roster.snapshot(list);
+    const idsBefore = roster.memberIds.value;
+
+    // A reconnect delivers the same roster in fresh wire objects.
+    roster.snapshot([
+      { id: 'a', state: { x: 1 } },
+      { id: 'b', state: { x: 2 } },
+    ]);
+
+    // Identity, not contents: a fresh array would wake every memberIds binding.
+    expect(roster.memberIds.value).toBe(idsBefore);
+  });
+
+  it('does not touch a member cell whose state is unchanged', () => {
+    const roster = createSignalRoster<State>();
+    roster.snapshot([{ id: 'a', state: { x: 1 } }]);
+    const cell = roster.member('a');
+    const before = cell.value;
+
+    roster.snapshot([{ id: 'a', state: { x: 1 } }]);
+    expect(cell.value).toBe(before);
+
+    roster.upsert('a', { x: 1 });
+    expect(cell.value).toBe(before);
+  });
+
+  it('CONTROL: a real state change still publishes', () => {
+    const roster = createSignalRoster<State>();
+    roster.snapshot([{ id: 'a', state: { x: 1 } }]);
+    const cell = roster.member('a');
+
+    roster.snapshot([{ id: 'a', state: { x: 2 } }]);
+    expect(cell.value).toEqual({ id: 'a', state: { x: 2 } });
+
+    roster.upsert('a', { x: 3 });
+    expect(cell.value).toEqual({ id: 'a', state: { x: 3 } });
+  });
+
+  it('CONTROL: membership changes still publish memberIds', () => {
+    const roster = createSignalRoster<State>();
+    roster.snapshot([{ id: 'a', state: { x: 1 } }]);
+    roster.snapshot([
+      { id: 'a', state: { x: 1 } },
+      { id: 'b', state: { x: 2 } },
+    ]);
+    expect(roster.memberIds.value).toEqual(['a', 'b']);
+  });
+});

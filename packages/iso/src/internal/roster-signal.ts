@@ -1,4 +1,5 @@
 import { signal, computed, batch, type Signal } from '@preact/signals';
+import { shallowEqual } from './shallow-equal.js';
 import type { PresenceMember } from './room-envelope.js';
 import type { ReadonlySignal } from '@preact/signals';
 
@@ -142,6 +143,26 @@ export function createSignalRoster<S>(): RosterStore<S> {
     return true;
   }
 
+  /**
+   * Publish a member into its cell, but only when the STATE actually changed.
+   *
+   * Every write here is a fresh object off the wire, so identity says nothing.
+   * Without this, a reconnect snapshot (which usually carries the roster
+   * unchanged) re-published every cell and woke every `member(id)` binding,
+   * which is precisely the granularity this store exists to provide. The
+   * comparison is one level into `state`, the same depth `useOptimistic` uses,
+   * so a flat presence payload (`{ x, y }`, `{ typing }`) dedupes and a nested
+   * one falls through to a write rather than risking a missed update.
+   */
+  function writeMember(
+    cell: Signal<PresenceMember<S> | undefined>,
+    next: PresenceMember<S>
+  ): void {
+    const prev = cell.peek();
+    if (prev !== undefined && shallowEqual(prev.state, next.state)) return;
+    cell.value = next;
+  }
+
   return {
     snapshot(members) {
       batch(() => {
@@ -157,7 +178,7 @@ export function createSignalRoster<S>(): RosterStore<S> {
           }
           const s = resolve(m.id);
           promote(m.id, s);
-          s.value = m;
+          writeMember(s, m);
         }
         // Anyone no longer listed is blanked THROUGH their existing cell, so a
         // held binding is notified instead of orphaned. Snapshotting the keys
@@ -165,7 +186,11 @@ export function createSignalRoster<S>(): RosterStore<S> {
         for (const id of [...live.keys()]) {
           if (!present.has(id)) blank(id);
         }
-        ids.value = nextIds;
+        // Only when membership actually changed. A reconnect snapshot usually
+        // carries the SAME roster, and `memberIds` is documented as changing on
+        // join/leave only; writing a fresh array unconditionally woke every
+        // `memberIds` binding on every reconnect.
+        if (!shallowEqual(ids.peek(), nextIds)) ids.value = nextIds;
       });
     },
     upsert(id, state) {
@@ -175,7 +200,7 @@ export function createSignalRoster<S>(): RosterStore<S> {
         // Keyed on MEMBERSHIP rather than on the cell holding a value, for the
         // same reason `blank` is: a present-but-blank cell would otherwise fall
         // through and push a SECOND copy of `id` into `ids`.
-        existing.value = { id, state };
+        writeMember(existing, { id, state });
         return;
       }
       batch(() => {

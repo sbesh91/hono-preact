@@ -1,8 +1,9 @@
 import type { ComponentChildren } from 'preact';
-import { useContext } from 'preact/hooks';
+import { useContext, useRef } from 'preact/hooks';
 import { LoaderDataContext, type LoaderData } from './contexts.js';
 import { LoaderDataProvider } from './loader-data-provider.js';
 import type { LoaderRef } from '../define-loader.js';
+import { shallowEqual } from './shallow-equal.js';
 
 /**
  * The consumption union <Page> puts on `LoaderDataContext`, minus the cold-error
@@ -44,6 +45,19 @@ type OverlayProps<T, A> = {
   pending?: A[];
   children: ComponentChildren;
 };
+
+/**
+ * Are these two re-provided arms equivalent to a consumer? Same status, and
+ * data that matches one level deep, which is where a re-`reduce` of unchanged
+ * `pending` lands (a fresh array or object holding the same entries).
+ */
+function sameArm(a: ConsumptionState, b: ConsumptionState): boolean {
+  if (a === b) return true;
+  if (a.status !== b.status) return false;
+  const aData = isDataBearing(a) ? a.data : undefined;
+  const bData = isDataBearing(b) ? b.data : undefined;
+  return shallowEqual(aData, bData);
+}
 
 export function OptimisticOverlay<T, A>({
   reducer,
@@ -93,13 +107,27 @@ export function OptimisticOverlay<T, A>({
   // compares by identity, so every `loader.useData()` consumer below would be
   // woken for nothing -- disabling the granularity this data layer exists for,
   // across the whole optimistic subtree.
-  const arm: ConsumptionState = isDataBearing(ctx)
+  //
+  // The identity guard above only covers the case where the projection was a
+  // no-op. With something pending, `reduce` builds a FRESH value every render,
+  // so the arm was a new object on every render of the overlay itself and woke
+  // every `useData()` consumer below for a projection that had not changed.
+  // Retaining the last published arm and reusing it when the contents match
+  // closes that, the same output-dedupe `useOptimistic` and `foldStream` use.
+  const nextArm: ConsumptionState = isDataBearing(ctx)
     ? projected === ctx.data
       ? ctx
       : { ...ctx, data: projected }
     : pending.length > 0
       ? { status: 'revalidating', data: projected }
       : ctx;
+
+  const lastArm = useRef<ConsumptionState | null>(null);
+  const arm: ConsumptionState =
+    lastArm.current !== null && sameArm(lastArm.current, nextArm)
+      ? lastArm.current
+      : nextArm;
+  lastArm.current = arm;
 
   // Re-provide the ONE loader channel with the projected arm, so every reader
   // below (a `.View` render function, a descendant's `loader.useData()`) sees

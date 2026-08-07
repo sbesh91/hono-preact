@@ -35,6 +35,7 @@ import {
   closeCollectSignals,
   createCollectSignals,
   beginCollectResubscribe,
+  resetCollectRun,
   setCollectError,
   createAccumulatorGuard,
   type CollectSignals,
@@ -459,6 +460,12 @@ export function useLoaderRunner<T>(
     session.loaderId = loaderRef.__id;
     if (locationChanged || loaderChanged) {
       setPhase({ tag: 'loading' });
+      // Collect-mode's equivalent of the `setPhase({ tag: 'loading' })` above
+      // and of `subscribeFold`'s `session.acc = mode.initial`. Its chunks live
+      // outside `phase` (that is the point of the mode), so nothing else here
+      // clears them, and `subscribeCollect` deliberately RETAINS them because it
+      // cannot tell a navigation from a reconnect. This is the site that can.
+      if (collectRef.current) resetCollectRun(collectRef.current);
       // A client navigation supersedes the SSR-baked deny exactly like a
       // reload does: preact-iso does not remount on a location/param change,
       // so without this the stale seed would keep overriding `finalView`

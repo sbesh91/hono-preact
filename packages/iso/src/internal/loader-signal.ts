@@ -294,6 +294,31 @@ export function appendCollectChunk(s: CollectSignals, chunk: unknown): void {
  * Begin a (re)subscription: clear any prior error and mark that the next chunk
  * starts a new generation. The current run's chunks stay served until it does.
  */
+/**
+ * Drop everything and start over: a NEW target, not a reconnect to the old one.
+ *
+ * The distinction is the whole reason this exists next to
+ * `beginCollectResubscribe`. Retaining chunks across a RECONNECT is correct and
+ * deliberate (a failed reconnect must not take the user's fold with it). Doing
+ * the same across a NAVIGATION is not: `/stock/AAPL` -> `/stock/MSFT` would keep
+ * serving AAPL's chunks, labelled `reconnecting`, until MSFT's first chunk
+ * lands, which for a quiet stream is indefinitely. Fold-mode never had this
+ * because `subscribeFold` reseeds `session.acc = mode.initial` on every
+ * subscribe; the two streaming modes simply disagreed.
+ *
+ * A fresh `chunks` array is what resets every retained fold's cursor, the same
+ * generation mechanism the first chunk of a reconnect uses.
+ */
+export function resetCollectRun(s: CollectSignals): void {
+  s.run.value = {
+    chunks: [],
+    length: 0,
+    status: 'connecting',
+    error: null,
+    awaitingFirstChunk: false,
+  };
+}
+
 export function beginCollectResubscribe(s: CollectSignals): void {
   const run = s.run.peek();
   s.run.value = {
