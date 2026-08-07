@@ -18,6 +18,9 @@ Be concrete. Cite `file:line`. Triage every finding by severity (see the rubric
 at the end). Do not perform agreement; if something is wrong, say so and show
 why.
 
+Report every finding you have; do not pre-filter for severity while reviewing.
+Triage happens after, via the rubric.
+
 ## How to run a review
 
 1. Get the diff. `gh pr diff <n>` for a PR, or `git diff origin/main...HEAD` for
@@ -28,6 +31,9 @@ why.
 3. Walk the six lenses below, then the repo-specific must-checks, then confirm
    the CI-parity gate.
 4. Report by severity. A P0 blocks merge.
+5. Match effort to the pass. A fast triage pass at `medium` effort catches most
+   real findings; reserve `xhigh` for the full six-lens sweep before merge.
+   Accuracy holds at lower effort, so the fast pass is not a lesser review.
 
 ## The six lenses
 
@@ -184,18 +190,10 @@ These ride on top of the six lenses and have each blocked a merge before.
 
 ## Pre-merge gate: CI parity
 
-The reviewer confirms the nine checks that mirror `.github/workflows/ci.yml`
-have been run locally, in order (full detail in `CLAUDE.md`):
-
-1. build framework packages (`@hono-preact/*` + `hono-preact` + `hono-preact-ui`)
-2. `pnpm gen:agents-corpus`
-3. `pnpm format:check`  (the single most-missed step; trivially fixable with `pnpm format`)
-4. `pnpm typecheck`
-5. `pnpm typecheck:tests`  (test files only; step 4 cannot see them, because the build `tsconfig`s must keep excluding tests to keep them out of the published `dist/`)
-6. `pnpm test:types`
-7. `pnpm test:coverage`
-8. `pnpm test:integration`
-9. `pnpm --filter site build`
+Confirm the nine local checks that mirror `.github/workflows/ci.yml` have been
+run in order. The list and the reasoning behind each step live in the
+`Pre-push verification` section of `CLAUDE.md`; `pnpm format:check` is the
+single most-missed step and is trivially fixable with `pnpm format`.
 
 Lighthouse, `client-size`, and the docs preview run in CI only; read their PR
 comments rather than running them locally.

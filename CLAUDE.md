@@ -10,6 +10,14 @@ A `PreToolUse` hook (`.claude/hooks/prefer-serena.py`) nudges toward Serena only
 
 Serena binds to the primary checkout (`--project .`), so it is unavailable in worktrees (see Worktree setup below) and when the MCP server is down (run `/mcp` to check). Fall back to native tools in both cases.
 
+## Scope and delegation
+
+Deliver what was asked, at the scope intended. Make routine judgment calls yourself; check in only when different readings of the request would lead to materially different work. If the request seems mistaken, say so in a sentence and continue with it as asked rather than quietly narrowing, widening, or transforming it.
+
+Skill mandates ("invoke a skill if there is any chance one applies") are scoped to multi-step or multi-file work. A single-file edit, a question, or a one-off lookup does not need a process skill wrapped around it.
+
+Delegate to a subagent only for large, genuinely independent tracks of work, such as a wide multi-file investigation. Do not delegate work finishable in a handful of tool calls, and do not use subagents to verify or double-check work already done. If one subagent suffices, use one.
+
 ## Site brand
 
 [`apps/site/BRAND.md`](apps/site/BRAND.md) is the source of truth for the docs site's brand: ideology, voice, visual doctrine, and the mapping to the tokens in `apps/site/src/styles/root.css`. Read it before any work that changes what a site visitor sees or reads (page design, components, CSS, copy), and verify against its checklist before shipping.
