@@ -133,7 +133,7 @@ const Movies = ({ loaderData }) => {
 
 ```ts
 type OptimisticHandle = {
-  settle: () => void; // success: linger until base ref changes
+  settle: () => void; // success: linger until `base` changes
   revert: () => void; // error: remove immediately
 };
 ```
@@ -149,7 +149,7 @@ queue=[A:active, B:active]
   → A succeeds, A.settle()
 queue=[A:ready, B:active]
   → loader refetches, base updates (A confirmed)
-  → A:ready evicted (base ref changed), B:active stays
+  → A:ready evicted (base contents changed), B:active stays
 queue=[B:active]
   → UI shows server-confirmed A + optimistic B
 ```
