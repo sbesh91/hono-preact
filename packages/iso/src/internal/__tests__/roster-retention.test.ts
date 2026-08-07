@@ -72,6 +72,33 @@ describe('roster retention', () => {
     }
   );
 
+  // `blank` and `upsert` key on MEMBERSHIP, not on the cell holding a value.
+  // Not reachable through this API today (every path that promotes a cell also
+  // writes it), so these pass either way right now; they exist so the invariant
+  // is pinned rather than depending on that remaining true.
+  it('leaves no phantom id behind, and rejoining does not duplicate it', () => {
+    const roster = createSignalRoster<State>();
+    roster.upsert('a', { x: 1 });
+    roster.upsert('b', { x: 2 });
+    roster.leave('a');
+    expect(roster.memberIds.value).toEqual(['b']);
+
+    roster.upsert('a', { x: 3 });
+    expect(roster.memberIds.value).toEqual(['b', 'a']);
+
+    roster.upsert('a', { x: 4 });
+    expect(roster.memberIds.value).toEqual(['b', 'a']);
+    expect(roster.members.value.filter((m) => m.id === 'a')).toHaveLength(1);
+  });
+
+  it('a repeated leave is inert', () => {
+    const roster = createSignalRoster<State>();
+    roster.upsert('a', { x: 1 });
+    roster.leave('a');
+    roster.leave('a');
+    expect(roster.memberIds.value).toEqual([]);
+  });
+
   it('dispose clears retained state', () => {
     const roster = createSignalRoster<State>();
     roster.upsert('a', { x: 1 });

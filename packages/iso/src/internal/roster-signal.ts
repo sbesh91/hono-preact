@@ -121,16 +121,24 @@ export function createSignalRoster<S>(): RosterStore<S> {
 
   /**
    * This id has left: blank its cell so anyone holding it is notified, and
-   * downgrade the store's own reference to a weak one. Returns whether it was
-   * actually a present member, which is what decides if `ids` changes.
+   * downgrade the store's own reference to a weak one. Returns whether the id
+   * was in the roster, which is what decides if `ids` changes.
+   *
+   * The return value tracks MEMBERSHIP (`live.has(id)`), not whether the cell
+   * happened to hold a value. Those are the same thing today, since every path
+   * that promotes a cell into `live` also writes it, but conflating them made
+   * this function report "nothing happened" AFTER it had already moved the cell
+   * out of `live`. The id would then stay in `memberIds` forever, unreachable
+   * by any later `leave` (the cell is no longer in `live` to be found), and the
+   * next `upsert` for it would push a duplicate id. Deciding before mutating
+   * costs nothing and takes the whole class off the table.
    */
   function blank(id: string): boolean {
     const s = live.get(id);
     if (!s) return false;
     live.delete(id);
     departed.set(id, new WeakRef(s));
-    if (s.peek() === undefined) return false;
-    s.value = undefined;
+    if (s.peek() !== undefined) s.value = undefined;
     return true;
   }
 
@@ -162,8 +170,11 @@ export function createSignalRoster<S>(): RosterStore<S> {
     },
     upsert(id, state) {
       const existing = live.get(id);
-      if (existing && existing.peek() !== undefined) {
-        // Existing member: touch ONLY this member's signal, never `ids`.
+      if (existing) {
+        // Already in the roster: touch ONLY this member's signal, never `ids`.
+        // Keyed on MEMBERSHIP rather than on the cell holding a value, for the
+        // same reason `blank` is: a present-but-blank cell would otherwise fall
+        // through and push a SECOND copy of `id` into `ids`.
         existing.value = { id, state };
         return;
       }

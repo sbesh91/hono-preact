@@ -94,18 +94,49 @@ function projectRunnerView<T>(
 }
 
 /**
- * Hold the host's mode IDENTITY stable across renders that did not change it.
- * A host may legitimately build a fresh `LoaderMode` object per render (a fold
- * mode wraps the caller's `accumulate`; a bare `<Loader>` host may write a
- * literal), and the runner's mode-keyed `useCallback`s would then rebuild every
- * render. Memoized on the mode's own fields, the same shape `loader.tsx` uses to
- * stabilize the projected union.
+ * Hold the host's mode IDENTITY stable for the host's lifetime. A host may
+ * legitimately build a fresh `LoaderMode` object per render (a fold mode wraps
+ * the caller's `accumulate`; a bare `<Loader>` host may write a literal), and
+ * the runner's mode-keyed `useMemo`/`useCallback`s would then rebuild every
+ * render.
+ *
+ * This used to memoize on `[kind, initial, reduce]`, which delivered nothing for
+ * the host authored the natural way:
+ *
+ *     <loader.Boundary accumulate={{ initial: [], reduce: (a, c) => [...a, c] }} />
+ *
+ * Both fields are fresh objects on every render there, so the memo missed every
+ * render and the identity churned. Every test that covered this hoisted its
+ * `accumulate` to module scope, which is why it read as working.
+ *
+ * So the fold payload is held rather than compared:
+ *
+ *  - `initial` is PINNED at the first render. It is the accumulator's starting
+ *    value, so a later render's copy has no meaning, and pinning it is load
+ *    bearing rather than cosmetic: `foldGuard` fingerprints `initial` once,
+ *    while `subscribeFold` resets `session.acc = mode.initial` on every
+ *    resubscribe. If those two saw different objects the guard's
+ *    `handedToReduce !== initial` test would early-return forever and a
+ *    reducer corrupting `initial` would go undetected.
+ *  - `reduce` is called THROUGH a ref, so a reducer closing over changing props
+ *    still folds with the current one while the mode object stays put.
  */
 function useStableLoaderMode(mode: LoaderMode): LoaderMode {
-  const kind = mode.kind;
-  const initial = mode.kind === 'fold' ? mode.initial : undefined;
-  const reduce = mode.kind === 'fold' ? mode.reduce : undefined;
-  return useMemo(() => mode, [kind, initial, reduce]);
+  const latestReduce = useRef(mode.kind === 'fold' ? mode.reduce : undefined);
+  if (mode.kind === 'fold') latestReduce.current = mode.reduce;
+
+  const stable = useRef<LoaderMode | null>(null);
+  if (stable.current === null || stable.current.kind !== mode.kind) {
+    stable.current =
+      mode.kind === 'fold'
+        ? {
+            kind: 'fold',
+            initial: mode.initial,
+            reduce: (acc, chunk) => latestReduce.current!(acc, chunk),
+          }
+        : mode;
+  }
+  return stable.current;
 }
 
 export type LoaderRunnerState<T> = {

@@ -97,19 +97,41 @@ export function useOptimistic<TBase, TPayload>(
   // `useMemo(..., [])`), so a plain closure capture would pin the fold to the
   // reducer passed on the mount render, and a call site whose reducer closes
   // over changing props (`(acc, p) => acc + p * mult`) would keep folding with
-  // the stale one. A fresh arrow per render is a new reference, so this writes
-  // during render; the value computed is read later in the SAME render pass,
-  // which reconciles the version before the batch ends, so no re-render is
-  // scheduled and there is no loop.
+  // the stale one.
+  //
+  // This one CANNOT be gated the way `base` is: a reducer is a function, and an
+  // inline arrow is a new identity every render with no way to tell "same logic,
+  // new closure" from "closes over a prop that changed". So the write stays
+  // unconditional and the dedupe moves to the computed's OUTPUT instead.
   const reducerState = useSignal(reducer);
   reducerState.value = reducer;
 
-  const value = useComputed(() =>
-    queue.value.reduce(
+  // The last value this projection PUBLISHED, so an invalidation that produces
+  // an equivalent result republishes the same object and `computed` dedupes it.
+  //
+  // Without this, an inline reducer re-published on every render of the caller
+  // whenever the queue was non-empty: the write above invalidates the computed,
+  // and `reduce` over a non-empty queue builds a FRESH array, which is never
+  // `===` the previous one, so every consumer bound to the projection
+  // re-rendered for a fold that produced the same entries. (The caller itself
+  // does not loop: the write happens during render and the computed is read in
+  // the same render pass, so the version reconciles before the batch ends. It
+  // is the bound leaf that pays, which is precisely the granularity the signal
+  // return exists to buy.)
+  //
+  // Same shape as `foldStream`'s retained `last` in `loader-signal.ts`.
+  const lastValue = useRef<{ v: TBase } | null>(null);
+
+  const value = useComputed(() => {
+    const next = queue.value.reduce(
       (acc, e) => reducerState.value(acc, e.payload),
       baseState.value
-    )
-  );
+    );
+    const prev = lastValue.current;
+    if (prev !== null && shallowEqual(prev.v, next)) return prev.v;
+    lastValue.current = { v: next };
+    return next;
+  });
 
   // Reads `transitionRef.current` at invocation time, not capture time, so it
   // is safe to close over from the memoized `addOptimistic` (useCallback([]))
