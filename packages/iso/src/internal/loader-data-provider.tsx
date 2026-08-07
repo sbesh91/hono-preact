@@ -19,8 +19,17 @@ import { LoaderDataContext, type LoaderData } from './contexts.js';
  *
  * Every site that puts loader data on context goes through here (`LoaderHost`
  * on the client, `DataReader` on the server, `OptimisticOverlay` when it
- * rewrites the data), so a provision site cannot get the identity contract
- * subtly wrong on its own.
+ * rewrites the data).
+ *
+ * NOTE what that does and does not buy. The signal's IDENTITY is owned here, so
+ * no caller can get that wrong. The no-op-on-unchanged property is NOT: this
+ * writes whatever it is handed, so it holds only as long as every caller passes
+ * a stable reference for an unchanged state. That is a convention, not an
+ * invariant, and it has already been broken once (`OptimisticOverlay` published
+ * a fresh arm on every render whenever anything was pending, waking every
+ * consumer below it). `LoaderHost` memoizes its union, `DataReader` renders
+ * once on the server, and the overlay now retains its last arm. Moving the
+ * comparison in here so a caller cannot forget it is tracked in #361.
  */
 export function LoaderDataProvider({
   state,

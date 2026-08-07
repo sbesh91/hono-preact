@@ -72,8 +72,17 @@ export function runReload<T>(deps: ReloadDeps<T>): void {
   if (isStreamingMode(mode)) {
     // Streaming reload = resubscribe: `ops.subscribeStream` (fold-mode's
     // `subscribeFold` or collect-mode's `subscribeCollect`, resolved by
-    // `use-loader-runner.tsx`) aborts the current stream, resets to `initial` /
-    // clears the retained log, reopens, and folds/appends chunks. Drive status
+    // `use-loader-runner.tsx`) aborts the current stream, reopens, and
+    // folds/appends chunks.
+    //
+    // The two modes do NOT treat the prior data the same way here, and the
+    // difference is deliberate. Fold-mode reseeds `session.acc = mode.initial`,
+    // so the accumulator restarts while the phase keeps the last value visible
+    // (`revalidating`, above). Collect-mode RETAINS its chunk log: a reload is
+    // a resubscribe to the SAME target, so the retained fold stays on screen
+    // and survives a reconnect that fails. A change of TARGET is the case where
+    // retaining would be wrong, and that is handled where it can be told apart,
+    // in the runner's location-change block (`resetCollectRun`), not here. Drive status
     // connecting -> open/closed/error, mirroring a fresh mount. `revalidating`
     // keeps `reloading` true until the first chunk lands. The `setStatus` call
     // below is fold-mode's own `useState`; collect-mode's status lives on its
