@@ -104,13 +104,21 @@ export async function bundleSize(
 }
 
 /**
- * esbuild's `external` matched a bare specifier and its subpaths; Rollup's
- * predicate form does not, so subpath imports (`preact/hooks`) have to be
- * matched explicitly or they get bundled and the row silently inflates by a
+ * esbuild's `external` matched a bare specifier and its subpaths, and accepted
+ * `pkg/*` globs; Rollup's predicate form does neither, so both spellings have to
+ * be handled here or an import gets bundled and the row silently inflates by a
  * whole peer.
+ *
+ * The `pkg/*` entries in `EXTERNAL` are currently redundant with their bare
+ * `pkg` entries, so dropping the glob handling would still measure correctly
+ * today and would break the first time someone adds a glob-only entry. Handling
+ * it explicitly is what stops that from being a silent size regression.
  */
 function isExternal(id, external) {
-  return external.some((e) => id === e || id.startsWith(`${e}/`));
+  return external.some((e) => {
+    const base = e.endsWith('/*') ? e.slice(0, -2) : e;
+    return id === base || id.startsWith(`${base}/`);
+  });
 }
 
 // Re-export each dist module by namespace so sideEffects:false tree-shaking
