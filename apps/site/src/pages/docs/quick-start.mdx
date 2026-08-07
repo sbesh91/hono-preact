@@ -137,7 +137,7 @@ Register the route in `src/routes.ts`; the colocated `movies.server.ts` is wired
 
 Reload `http://localhost:5173/movies`. The list renders server-side on first load, with the data preloaded into the HTML. On client-side navigation away and back, the framework calls the loader over RPC. Same function, no manual wiring.
 
-`defineLoader(fn)` returns a typed `LoaderRef<T>`. The Vite `moduleKeyPlugin` rewrites the call at build time to inject `{ __moduleKey, __loaderName }` so the key drives RPC routing (`/__loaders`), the `__id` Symbol identity, and HMR. `.View(render)` returns a Preact component pre-wrapped in the loader's error boundary, data context, and reload context. The render function receives a `LoaderState` discriminated union on every render; switch on `status` (`loading | success | revalidating | error`) to render each state, and read `reload` from `useReload()`. `loader.useData()` inside the render function is argument-free and returns the same `LoaderState`.
+`defineLoader(fn)` returns a typed `LoaderRef<T>`. The Vite `moduleKeyPlugin` rewrites the call at build time to inject `{ __moduleKey, __loaderName }` so the key drives RPC routing (`/__loaders`), the `__id` Symbol identity, and HMR. `.View(render)` returns a Preact component pre-wrapped in the loader's error boundary, data context, and reload context. The render function receives a `LoaderState` discriminated union on every render; switch on `status` (`loading | success | revalidating | error`) to render each state, and read `reload` from `useReload()`. `loader.useData()`, called inside a `.View()` render function or a `loader.Boundary`, is argument-free and returns a `ReadonlySignal<LoaderState>`; read `.value` to get the current state.
 
 ## 3. Add a server action
 

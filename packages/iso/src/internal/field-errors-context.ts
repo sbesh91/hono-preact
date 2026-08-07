@@ -1,13 +1,27 @@
 import { createContext } from 'preact';
+import { INERT_FIELD_ERROR_STORE } from './field-error-signal.js';
+import type { FieldErrorStore } from './field-error-signal.js';
 
-/** Field name (dot-joined issue path) -> messages for that field. */
-export type FieldErrorsMap = Record<string, string[]>;
+export type { FieldErrorStore, FieldErrorsMap } from './field-error-signal.js';
 
 /**
  * Carries a `<Form>`'s merged field errors (client pre-validation + server
- * `deny(422)` issues) to `useFieldErrors` / `<FieldError>` descendants.
+ * `deny(422)` issues) to `useFieldErrors` / `<FieldError>` descendants, as a
+ * per-field signal accessor (`fieldError(name)` / `all`) rather than the raw
+ * map: `useFieldErrors(name)` reads `fieldError(name).value`, subscribing
+ * only to that field, so a sibling field's error change does not re-render
+ * this consumer. `useFieldErrors()` (no name) reads `all.value`, the whole
+ * map, and subscribes to every field.
+ *
+ * The default (outside a `<Form>`) is `INERT_FIELD_ERROR_STORE`: nothing ever
+ * writes to it, so `fieldError(name).value` is always `[]` and `all.value` is
+ * always `{}`. It also ALLOCATES nothing per field, which matters because this
+ * default lives at module scope and is therefore shared by every SSR request in
+ * a worker isolate.
  */
-export const FieldErrorsContext = createContext<FieldErrorsMap>({});
+export const FieldErrorsContext = createContext<FieldErrorStore>(
+  INERT_FIELD_ERROR_STORE
+);
 
 /**
  * A per-`<Form>` unique id prefix (a `useId()`), used to mint stable, collision-

@@ -146,7 +146,7 @@ If you want chrome plus a leaf loader at the same URL, structure it as a layout 
 }
 ```
 
-The list view consumes its loader data via `loader.useData()`; the layout never sees it. If a child needs data the layout ALSO needs to display, lift the data into the layout's render via context or pass it through as a prop in the empty-path child.
+The list view consumes its loader data via `loader.useData().value`; the layout never sees it. If a child needs data the layout ALSO needs to display, lift the data into the layout's render via context or pass it through as a prop in the empty-path child.
 
 ## Path-grouping (no layout)
 

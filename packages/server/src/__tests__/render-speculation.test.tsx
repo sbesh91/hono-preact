@@ -105,7 +105,11 @@ describe('renderPage speculation rules', () => {
         <html>
           <head></head>
           <body>
-            <Loader loader={streamingLoader} location={loc}>
+            <Loader
+              mode={{ kind: 'single' }}
+              loader={streamingLoader}
+              location={loc}
+            >
               <a href="/about">About</a>
             </Loader>
           </body>

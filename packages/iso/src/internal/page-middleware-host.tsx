@@ -12,7 +12,6 @@ import { dispatchServer, dispatchClient } from './middleware-runner.js';
 import { partitionUse } from './use-partitioner.js';
 import type { UseEntry } from './use-entry.js';
 import wrapPromise from './wrap-promise.js';
-import { useForceUpdate } from './use-force-update.js';
 import { hasClientNavigated } from './history-shim.js';
 import { HonoRequestContext } from './contexts.js';
 
@@ -151,7 +150,13 @@ function HostConsumer({
   // Subscribe to the chain promise's settlement and re-render THIS component on
   // resolve, mirroring preact-iso `lazy`'s self-update. Re-subscribe whenever
   // the wrapped result changes (a new path produces a fresh wrapPromise).
-  const force = useForceUpdate();
+  //
+  // The self-heal uses a plain `useState` force-render (NOT a signal): this
+  // module is in the always-loaded core graph, so pulling `@preact/signals` in
+  // here through a signal would put it in core and break the core-signals-free
+  // invariant (the size probe measures it). Bumping the counter in the
+  // settlement callback re-renders this component with no signal machinery.
+  const [, force] = useState(0);
   const subscribedTo = useRef<WrappedResult | null>(null);
   // Browser-only: on the server the prerender drives suspension resume by
   // awaiting the thrown promise and re-rendering, so subscribing here would be
@@ -172,10 +177,11 @@ function HostConsumer({
       const dispatchedAt = currentPathname();
       pending.settled.then(() => {
         if (currentPathname() !== dispatchedAt) return;
-        // If this consumer unmounted before the chain settled, force() is a
-        // harmless no-op in Preact; the closure (only `force` + `dispatchedAt`)
-        // is retained until the chain settles, which is bounded by the request.
-        force();
+        // If this consumer unmounted before the chain settled, `force()` is a
+        // harmless no-op on an unmounted component; the closure (only `force` +
+        // `dispatchedAt`) is retained until the chain settles, which is bounded
+        // by the request.
+        force((n) => n + 1);
       });
     }
   }

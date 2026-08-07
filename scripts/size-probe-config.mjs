@@ -123,9 +123,19 @@ export const EXCLUDED_MODULES = [
   'infer.js',
 ];
 
-// Peers a consumer already has; excluded so a probe measures only the
-// framework's own bytes on top of preact. Anything NOT listed here (e.g. a
-// third-party dep a feature drags in) is intentionally counted.
+// PEER dependencies only: packages a consumer installs itself and therefore
+// already ships, so excluding them measures the framework's own bytes on top.
+// A BUNDLED dependency must never appear here, however "infrastructural" it
+// feels: the consumer does not have it until this framework drags it in, so
+// its bytes are the framework's bytes. `@floating-ui/dom` is the in-repo
+// precedent, deliberately counted in every `packages/ui` component row.
+//
+// `EXTERNAL` is asserted to be a subset of the framework packages' declared
+// `peerDependencies` by scripts/__tests__/size-probe-config.test.mjs, so a
+// dependency cannot be quietly excluded here again. @preact/signals was
+// listed here while sitting in `dependencies`, which priced the entire
+// always-on signals decision at zero across the loaders, actions and realtime
+// buckets.
 export const EXTERNAL = [
   'preact',
   'preact/*',

@@ -57,6 +57,7 @@ export const nav: NavArea[] = [
         heading: 'Data',
         icon: Database,
         entries: [
+          { title: 'Signals', route: '/docs/signals' },
           { title: 'Server Loaders', route: '/docs/loaders' },
           { title: 'Loading States', route: '/docs/loading-states' },
           { title: 'Reloading Data', route: '/docs/reloading' },

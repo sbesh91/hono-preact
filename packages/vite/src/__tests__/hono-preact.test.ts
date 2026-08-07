@@ -145,6 +145,13 @@ describe('honoPreact config plugin', () => {
     expect(result.resolve?.dedupe).toContain('preact');
     expect(result.resolve?.dedupe).toContain('preact-iso');
     expect(result.resolve?.dedupe).not.toContain('preact/compat');
+    // Signals is always-on, patches `preact.options` and `Signal.prototype` at
+    // import, and fails SILENTLY if duplicated (a computed in one copy never
+    // subscribes to a signal from the other). Core is listed separately because
+    // the adapter depends on it as a plain nested dep, so deduping only the
+    // adapter still permits two cores.
+    expect(result.resolve?.dedupe).toContain('@preact/signals');
+    expect(result.resolve?.dedupe).toContain('@preact/signals-core');
     expect(result.build?.target).toBe('esnext');
     expect(result.build?.assetsDir).toBe('static');
   });

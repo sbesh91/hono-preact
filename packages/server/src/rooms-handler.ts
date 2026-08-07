@@ -19,6 +19,31 @@ import {
 import { warnIfOverForwardBudget } from './realtime-budget.js';
 import { parseKeyParams } from './param-parse.js';
 
+/**
+ * Namespace for room traffic on the in-process pub/sub bus.
+ *
+ * Rooms and live-loader topics are addressed by the same channel key, so
+ * without a prefix they share one bus topic and leak into each other in both
+ * directions: a `publish(channel.key(p), payload)` aimed at a live loader is
+ * delivered to every member of a room bound to the same key (arriving as a
+ * frame with no `t`, which `useRoom` dispatches to `onMessage(undefined,
+ * undefined)`), and a room's own presence and message broadcasts re-run every
+ * live loader subscribed to that key.
+ *
+ * Cloudflare has never had this: `ROOM_DO_PREFIX` / `TOPIC_DO_PREFIX` in
+ * `cf/realtime-do-glue.ts` already resolve the two to disjoint Durable Objects,
+ * and that file documents the disjointness as deliberate. This restores the
+ * same property on Node. The string matches `ROOM_DO_PREFIX` by intent, but the
+ * two are NOT one constant: that one namespaces DO ids, this one namespaces bus
+ * topics, and coupling them would be a false dependency from the Node handler
+ * onto the CF glue.
+ *
+ * Scope: the BUS topic only. The presence registry stays keyed on the bare
+ * topic, because it is already a room-private map and re-keying it would be a
+ * behaviour change with no leak to fix.
+ */
+export const ROOM_BUS_PREFIX = 'room:';
+
 type GlobModule = {
   __moduleKey?: unknown;
   serverRooms?: unknown;
@@ -201,6 +226,9 @@ export function createRoomWsEvents(
       // string-valued params. The client only varies param VALUES, never the
       // namespace, so it cannot reach an unrelated topic.
       const roomTopic = roomKey.topic;
+      // Bus traffic is namespaced; the presence registry below is not (see
+      // ROOM_BUS_PREFIX).
+      const roomBusTopic = ROOM_BUS_PREFIX + roomTopic;
       const params = roomKey.params;
       topic = roomTopic;
 
@@ -215,7 +243,7 @@ export function createRoomWsEvents(
       // decodeEnvelope; that is the client-side wire parse). Sender-exclude is
       // realized HERE, receiver-side: never echo my own 'msg' broadcasts back to
       // me. Presence deltas (and others' msgs) are always forwarded.
-      unsub = getPubSubBackend().subscribe(roomTopic, (message) => {
+      unsub = getPubSubBackend().subscribe(roomBusTopic, (message) => {
         const env = message as AnyEnvelope; // sanctioned: own object through the unknown seam
         if (env.t === 'msg' && env.from === myId) return;
         ws.send(JSON.stringify(env));
@@ -241,7 +269,7 @@ export function createRoomWsEvents(
       transport = {
         connId: myId,
         sendTo: (_to, env) => ws.send(JSON.stringify(env)),
-        broadcast: (env) => getPubSubBackend().publish(roomTopic, env),
+        broadcast: (env) => getPubSubBackend().publish(roomBusTopic, env),
         joinPresence: (id, state) => joinPresence(roomTopic, id, state),
         leavePresence: (id) => leavePresence(roomTopic, id),
         updatePresence: (id, state) => updatePresence(roomTopic, id, state),

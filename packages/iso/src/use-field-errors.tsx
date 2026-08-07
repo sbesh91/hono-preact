@@ -13,11 +13,24 @@ import {
 
 /**
  * Read the enclosing `<Form>`'s merged field errors (client pre-validation plus
- * any server `deny(422)` issues), keyed by field name (the issue path joined by
- * `.`). Returns `{}` outside a `<Form>`.
+ * any server `deny(422)` issues).
+ *
+ * With a `name`, returns just that field's messages and subscribes only to
+ * that field: a sibling field's error change does not re-render this caller.
+ * Returns `[]` for a valid field, or outside a `<Form>`.
+ *
+ * Without a `name`, returns the whole map (keyed by field name, the issue
+ * path joined by `.`) and subscribes to every field. Returns `{}` outside a
+ * `<Form>`.
  */
-export function useFieldErrors(): FieldErrorsMap {
-  return useContext(FieldErrorsContext);
+export function useFieldErrors(): FieldErrorsMap;
+export function useFieldErrors(name: string): readonly string[];
+export function useFieldErrors(
+  name?: string
+): FieldErrorsMap | readonly string[] {
+  const store = useContext(FieldErrorsContext);
+  if (name !== undefined) return store.fieldError(name).value;
+  return store.all.value;
 }
 
 /** ARIA props to spread onto a field control so screen readers announce and
@@ -42,9 +55,9 @@ export interface FieldErrorAriaProps {
  * the attributes are absent rather than stale.
  */
 export function useFieldErrorProps(name: string): FieldErrorAriaProps {
-  const errors = useContext(FieldErrorsContext);
+  const store = useContext(FieldErrorsContext);
   const prefix = useContext(FieldErrorPrefixContext);
-  const hasError = (errors[name]?.length ?? 0) > 0;
+  const hasError = store.fieldError(name).value.length > 0;
   if (!hasError) return {};
   return {
     'aria-invalid': true,
@@ -75,9 +88,8 @@ export interface FieldErrorProps {
  * richer rendering (e.g. listing every message for a field).
  */
 export function FieldError(props: FieldErrorProps): VNode | null {
-  const errors = useFieldErrors();
+  const message = useFieldErrors(props.name)[0];
   const prefix = useContext(FieldErrorPrefixContext);
-  const message = errors[props.name]?.[0];
   if (!message) return null;
   return renderElement({
     render: props.render,

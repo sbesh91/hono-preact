@@ -4,6 +4,7 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import knownGaps from './type-members-known-gaps.json' with { type: 'json' };
+import { readCodeSpans } from './helpers/docs-corpus.js';
 
 // `exports-coverage.test.ts` checks that every public runtime export is NAMED in
 // the docs. It cannot see a level down: `memberIds` and `member` are fields on
@@ -63,31 +64,7 @@ const ENTRIES = [
   'adapter-node',
 ].map((e) => join(distDir, `${e}.d.ts`));
 
-/** One code span (fenced block, inline span, or table row) from a docs page. */
-function readCodeSpans(): string[] {
-  const spans: string[] = [];
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        if (entry.name === '__tests__') continue;
-        walk(resolve(dir, entry.name));
-      } else if (entry.name.endsWith('.mdx')) {
-        const raw = readFileSync(resolve(dir, entry.name), 'utf8');
-        for (const m of raw.matchAll(/```[\s\S]*?```/g)) spans.push(m[0]);
-        for (const m of raw.matchAll(/`[^`\n]+`/g)) spans.push(m[0]);
-        // A markdown TABLE ROW is one documentation unit even though each cell
-        // is its own inline span: the reference tables cite the type in one
-        // column and the member in another. Without this, every table-documented
-        // member reads as undocumented under co-occurrence.
-        for (const m of raw.matchAll(/^\|.*\|$/gm)) spans.push(m[0]);
-      }
-    }
-  };
-  walk(docsDir);
-  return spans;
-}
-
-const codeSpans = readCodeSpans();
+const codeSpans = readCodeSpans(docsDir);
 
 /** Is this declaration ours, rather than a lib or a dependency? */
 function isOurs(d: ts.Declaration): boolean {
@@ -282,7 +259,9 @@ describe('the matcher discriminates', () => {
     // appears nowhere, so it passed under any matcher: replacing the code
     // extraction with raw page text left it green.
     const rooms = readFileSync(resolve(docsDir, 'rooms.mdx'), 'utf8');
-    const proseOnly = /reactive and updates on every join/.test(rooms);
+    const proseOnly = /updates on every join, leave, or presence change/.test(
+      rooms
+    );
     expect(proseOnly).toBe(true);
     // "join" is in that sentence and in no UseRoomResult code span.
     expect(documented('UseRoomResult', 'join')).toBe(false);

@@ -52,7 +52,7 @@ import { Form, useActionResult, getValidationIssues } from 'hono-preact';
 import { serverActions } from './tasks.server.js';
 
 const CreateForm = () => {
-  const result = useActionResult(serverActions.createTask);
+  const result = useActionResult(serverActions.createTask).value;
   const issues = getValidationIssues(result);
 
   return (
@@ -135,7 +135,7 @@ The `schema` prop is typed as `StandardSchemaV1<unknown, TPayload>` where `TPayl
 
 ### Rendering field errors
 
-**`<FieldError name>`** renders the first error message for a field, or nothing. It is a thin convenience wrapper around `useFieldErrors()`.
+**`<FieldError name>`** renders the first error message for a field, or nothing. It is a thin convenience wrapper around `useFieldErrors(name)`, so it re-renders only when its own field's errors change, not on every field-error update elsewhere in the form.
 
 ```tsx
 <FieldError name="title" />
@@ -145,7 +145,7 @@ The `schema` prop is typed as `StandardSchemaV1<unknown, TPayload>` where `TPayl
 <FieldError name="" />
 ```
 
-**`useFieldErrors()`** returns the full `FieldErrorsMap` (a `Record<string, string[]>`) for custom rendering. It reads from form context and is only useful inside a `<Form>`.
+**`useFieldErrors()`** returns the full `FieldErrorsMap` (a `Record<string, readonly string[]>`) for custom rendering. It reads from form context and is only useful inside a `<Form>`.
 
 ```tsx
 import { useFieldErrors } from 'hono-preact';
@@ -170,6 +170,15 @@ const TitleField = () => {
 };
 ```
 
+**`useFieldErrors(name)`** returns just that field's messages (`readonly string[]`) instead of the whole map, and re-renders only when that field's own errors change: a sibling field's error appearing, changing, or clearing does not re-render this component. Prefer this form when a field's own error display lives in its own component, and the whole-map form when one component renders several fields' errors together.
+
+```tsx
+const TitleErrors = () => {
+  const titleErrors = useFieldErrors('title');
+  return titleErrors.length > 0 ? <ul>{/* ... */}</ul> : null;
+};
+```
+
 **`useFieldErrorProps(name)`** returns the ARIA props to spread onto a field control (`<input>`/`<select>`/...) so it is programmatically associated with its `<FieldError>`. When the field has an error it returns `{ 'aria-invalid': true, 'aria-describedby': <error id> }`; when valid it returns `{}`, so the attributes are absent rather than stale. The id it references is the one `<FieldError>` renders, scoped per `<Form>` so two forms on a page do not collide.
 
 Both `useFieldErrors()` and `<FieldError>` unify client pre-validation issues and server-returned `deny(422)` issues into the same field-error surface, so client-skipped and server-caught errors render identically. Client pre-validation errors clear as you type once a field has been shown an error; server-returned field errors (from a `deny(422)` response) clear on the next submit rather than on input.
@@ -187,7 +196,9 @@ const CreateTaskButton = () => {
   const { mutate, pending } = useAction(serverActions.createTask, {
     schema: NewTaskSchema,
   });
-  const issues = getValidationIssues(useActionResult(serverActions.createTask));
+  const issues = getValidationIssues(
+    useActionResult(serverActions.createTask).value
+  );
 
   return (
     <>
@@ -209,7 +220,7 @@ const CreateTaskButton = () => {
 };
 ```
 
-An invalid payload is rejected locally, no request goes out, and `mutate` surfaces the same `deny(422)` a server validation failure produces, so `getValidationIssues` decodes both the same way. If the schema's `validate` throws, the request proceeds and the server validates instead. The server always re-validates and coerces; the client gate never changes what is sent. Because a client-caught rejection short-circuits before any request, the mutation lifecycle never starts, so `onMutate`/`onError` do not fire for it; the path-independent way to surface issues either way is `getValidationIssues(useActionResult(stub))`, which reads the same whether the client or the server rejected.
+An invalid payload is rejected locally, no request goes out, and `mutate` surfaces the same `deny(422)` a server validation failure produces, so `getValidationIssues` decodes both the same way. If the schema's `validate` throws, the request proceeds and the server validates instead. The server always re-validates and coerces; the client gate never changes what is sent. Because a client-caught rejection short-circuits before any request, the mutation lifecycle never starts, so `onMutate`/`onError` do not fire for it; the path-independent way to surface issues either way is `getValidationIssues(useActionResult(stub).value)`, which reads the same whether the client or the server rejected.
 
 ## Loader validation
 
@@ -344,10 +355,15 @@ Extracts validation issues from `useActionResult()`. Returns `null` when the res
 
 ```ts
 function useFieldErrors(): FieldErrorsMap;
-// type FieldErrorsMap = Record<string, string[]>
+function useFieldErrors(name: string): readonly string[];
+// type FieldErrorsMap = Record<string, readonly string[]>
 ```
 
 Returns the enclosing `<Form>`'s merged field errors, keyed by field name. The path segments from each issue are joined with `.` (`['address', 'zip']` becomes `"address.zip"`). Issues with no path map to `""` (form-level errors). Returns `{}` outside a `<Form>`.
+
+With a `name`, returns just that field's messages (`readonly string[]`, `[]` when the field is valid) and subscribes only to that field: a change to a sibling field's errors does not re-render the caller. Without a `name`, returns the whole map and subscribes to every field, so any field's error change re-renders the caller.
+
+The message arrays are `readonly` because they are the form's own arrays, handed out by reference. Copy before sorting or filtering in place.
 
 ### `<FieldError name>`
 
@@ -365,7 +381,7 @@ Renders the first error message for `name` inside a `<span data-field-error={nam
 | ------------------ | --------------------------------------------------------------------- |
 | `StandardSchemaV1` | The Standard Schema interface. Any compliant validator implements it. |
 | `ValidationIssue`  | A single normalized validation problem: `{ path, message }`.          |
-| `FieldErrorsMap`   | `Record<string, string[]>`: field name to error messages.             |
+| `FieldErrorsMap`   | `Record<string, readonly string[]>`: field name to error messages.    |
 
 To infer the input or output type of a schema, use `StandardSchemaV1.InferInput<S>` and `StandardSchemaV1.InferOutput<S>` from the `@standard-schema/spec` package, or the equivalent helpers your schema library provides (e.g. `z.infer<typeof MySchema>` for Zod, `v.InferOutput<typeof MySchema>` for Valibot).
 

@@ -178,14 +178,14 @@ that event to reset themselves.
 
 ## Progressive enhancement (PE): forms without JS
 
-`<Form action={stub}>` works without JavaScript. On a no-JS page load the form submits as a standard HTML POST to the page URL. The server runs the action, then re-renders the page. Inside the rendered page, `useActionResult(stub?)` returns the outcome of that action call so you can show validation errors or a success message without requiring JavaScript.
+`<Form action={stub}>` works without JavaScript. On a no-JS page load the form submits as a standard HTML POST to the page URL. The server runs the action, then re-renders the page. Inside the rendered page, `useActionResult(stub?)` returns a `ReadonlySignal` of the outcome of that action call so you can show validation errors or a success message without requiring JavaScript.
 
 ```tsx
 import { Form, useActionResult } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const AddMovieForm = () => {
-  const result = useActionResult(serverActions.addMovie);
+  const result = useActionResult(serverActions.addMovie).value;
 
   return (
     <Form action={serverActions.addMovie}>
@@ -204,7 +204,7 @@ const AddMovieForm = () => {
 };
 ```
 
-`useActionResult(stub?)` returns the result of the most recent action invocation that targeted the current page render. The `submittedPayload` field lets you re-populate form inputs via `defaultValue` so users don't lose what they typed on a deny.
+`useActionResult(stub?)` returns a `ReadonlySignal` of the result of the most recent action invocation that targeted the current page render. Read `.value` to get the current `ActionResult`, or hold the signal and read it in a leaf so only that leaf re-renders; see [Signals](/docs/signals). The `submittedPayload` field lets you re-populate form inputs via `defaultValue` so users don't lose what they typed on a deny.
 
 Pass no argument (or pass `undefined`) to receive the result of any action that posted to this page. Pass a specific stub to filter to that action only.
 
@@ -285,7 +285,7 @@ import { useActionResult } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const ActionFeedback = () => {
-  const result = useActionResult(serverActions.addMovie);
+  const result = useActionResult(serverActions.addMovie).value;
   if (result?.kind !== 'deny') return null;
 
   switch (result.code) {
@@ -339,7 +339,7 @@ import { serverLoaders, serverActions } from './movies.server.js';
 const moviesLoader = serverLoaders.default;
 
 const Movies = () => {
-  const { data } = moviesLoader.useData();
+  const { data } = moviesLoader.useData().value;
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
     invalidate: 'auto',
     onSuccess: (result) => console.log('added', result),
@@ -402,7 +402,9 @@ Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still 
 
 `mutate` and `<Form>` submit both manage their in-flight request lifetime automatically.
 
-**Unmount aborts the request.** If a component that called `mutate` unmounts while the request is in flight, the fetch is aborted. The abort is quiet: no error state is written, no `onError` fires. This prevents "setState after unmount" warnings without any cleanup code in the component.
+**Unmount aborts the request.** If a component that called `mutate` unmounts while the request is in flight, the fetch is aborted. No error outcome is recorded, so nothing surfaces through `useActionResult`. `onError` does still fire, with an abort error: an optimistic wrapper needs it to revert its pending entry rather than strand it as permanently in-flight. Guard on `err.name === 'AbortError'` if your handler should skip cancellations.
+
+Aborting is a client-side cancellation, not a rollback. The request may already have reached the server and committed, so treat an aborted mutation as unknown rather than failed, and let the next loader read settle it.
 
 `<Form>` submit works the same way: unmounting the form while a submit is in flight aborts the underlying fetch.
 
@@ -439,14 +441,14 @@ const handleSave = (payload) => {
 
 ## Pending state outside the form
 
-`useFormStatus(stub?)` reports whether a submission is currently in flight. It is JS-only (SSR always returns `{ pending: false }`). Use it for indicators outside the form's `<fieldset>`, such as a global spinner or a disabled navigation item.
+`useFormStatus(stub?)` returns a `ReadonlySignal<{ pending: boolean }>` reporting whether a submission is currently in flight. It is JS-only (SSR always returns `{ pending: false }`). Use it for indicators outside the form's `<fieldset>`, such as a global spinner or a disabled navigation item.
 
 ```tsx
 import { useFormStatus } from 'hono-preact';
 import { serverActions } from './movies.server.js';
 
 const SaveIndicator = () => {
-  const { pending } = useFormStatus(serverActions.addMovie);
+  const { pending } = useFormStatus(serverActions.addMovie).value;
   return pending ? <p>Saving...</p> : null;
 };
 ```
@@ -458,7 +460,7 @@ Pass no argument to track any in-flight form submission on the page. Pass a spec
 Use `onMutate` to update local state before the request fires, and `onError` to roll it back:
 
 ```tsx
-const { data } = moviesLoader.useData();
+const { data } = moviesLoader.useData().value;
 const initialMovies = data ? data.movies.results : [];
 const [items, setItems] = useState(initialMovies);
 

@@ -46,17 +46,19 @@
    const action = serverActions.default;
 
    export function SignupForm() {
-     const { pending } = useFormStatus(action);
+     const status = useFormStatus(action);
      const result = useActionResult(action);
      const error =
-       result?.kind === 'deny' || result?.kind === 'error' ? result.message : null;
+       result.value?.kind === 'deny' || result.value?.kind === 'error'
+         ? result.value.message
+         : null;
 
      return (
        <Form action={action}>
          <input name="email" type="email" required />
          {error && <p role="alert">{error}</p>}
-         <button type="submit" disabled={pending}>
-           {pending ? 'Submitting...' : 'Submit'}
+         <button type="submit" disabled={status.value.pending}>
+           {status.value.pending ? 'Submitting...' : 'Submit'}
          </button>
        </Form>
      );
@@ -78,12 +80,15 @@
 
 - Hand-rolling a POST route instead of `defineAction`. You lose the typed payload, the
   envelope, and progressive enhancement.
-- Reading a raw `Response`. Read the outcome via `useActionResult()`; its `kind` is
-  `'success' | 'deny' | 'error'`.
+- Reading a raw `Response`. Read the outcome via `useActionResult()`, which returns a
+  signal: `result.value?.kind` is `'success' | 'deny' | 'error'`.
 - Relying on client JS for the form to work at all. It must function without JS; only the
   enhancements (pending state, no full reload) need JS.
-- Ignoring the deny/error branch. Handle `result.kind === 'deny'` / `'error'` and show
-  `result.message`.
+- Ignoring the deny/error branch. Handle `result.value?.kind === 'deny'` / `'error'` and
+  show `result.value.message`.
+- Forgetting `.value`. `useActionResult()` and `useFormStatus()` return signals, so
+  `result.kind` is `undefined` and `if (result)` is always true (a signal is an object).
+  Read `result.value` and `status.value.pending`.
 
 ## Reference
 

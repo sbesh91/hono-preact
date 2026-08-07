@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as root from 'hono-preact';
@@ -9,6 +9,11 @@ import * as viteApi from 'hono-preact/vite';
 import * as cloudflare from 'hono-preact/adapter-cloudflare';
 import * as node from 'hono-preact/adapter-node';
 import * as ui from 'hono-preact-ui';
+import {
+  codeSpansOf,
+  isCitedInCode,
+  readCodeSpans,
+} from './helpers/docs-corpus.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const docsDir = resolve(here, '..');
@@ -118,23 +123,16 @@ function isDocumented(
   return false;
 }
 
-function readCorpus(): string {
-  const parts: string[] = [];
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        if (entry.name === '__tests__') continue;
-        walk(resolve(dir, entry.name));
-      } else if (entry.name.endsWith('.mdx')) {
-        parts.push(readFileSync(resolve(dir, entry.name), 'utf8'));
-      }
-    }
-  };
-  walk(docsDir);
-  return parts.join('\n');
-}
-
-const corpus = readCorpus();
+// CODE SPANS, not whole pages. A prose match calls a symbol documented on
+// sight when its name is ordinary English, which several exports are
+// (`signal`, `computed`, `effect`, `batch`, `untracked`). The type-member gate
+// was hardened this way in #354 and the UI arm below in #222; this is the same
+// treatment for the runtime arm, which was the last one still matching prose.
+//
+// Switching cost nothing to fix: every documented export was already cited in a
+// code span, so no page needed editing and no allowlist entry was added. The
+// hole was real but unexploited -- which is exactly when to close it.
+const codeSpans = readCodeSpans(docsDir);
 
 // Reads a UI component doc page's content, or `undefined` if the page does not
 // exist. Injected into `isDocumented` so the deleted-page path is testable.
@@ -158,8 +156,9 @@ describe('public runtime exports are documented', () => {
     if (INTENTIONALLY_UNDOCUMENTED.has(name)) continue;
     it(`documents ${name}`, () => {
       expect(
-        new RegExp(`\\b${name}\\b`).test(corpus),
-        `${name} not found in docs`
+        isCitedInCode(name, codeSpans),
+        `${name} not cited as code in any docs page ` +
+          `(a prose mention is not a usable reference)`
       ).toBe(true);
     });
   }
@@ -237,5 +236,57 @@ describe('UI docs gate catches a symbol dropped from a present owning page', () 
         ? '# Dialog\n\nno parts cited here.'
         : readComponentPage(file);
     expect(isDocumented('DialogClose', uiRoots, stubbed)).toBe(false);
+  });
+});
+
+// Regression for the hole this arm had until F5: a whole-page prose match let a
+// symbol whose name is ordinary English pass on a sentence that never cites it.
+// `<Show>`'s only corpus hit was the word "Show" starting an unrelated sentence
+// in loading-states.mdx, and the signals re-exports (`signal`, `computed`,
+// `effect`, `batch`, `untracked`) are the same shape at scale.
+//
+// The switch to code spans changed no result, so nothing failing proves it
+// works. These drive the matcher over injected page text instead, which is the
+// same technique the UI arm's deleted-page tests use.
+describe('the runtime arm counts code, not prose', () => {
+  const cite = (page: string, name: string) =>
+    isCitedInCode(name, codeSpansOf(page));
+
+  it('does not count a bare prose mention', () => {
+    expect(cite('Show the user a spinner while it loads.', 'Show')).toBe(false);
+    expect(cite('The loader will signal that it is done.', 'signal')).toBe(
+      false
+    );
+  });
+
+  it('counts a fenced block', () => {
+    expect(
+      cite(
+        'Text.\n\n```tsx\nimport { Show } from "hono-preact";\n```\n',
+        'Show'
+      )
+    ).toBe(true);
+  });
+
+  it('counts an inline span', () => {
+    expect(cite('Use `signal()` for local state.', 'signal')).toBe(true);
+  });
+
+  it('counts a table row whose cell is not backticked', () => {
+    // Deliberately WITHOUT backticks: a backticked cell is already caught by
+    // the inline-span matcher, so `| `batch` |` would pass even with table-row
+    // handling removed and would test nothing. This is the case only the
+    // table-row span covers.
+    expect(cite('| batch | Groups writes into one update |', 'batch')).toBe(
+      true
+    );
+  });
+
+  it('does not let a prose mention on one page cover a code-free symbol', () => {
+    // Both forms present but for DIFFERENT symbols: the prose one stays
+    // uncited, which is the discrimination the whole-corpus match lacked.
+    const page = 'We untracked the change.\n\n```ts\nbatch(() => {});\n```\n';
+    expect(cite(page, 'batch')).toBe(true);
+    expect(cite(page, 'untracked')).toBe(false);
   });
 });

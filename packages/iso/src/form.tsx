@@ -37,6 +37,7 @@ import {
   FieldErrorPrefixContext,
   type FieldErrorsMap,
 } from './internal/field-errors-context.js';
+import { createFieldErrorStore } from './internal/field-error-signal.js';
 
 /**
  * The `action` prop accepts either a plain action stub or the branded value
@@ -125,6 +126,19 @@ export function Form<TPayload, TResult>({
   // A stable per-Form prefix so `<FieldError>` ids are unique across forms and
   // `useFieldErrorProps` can wire `aria-describedby` to them.
   const fieldErrorPrefix = useId();
+  // The per-field error store: created once for this Form instance (mirrors
+  // `use-room.ts`'s `createSignalRoster` ref) and driven below from the
+  // merged `fieldErrors`. Kept as a stable object across renders so
+  // `<FieldErrorsContext.Provider value={fieldErrorStore}>` never changes
+  // reference -- only `setAll`'s per-field signal writes propagate, which is
+  // what gives descendants their per-field granularity.
+  const fieldErrorStoreRef = useRef<ReturnType<
+    typeof createFieldErrorStore
+  > | null>(null);
+  if (!fieldErrorStoreRef.current) {
+    fieldErrorStoreRef.current = createFieldErrorStore();
+  }
+  const fieldErrorStore = fieldErrorStoreRef.current;
   const [clearedServerFields, setClearedServerFields] = useState<Set<string>>(
     () => new Set()
   );
@@ -203,16 +217,19 @@ export function Form<TPayload, TResult>({
   // Split into two memos: server errors only recompute when the server result
   // changes; fieldErrors recomputes on keystroke (when clientErrors updates).
   //
-  // useActionResult reads both the browser-global action-result store (via
-  // useSyncExternalStore, restoring the subscription) AND the request-scoped
-  // ActionResultContext (the SSR / no-JS deny re-render path). Keying the memo
-  // on the deny result's underlying data object keeps it stable across unrelated
-  // re-renders: useActionResult re-wraps into a new object each render, but for
-  // a deny its .data points at the same stable store/context object until a
-  // fresh result arrives. For non-deny results the key is null (no issues).
+  // useActionResult returns a `ReadonlySignal` projecting both the
+  // browser-global action-result store AND the request-scoped
+  // ActionResultContext (the SSR / no-JS deny re-render path). Reading
+  // `.value` during render subscribes this component (Preact's signals
+  // integration auto-tracks any `.value` read in a function component's
+  // render). Keying the memo on the deny result's underlying data object
+  // keeps it stable across unrelated re-renders: useActionResult re-wraps
+  // into a new object each recompute, but for a deny its `.data` points at
+  // the same stable store/context object until a fresh result arrives. For
+  // non-deny results the key is null (no issues).
   const serverResult = useActionResult(
     action as ActionRef<TPayload, TResult, never>
-  );
+  ).value;
   const serverErrors = useMemo<FieldErrorsMap>(
     () => mapIssuesToFields(getValidationIssues(serverResult)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -228,6 +245,16 @@ export function Form<TPayload, TResult>({
     }
     return { ...out, ...clientErrors };
   }, [serverErrors, clientErrors, clearedServerFields]);
+
+  // Drive the per-field store from the merged map. `setAll` only touches
+  // (and notifies) the per-field signals whose messages actually changed, so
+  // this unconditional call every render is cheap and does not spuriously
+  // re-render an unrelated field's consumer. Writing during render (not in a
+  // `useEffect`) means the very first render -- including the server-seeded
+  // no-JS/SSR deny path, where `serverErrors` already reflects
+  // `ActionResultContext` -- has the store populated before any descendant
+  // reads it, so first paint matches the server.
+  fieldErrorStore.setAll(fieldErrors);
 
   const handleSubmit = useCallback(
     async (e: Event) => {
@@ -473,7 +500,7 @@ export function Form<TPayload, TResult>({
       <input type="hidden" name={FORM_MODULE_FIELD} value={moduleKey} />
       <input type="hidden" name={FORM_ACTION_FIELD} value={actionName} />
       <FieldErrorPrefixContext.Provider value={fieldErrorPrefix}>
-        <FieldErrorsContext.Provider value={fieldErrors}>
+        <FieldErrorsContext.Provider value={fieldErrorStore}>
           <fieldset disabled={pending} class="hp-form-fieldset">
             {children}
           </fieldset>

@@ -61,7 +61,7 @@ describe('streaming loader: client-driven', () => {
     // Loading-aware: with the state model the children render eagerly during the
     // connecting window, so `data` is undefined until the first chunk lands.
     function Page() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       if (s.status === 'loading') return <p data-testid="count">pending</p>;
       return <p data-testid="count">{s.data.count}</p>;
     }
@@ -69,6 +69,7 @@ describe('streaming loader: client-driven', () => {
     render(
       <LocationProvider>
         <Loader
+          mode={{ kind: 'single' }}
           loader={ref}
           location={{ path: '/', pathParams: {}, searchParams: {} }}
         >
@@ -195,7 +196,7 @@ describe('streaming loader: client-driven', () => {
     let lastData: { count: number } | null = null;
     let lastError: Error | null = null;
     function Page() {
-      const s = ref.useData();
+      const s = ref.useData().value;
       if (s.status !== 'loading') lastData = s.data;
       lastError = ref.useError();
       return null;
@@ -204,6 +205,7 @@ describe('streaming loader: client-driven', () => {
     render(
       <LocationProvider>
         <Loader
+          mode={{ kind: 'single' }}
           loader={ref}
           location={{ path: '/', pathParams: {}, searchParams: {} }}
         >

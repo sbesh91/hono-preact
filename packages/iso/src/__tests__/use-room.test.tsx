@@ -227,9 +227,9 @@ describe('useRoom', () => {
       lastWS!._message(snapshot);
     });
 
-    expect(result.members).toHaveLength(2);
-    expect(result.members.map((m) => m.id)).toEqual(['me', 'other']);
-    expect(result.self).toEqual({
+    expect(result.members.value).toHaveLength(2);
+    expect(result.members.value.map((m) => m.id)).toEqual(['me', 'other']);
+    expect(result.self.value).toEqual({
       id: 'me',
       state: { name: 'Me', color: 'blue' },
     });
@@ -263,7 +263,7 @@ describe('useRoom', () => {
       lastWS!._message(join);
     });
 
-    expect(result.members).toEqual([
+    expect(result.members.value).toEqual([
       { id: 'u1', state: { name: 'Alice', color: 'red' } },
     ]);
   });
@@ -300,7 +300,7 @@ describe('useRoom', () => {
       lastWS!._message(upd);
     });
 
-    expect(result.members).toEqual([
+    expect(result.members.value).toEqual([
       { id: 'u1', state: { name: 'Alice', color: 'green' } },
     ]);
   });
@@ -335,7 +335,7 @@ describe('useRoom', () => {
       lastWS!._message(leave);
     });
 
-    expect(result.members).toEqual([
+    expect(result.members.value).toEqual([
       { id: 'u2', state: { name: 'Bob', color: 'blue' } },
     ]);
   });
@@ -373,7 +373,7 @@ describe('useRoom', () => {
       lastWS!._message(upd);
     });
 
-    expect(result.self).toEqual({
+    expect(result.self.value).toEqual({
       id: 'me',
       state: { name: 'Me', color: 'purple' },
     });
@@ -409,7 +409,7 @@ describe('useRoom', () => {
 
     expect(onMessage).toHaveBeenCalledTimes(1);
     expect(onMessage).toHaveBeenCalledWith({ text: 'hello' }, 'u9');
-    expect(result.members).toHaveLength(0);
+    expect(result.members.value).toHaveLength(0);
   });
 
   it('send posts a {t:msg,msg} frame', async () => {
@@ -592,9 +592,9 @@ describe('useRoom', () => {
       lastWS!._message(joinNoState);
     });
 
-    expect(result.members).toHaveLength(1);
-    expect(result.members[0]!.id).toBe('u2');
-    expect(result.members[0]!.state).toBeUndefined();
+    expect(result.members.value).toHaveLength(1);
+    expect(result.members.value[0]!.id).toBe('u2');
+    expect(result.members.value[0]!.state).toBeUndefined();
   });
 });
 
@@ -639,7 +639,7 @@ describe('defineRoom server def (SSR ref-method)', () => {
     // socket during SSR, so the SSR markup matches the client's first render.
     expect(lastWS).toBeNull();
     expect(captured?.status).toBe('connecting');
-    expect(captured?.members).toEqual([]);
-    expect(captured?.self).toBeUndefined();
+    expect(captured?.members.value).toEqual([]);
+    expect(captured?.self.value).toBeUndefined();
   });
 });

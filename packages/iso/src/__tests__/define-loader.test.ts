@@ -2,8 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import { defineLoader } from '../define-loader.js';
 import { createCache } from '../cache.js';
-import { LoaderDataContext } from '../internal/contexts.js';
+import { LoaderDataContext, type LoaderData } from '../internal/contexts.js';
 import { h } from 'preact';
+import { signal } from '@preact/signals';
 import { render } from '@testing-library/preact';
 
 describe('defineLoader', () => {
@@ -85,18 +86,24 @@ describe('LoaderRef methods', () => {
     expect(b.cache.has()).toBe(false);
   });
 
-  it('useData() returns a discriminated LoaderState (review #1,#2)', () => {
-    // useData() projects the loader context into the discriminated union, not
-    // the raw value: a resolved loader reads as { status: 'success', data }.
+  it('useData() returns a reactive signal of the discriminated LoaderState (review #1,#2)', () => {
+    // useData() returns a ReadonlySignal wrapping the loader context's
+    // discriminated union, not the raw value: a resolved loader reads as
+    // { status: 'success', data } through `.value`.
     const loader = defineLoader(async () => ({ value: 42 }));
     const Probe = () => {
       const state = loader.useData();
-      return h('span', null, JSON.stringify(state));
+      return h('span', null, JSON.stringify(state.value));
     };
     const { container } = render(
       h(
         LoaderDataContext.Provider,
-        { value: { status: 'success', data: { value: 42 } } },
+        {
+          value: signal<LoaderData>({
+            status: 'success',
+            data: { value: 42 },
+          }),
+        },
         h(Probe, null)
       )
     );
@@ -105,7 +112,7 @@ describe('LoaderRef methods', () => {
     );
   });
 
-  it('useData() throws when called outside a LoaderDataContext', () => {
+  it('useData() throws when called outside a <Loader> / loader.View', () => {
     const loader = defineLoader(async () => ({ value: 1 }));
     expect(() => {
       const Probe = () => {
@@ -113,7 +120,7 @@ describe('LoaderRef methods', () => {
         return null;
       };
       render(h(Probe, null));
-    }).toThrow(/loader\.View.*render function|loader\.Boundary/);
+    }).toThrow(/loader\.View.*render function|<Loader>/);
   });
 });
 

@@ -19,7 +19,11 @@ import {
   SOCKET_KEY_PARAM,
   WS_DENY_CODE,
 } from '@hono-preact/iso/internal/runtime';
-import { buildRoomRegistry, resolveRoomKey } from '../rooms-handler.js';
+import {
+  buildRoomRegistry,
+  resolveRoomKey,
+  ROOM_BUS_PREFIX,
+} from '../rooms-handler.js';
 import { socketsHandler } from '../sockets-handler.js';
 import type { WebSocketUpgrader } from '@hono-preact/iso/internal/runtime';
 import type { WSEvents } from 'hono/ws';
@@ -435,7 +439,9 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
       t: 'msg' as const,
       msg: { text: 'after-leave' },
     };
-    getPubSubBackend().publish(TOPIC, sentinel);
+    // Room traffic rides the NAMESPACED bus topic (see ROOM_BUS_PREFIX); a
+    // publish to the bare topic is live-loader traffic and reaches no room.
+    getPubSubBackend().publish(ROOM_BUS_PREFIX + TOPIC, sentinel);
     // B is still subscribed and must receive the sentinel.
     const bGotSentinel = b
       .received()
@@ -486,6 +492,53 @@ describe('rooms-handler: fan-out over the real in-process backend', () => {
 
     // The teardown must have run BEFORE onLeave.
     expect(callOrder).toEqual(['teardown', 'onLeave']);
+  });
+
+  // Rooms and live-loader topics are addressed by the same channel key, and the
+  // docs name the SAME example channel on both pages (`realtime.mdx` and
+  // `rooms.mdx` both use `defineChannel('board/:boardId')`). So a reused key is
+  // the documented path, not an edge case, and before ROOM_BUS_PREFIX the two
+  // shared one bus topic and leaked into each other in both directions.
+  // Cloudflare never had this; these pin the Node half to the same property.
+
+  it('(f3) a bare-topic publish does not leak into a room on the same key', async () => {
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const app = makeApp(makeRoomRegistry({}));
+
+    await connect(app);
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+
+    const before = a.ws.sends.length;
+
+    // Exactly what /docs/realtime tells an author to write to feed a live
+    // loader. Under the leak this arrived at every room member as a frame with
+    // no `t`, which `useRoom` dispatches to `onMessage(undefined, undefined)`.
+    getPubSubBackend().publish(TOPIC, { rows: [1, 2, 3] });
+
+    expect(a.ws.sends.slice(before)).toHaveLength(0);
+  });
+
+  it('(f4) room traffic does not leak onto the bare topic', async () => {
+    // The reverse direction: a room's presence/join broadcasts re-ran every
+    // live loader subscribed to the same key.
+    const { upgrader, conns } = makeFakeUpgrader();
+    installWebSocketUpgrader(upgrader);
+    const app = makeApp(makeRoomRegistry({}));
+
+    const seen: unknown[] = [];
+    const unsub = getPubSubBackend().subscribe(TOPIC, (m) => seen.push(m));
+
+    await connect(app);
+    const a = conns()[0]!;
+    await a.events.onOpen?.(new Event('open'), a.ws as never);
+    await connect(app);
+    const b = conns()[1]!;
+    await b.events.onOpen?.(new Event('open'), b.ws as never);
+
+    unsub();
+    expect(seen).toHaveLength(0);
   });
 
   it('(g) a denying def.use closes WS_DENY_CODE and never joins', async () => {

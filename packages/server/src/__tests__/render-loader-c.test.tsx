@@ -28,7 +28,7 @@ it('a loader invoked during SSR receives the request c', async () => {
     return (
       <html>
         <body>
-          <Loader loader={probe} location={loc}>
+          <Loader mode={{ kind: 'single' }} loader={probe} location={loc}>
             <span>ok</span>
           </Loader>
         </body>

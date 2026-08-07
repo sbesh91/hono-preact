@@ -8,13 +8,25 @@ import {
   FieldErrorPrefixContext,
   fieldErrorId,
 } from '../internal/field-errors-context.js';
+import { createFieldErrorStore } from '../internal/field-error-signal.js';
 
 afterEach(() => {
   cleanup();
 });
 
+// The context now carries a per-field store accessor, not the raw map;
+// these helpers build a store and seed it via `setAll` so the tests read the
+// same public shape a real `<Form>` provides.
+function storeWith(errors: Record<string, string[]>) {
+  const store = createFieldErrorStore();
+  store.setAll(errors);
+  return store;
+}
+
 function withErrors(errors: Record<string, string[]>, node: VNode) {
-  return render(h(FieldErrorsContext.Provider, { value: errors }, node));
+  return render(
+    h(FieldErrorsContext.Provider, { value: storeWith(errors) }, node)
+  );
 }
 
 function withCtx(
@@ -26,7 +38,7 @@ function withCtx(
     h(
       FieldErrorPrefixContext.Provider,
       { value: prefix },
-      h(FieldErrorsContext.Provider, { value: errors }, node)
+      h(FieldErrorsContext.Provider, { value: storeWith(errors) }, node)
     )
   );
 }

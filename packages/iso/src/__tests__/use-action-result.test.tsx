@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/preact';
+import { render, screen, act, cleanup } from '@testing-library/preact';
 import { ActionResultContext } from '../action-result-context.js';
 import { useActionResult } from '../use-action-result.js';
 import {
@@ -10,7 +10,7 @@ import {
 
 function Reader({ stub }: { stub?: { __module: string; __action: string } }) {
   const r = useActionResult(stub as never);
-  return <pre>{JSON.stringify(r)}</pre>;
+  return <pre>{JSON.stringify(r.value)}</pre>;
 }
 
 afterEach(() => {
@@ -19,7 +19,7 @@ afterEach(() => {
 });
 
 describe('useActionResult', () => {
-  it('returns null when no provider', () => {
+  it('returns a ReadonlySignal that is null when no provider', () => {
     const { container } = render(<Reader />);
     expect(container.textContent).toBe('null');
   });
@@ -144,5 +144,135 @@ describe('useActionResult', () => {
     const parsed = JSON.parse(container.textContent!);
     expect(parsed.kind).toBe('success');
     expect(parsed.data).toEqual({ fromClient: true });
+  });
+
+  it('granularity: a binding that reads `.value` updates without the host re-rendering', async () => {
+    const stub = { __module: 'pages/foo.server', __action: 'submit' };
+    const renders = { host: 0, binding: 0 };
+
+    function Binding() {
+      renders.binding++;
+      const result = useActionResult(stub as never);
+      return <pre data-testid="binding">{JSON.stringify(result.value)}</pre>;
+    }
+    function Host() {
+      renders.host++;
+      return <Binding />;
+    }
+
+    render(<Host />);
+    expect(screen.getByTestId('binding').textContent).toBe('null');
+    const hostBefore = renders.host;
+
+    await act(async () => {
+      setLastActionResult('pages/foo.server', 'submit', {
+        kind: 'success',
+        data: { ok: true },
+        submittedPayload: null,
+      });
+    });
+
+    // The binding picked up the fresh value...
+    expect(JSON.parse(screen.getByTestId('binding').textContent)).toMatchObject(
+      { kind: 'success', data: { ok: true } }
+    );
+    // ...but the HOST never re-rendered: only the signal-subscribed leaf did
+    // (Preact's per-component signal tracking, not a top-down re-render).
+    expect(renders.host).toBe(hostBefore);
+  });
+});
+
+// T1 (an earlier review). `defineAction` attaches `__module`/`__action` only when
+// the Vite `moduleKeyPlugin` injected them (`action.ts:152-153` guards both with
+// `!== undefined`), so a stub from an unprocessed module carries NEITHER.
+//
+// The hooks derived a `ref` from those two fields and then keyed every decision
+// off `ref`, which collapses "no stub was passed" and "a stub was passed but has
+// no identity" into the same branch. The first legitimately means "any action";
+// the second must mean "nothing", because the caller named an action and we
+// cannot tell which. On `main` the identity guard tested `stub` (the object), so
+// this returned null.
+describe('a stub with no injected identity matches NOTHING', () => {
+  it("does not adopt another action's result", () => {
+    setLastActionResult('pages/other.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Task deleted',
+      submittedPayload: {},
+    });
+    // A stub object, but the plugin never rewrote it.
+    const unrewritten = {} as { __module: string; __action: string };
+    const { container } = render(<Reader stub={unrewritten} />);
+    // Under the defect this rendered the OTHER action's deny message: a signup
+    // form showing "Task deleted".
+    expect(container.textContent).toBe('null');
+    clearLastActionResult('pages/other.server', 'submit');
+  });
+
+  it('CONTROL: no stub at all still reports the most recent result', () => {
+    // The no-stub fallback is a designed feature ("the last action result on
+    // this page"), so the fix must not break it. This is what stops the test
+    // above from passing against a hook that simply returns null always.
+    setLastActionResult('pages/other.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Task deleted',
+      submittedPayload: {},
+    });
+    const { container } = render(<Reader />);
+    expect(container.textContent).toContain('Task deleted');
+    clearLastActionResult('pages/other.server', 'submit');
+  });
+
+  it('CONTROL: a properly keyed stub still matches its own result', () => {
+    setLastActionResult('pages/foo.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Name required',
+      submittedPayload: {},
+    });
+    const { container } = render(
+      <Reader stub={{ __module: 'pages/foo.server', __action: 'submit' }} />
+    );
+    expect(container.textContent).toContain('Name required');
+  });
+});
+
+// The mirror has to FOLLOW the stub, including when it appears or disappears.
+// `<Form action={mode === 'edit' ? updateTodo : undefined}>` is the shape: a
+// reader that latched `given` at mount keeps answering for the wrong branch,
+// and in the no-stub-then-unrewritten-stub direction that is the T1 leak again.
+describe('the any-action fallback follows a stub that appears or vanishes', () => {
+  it('stops reporting another action once an unkeyed stub is supplied', () => {
+    setLastActionResult('pages/other.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Task deleted',
+      submittedPayload: {},
+    });
+    const { container, rerender } = render(<Reader />);
+    // No stub: the designed any-action fallback.
+    expect(container.textContent).toContain('Task deleted');
+
+    const unrewritten = {} as { __module: string; __action: string };
+    rerender(<Reader stub={unrewritten} />);
+    expect(container.textContent).toBe('null');
+    clearLastActionResult('pages/other.server', 'submit');
+  });
+
+  it('resumes the any-action fallback when the stub goes away', () => {
+    setLastActionResult('pages/other.server', 'submit', {
+      kind: 'deny',
+      status: 422,
+      message: 'Task deleted',
+      submittedPayload: {},
+    });
+    const unrewritten = {} as { __module: string; __action: string };
+    const { container, rerender } = render(<Reader stub={unrewritten} />);
+    expect(container.textContent).toBe('null');
+
+    rerender(<Reader />);
+    expect(container.textContent).toContain('Task deleted');
+    clearLastActionResult('pages/other.server', 'submit');
   });
 });

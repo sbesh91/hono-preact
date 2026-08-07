@@ -79,7 +79,9 @@ describe('useLoaderRunner exposes data/loading state without throwing', () => {
     loaderRef: LoaderRef<T, boolean>;
     location?: RouteHook;
   }) {
-    captured = useLoaderRunner<T>(loaderRef, location, 'probe-id');
+    captured = useLoaderRunner<T>(loaderRef, location, 'probe-id', {
+      kind: 'single',
+    });
     return null;
   }
 

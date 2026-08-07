@@ -101,6 +101,17 @@ export default defineConfig({
     },
   },
   test: {
+    // `--expose-gc` has to be set on the WORKER, not the parent: vitest runs
+    // suites in worker threads, and a flag on the `vitest` process itself never
+    // reaches them (a `node --expose-gc vitest.mjs` looks like it works and
+    // leaves `globalThis.gc` undefined where the tests actually run).
+    //
+    // One suite needs it: `roster-signal`'s retention bound is enforced by weak
+    // references, so the only way to assert that a departed member's cell is
+    // actually released is to make collection happen. Without the flag that
+    // test skips, which reads as a gap rather than as coverage.
+    // (Vitest 4 flattened the old `poolOptions.<pool>.execArgv` to this.)
+    execArgv: ['--expose-gc'],
     include: [
       'packages/iso/src/**/__tests__/**/*.test.{ts,tsx}',
       'packages/ui/src/**/__tests__/**/*.test.{ts,tsx}',

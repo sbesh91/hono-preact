@@ -4,7 +4,7 @@ import { render, act, cleanup, waitFor } from '@testing-library/preact';
 import type { RouteHook } from 'preact-iso';
 import { defineLoader } from '../../define-loader.js';
 import { useLoaderRunner } from '../use-loader-runner.js';
-import type { AccumulateOptions } from '../use-loader-runner.js';
+import { resolveLoaderMode, type AccumulateOptions } from '../loader-mode.js';
 
 // Spy on the cold-fetch/streaming path so we can assert whether a network call
 // happens. Wraps the real module (not a stub) so every other runner behavior
@@ -44,7 +44,15 @@ function Harness({
   location: RouteHook;
   accumulate?: AccumulateOptions;
 }) {
-  captured = useLoaderRunner<Data>(loaderRef, location, 'FIXED_ID', accumulate);
+  // Resolve through the real `resolveLoaderMode` (with `isStreaming: false`, the
+  // shape these refs have) rather than hand-building a mode, so the harness
+  // exercises the same derivation `.Boundary` uses.
+  captured = useLoaderRunner<Data>(
+    loaderRef,
+    location,
+    'FIXED_ID',
+    resolveLoaderMode(accumulate, false)
+  );
   return null;
 }
 

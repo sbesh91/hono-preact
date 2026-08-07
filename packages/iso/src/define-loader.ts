@@ -4,22 +4,34 @@ import type {
   ComponentType,
   FunctionComponent,
 } from 'preact';
-import { useContext } from 'preact/hooks';
+import { useContext, useRef } from 'preact/hooks';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
 import type { Serialize } from './internal/serialize.js';
 import { createCache, type LoaderCache } from './cache.js';
-import { LoaderDataContext, LoaderErrorContext } from './internal/contexts.js';
+import {
+  LoaderDataContext,
+  LoaderErrorContext,
+  LoaderStreamContext,
+  type LoaderData,
+} from './internal/contexts.js';
 import { Loader as LoaderHost } from './internal/loader.js';
 import { ViewRenderer } from './internal/view-renderer.js';
-import type { AccumulateOptions } from './internal/use-loader-runner.js';
-import type { LoaderState, StreamState, StreamStatus } from './loader-state.js';
+import {
+  resolveLoaderMode,
+  type AccumulateOptions,
+} from './internal/loader-mode.js';
+import { isLoaderState } from './loader-state.js';
+import type { LoaderState, StreamState } from './loader-state.js';
 import type { LoaderUse } from './internal/use-types.js';
 import type { Middleware } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 import { validateTimeoutMs } from './internal/timeout.js';
 import type { ServerCaller } from './server-caller.js';
+import { foldStream } from './internal/loader-signal.js';
+import { useComputed } from '@preact/signals';
+import type { ReadonlySignal } from '@preact/signals';
 export type { StreamStatus, LoaderState, StreamState } from './loader-state.js';
 
 /**
@@ -167,11 +179,14 @@ type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
  * the fn return type: `AsyncGenerator` -> `true`, `Promise` -> `false`) selects
  * the consumption surface at the type level:
  *
- * - `LoaderRef<T, true>` (a streaming loader) exposes ONLY the accumulating
- *   `View(render, { initial, reduce })` form; `useData` and `Boundary` are
- *   `never` (a streaming loader has no single value).
- * - `LoaderRef<T, false>` exposes ONLY the single-value `View(render)` form,
- *   plus `useData()` and `Boundary`.
+ * - `LoaderRef<T, true>` (a streaming loader) exposes the accumulating
+ *   `View(render, { initial, reduce })` form and the adaptive
+ *   `useData(initial, reduce)` read; `Boundary` runs in collect-mode (children
+ *   fold the stream via `useData(initial, reduce)`). The single-value
+ *   `View(render)` and argument-free `useData()` are `never` (a streaming loader
+ *   has no single value).
+ * - `LoaderRef<T, false>` exposes the single-value `View(render)` form, the
+ *   argument-free `useData()`, and `Boundary`.
  *
  * Using the wrong form is therefore a compile error rather than a runtime throw.
  * `Live` defaults to `false` (the common, non-streaming case) so a bare
@@ -222,23 +237,77 @@ export interface LoaderRef<T, Live extends boolean = false> {
    */
   readonly use: ReadonlyArray<Middleware | StreamObserver<unknown, never>>;
   /**
-   * Consume the loader's data as a discriminated `LoaderState<Serialize<T>>`:
-   * pattern-match on `status` (`loading` | `success` | `revalidating` |
-   * `error`). The data-carrying arms expose `Serialize<T>`, the JSON round-trip
-   * of the server-side return `T` (e.g. a `Date` field arrives as a string).
-   * `never` on a streaming loader (it has no single value).
+   * Read the loader's data as a reactive signal, adaptive on `Live`:
+   *
+   * - Single-value loader: `useData()` returns a
+   *   `ReadonlySignal<LoaderState<Serialize<T>>>` (pattern-match
+   *   `.value.status`).
+   * - Live (streaming) loader: `useData(initial, reduce)` folds every chunk
+   *   through `reduce` (the SAME reducer shape the accumulating
+   *   `.View(render, { initial, reduce })` form takes) and returns a
+   *   `ReadonlySignal<StreamState<Acc>>`, `Acc` inferred from `initial` /
+   *   `reduce`. Multiple `useData` calls under one host fold the SAME
+   *   underlying stream independently.
+   *
+   * Either form: read `.value` in render; a binding updates without the
+   * loader host re-rendering.
+   *
+   * HOSTS: the single-value form reads any non-accumulating host (`.Boundary`,
+   * or a `.View(render)` render function). The live form needs `.Boundary`
+   * specifically -- it folds the retained chunk log, which only that host
+   * keeps. A `.View(render, { initial, reduce })` host hands its render
+   * function the folded state directly and retains no log.
+   *
+   * REDUCERS MUST NOT CLOSE OVER CHANGING STATE. The live arm memoizes the
+   * FIRST render's `reduce` and `initial`; a fresh inline arrow passed on a
+   * later render is discarded. So a reducer that captures a prop --
+   * `(acc, tick) => acc + tick.qty * rate` -- keeps folding with the `rate` it
+   * captured at mount, and every chunk arriving after `rate` changes is folded
+   * at the stale value. Nothing throws; the number is just wrong, until the
+   * component unmounts.
+   *
+   * Keep the reducer a pure function of `(acc, chunk)`. If a fold genuinely
+   * depends on changing state, fold the raw chunks into an accumulator that
+   * does not, and apply the state where you RENDER the result instead:
+   *
+   * ```tsx
+   * const qty = ticker.useData(0, (acc, tick) => acc + tick.qty); // pure
+   * return <p>{qty.value.data * rate}</p>;                        // state here
+   * ```
+   *
+   * The pin is deliberate. Honouring a changed reducer means refolding the
+   * whole retained log, and because an inline arrow is a fresh reference on
+   * every render that refold would run on every render: measured at 5,000
+   * chunks it is 12,502,500 reducer calls against 5,000, i.e. the O(n^2) the
+   * collect-mode log was restructured to remove. Applying the new reducer only
+   * to later chunks is cheap but yields a value that is part old-behaviour and
+   * part new, which is harder to reason about than consistent staleness.
    */
-  useData: Live extends true ? never : () => LoaderState<Serialize<T>>;
+  useData: Live extends true
+    ? <Acc>(
+        initial: Acc,
+        reduce: (acc: Acc, chunk: Serialize<T>) => Acc
+      ) => ReadonlySignal<StreamState<Acc>>
+    : () => ReadonlySignal<LoaderState<Serialize<T>>>;
   useError(): Error | null;
   invalidate(): void;
   /**
-   * The lower-level state-based boundary (single-value loaders): it renders its
-   * children eagerly and provides the loader's state on context, which children
-   * read via `useData()` (pattern-match on `status`). `never` on a streaming
-   * loader: consume it via the accumulating `.View` form instead.
+   * The lower-level state-based host: it renders its children eagerly and
+   * provides the loader's reactive state on context, which children read via
+   * `useData()`. On a single-value loader, children call `useData()`
+   * (pattern-match `.value.status`). On a streaming loader, the boundary runs in
+   * collect-mode and children call `useData(initial, reduce)` to fold the stream
+   * (each consumer folds independently off the one shared subscription). The
+   * accumulating `.View(render, { initial, reduce })` form remains available as
+   * the render-prop alternative.
    */
   Boundary: Live extends true
-    ? never
+    ? ComponentType<{
+        errorFallback?:
+          | ComponentChildren
+          | ((err: Error, reset: () => void) => ComponentChildren);
+        children: ComponentChildren;
+      }>
     : ComponentType<{
         errorFallback?:
           | ComponentChildren
@@ -261,7 +330,7 @@ export interface LoaderRef<T, Live extends boolean = false> {
  * loader (invalidate, prefetch) without reading its data shape.
  *
  * Uses `LoaderRef<any>`, not `LoaderRef<unknown>`, deliberately. `LoaderRef<T>`
- * is invariant in `T` (it surfaces `T` through `useData(): LoaderState<Serialize<T>>`),
+ * is invariant in `T` (it surfaces `T` through `useData(): ReadonlySignal<LoaderState<Serialize<T>>>`),
  * so a concrete `LoaderRef<Movie>` is NOT assignable to `LoaderRef<unknown>`. The
  * `any` argument erases the data type so any loader is accepted; these call
  * sites never inspect the data with a meaningful type. `boolean` (not the default
@@ -400,31 +469,52 @@ function getSharedCaches(): SharedCacheMap {
 }
 
 /**
- * The streaming-only statuses: the part of the streaming vocabulary that never
- * appears on a single-value `LoaderState` (the shared `error` stays on the
- * `LoaderState` side). Derived from the status union via `Exclude`, so the
- * exclusion set has ONE source of truth: adding a `StreamStatus` member forces
- * this map to list it (a missing key is a compile error) and it cannot drift.
+ * The cold arm for the `null` routing signal below. Module-level so the
+ * projection returns a STABLE reference: a `computed` recompute that lands here
+ * hands back the same object, and a memoized consumer sees no change.
  */
-type StreamOnlyStatus = Exclude<StreamStatus, LoaderState<unknown>['status']>;
-const STREAM_ONLY_STATUSES: Record<StreamOnlyStatus, true> = {
-  connecting: true,
-  open: true,
-  closed: true,
-};
+const COLD_LOADING: LoaderState<unknown> = { status: 'loading' };
 
 /**
- * Narrow `LoaderDataContext`'s union to the single-value `LoaderState` half by
- * excluding the stream-only statuses. A non-streaming loader always carries a
- * `LoaderState` on context, so this lets `useData()` return the context value
- * directly (no re-projection, no cast). The shared `error` status stays on the
- * `LoaderState` side, which is correct: `useData()` is never called on a
- * streaming loader (it throws first).
+ * Project `LoaderDataContext`'s value down to the single-value `LoaderState`
+ * half, for `useData()`'s no-arg arm.
+ *
+ * `null` is unreachable defense: it is the cold-error routing signal, and
+ * `loader.tsx` renders the `errorFallback` instead of the children, so no
+ * mounted consumer sees it.
+ *
+ * A `StreamState` is NOT unreachable, and is a real user mistake rather than an
+ * internal one. One host produces it: a NON-streaming loader consumed with
+ * `accumulate` (`{ kind: 'fold' }` per `internal/loader-mode.ts`, a supported
+ * host pinned by `loader-accumulate.test.tsx`). That host folds chunks into an
+ * accumulator of the CALLER's type, while `useData()` on a non-streaming ref is
+ * typed `ReadonlySignal<LoaderState<Serialize<T>>>` -- `Acc` is unrelated to
+ * `Serialize<T>` and `StreamState` is not `LoaderState`, so there is no honest
+ * value to return. Returning a fabricated `{ status: 'loading' }` (what this
+ * did before) leaves the consumer on a skeleton that never resolves, with
+ * nothing in the console to explain it.
+ *
+ * So: throw, and name the fix. An accumulating host's state is read through
+ * `.View(render, { initial, reduce })`, which receives it directly.
  */
-function isLoaderState(
-  s: LoaderState<unknown> | StreamState<unknown>
-): s is LoaderState<unknown> {
-  return !(s.status in STREAM_ONLY_STATUSES);
+function toSingleValueState(s: LoaderData): LoaderState<unknown> {
+  if (s === null) return COLD_LOADING;
+  if (isLoaderState(s)) return s;
+  // The throw is unconditional, the explanation is not (#338): a production
+  // client build gets the locator alone. Read `import.meta.env` INSIDE the
+  // function and inline, never via a helper taking the message as an argument,
+  // or the long string stays referenced and never tree-shakes.
+  throw new Error(
+    typeof import.meta.env === 'undefined' ||
+      import.meta.env.SSR ||
+      import.meta.env.DEV
+      ? 'loader.useData() was called under an accumulating host. A host given ' +
+          '`accumulate` folds chunks into your own accumulator, which `useData()` ' +
+          'cannot type or return. Read that state with ' +
+          '`loader.View(render, { initial, reduce })`, whose render function ' +
+          'receives it directly.'
+      : 'loader.useData() was called under an accumulating host.'
+  );
 }
 
 /**
@@ -593,6 +683,97 @@ function makeLoaderRef(
     }
   }
 
+  // Shared body for `useData` (single-value arm). A plain local fn rather than
+  // a `this` call keeps the object literal's method typing simple and avoids
+  // an `as any` on `this`. `useDataDispatch` below only ever calls this when
+  // `!isStreaming`, so no `isStreaming` guard is needed here.
+  function readDataSignal(): ReadonlySignal<LoaderState<unknown>> {
+    const source = useContext(LoaderDataContext);
+    if (!source) {
+      throw new Error(
+        'loader.useData() must be called inside a `loader.View` render function or a `<Loader>`.'
+      );
+    }
+    // The context's signal carries the WHOLE consumption union, and
+    // `ReadonlySignal<A | B>` is not assignable to `ReadonlySignal<A>`, so the
+    // narrowing has to happen INSIDE a derived signal rather than at the read.
+    // `source` is a single stable signal (see `LoaderDataProvider`);
+    // `useComputed` memoizes the derived reactive for this component instance
+    // so a binding does not resubscribe each render.
+    return useComputed(() => toSingleValueState(source.value));
+  }
+
+  // Shared body for `useData` (live arm). Reads the collect-mode host's
+  // `LoaderStreamContext` (the retained chunk log plus status/error) and folds
+  // it through the caller's `reduce`, memoized once per call site so the fold
+  // stays incremental (O(n) over the stream) and a late mount still consumes
+  // the whole retained log (`foldStream` in `loader-signal.ts` owns the fold).
+  //
+  // The memo PINS the first render's `reduce`/`initial`, so a reducer that
+  // closes over changing state silently keeps folding with the captured value.
+  // That is a known trade, decided rather than overlooked: the two
+  // alternatives were measured and both are worse. Refolding the log to honour
+  // a new reducer runs on EVERY render (an inline arrow is a fresh reference
+  // each time) -- 12,502,500 reducer calls against 5,000 at a 5,000-chunk
+  // stream, the exact O(n^2) collect-mode was restructured to remove. Applying
+  // the new reducer to later chunks only stays linear but mixes old and new
+  // behaviour in one accumulator. The contract is documented on `useData`'s
+  // JSDoc and in `live-loaders.mdx`: keep the reducer pure in (acc, chunk).
+  function readLiveDataSignal<Acc>(
+    initial: Acc,
+    reduce: (acc: Acc, chunk: unknown) => Acc
+  ): ReadonlySignal<StreamState<Acc>> {
+    const ctx = useContext(LoaderStreamContext);
+    if (!ctx) {
+      throw new Error(
+        typeof import.meta.env === 'undefined' ||
+          import.meta.env.SSR ||
+          import.meta.env.DEV
+          ? 'live loader.useData(initial, reduce) must be called inside a ' +
+              '`loader.Boundary` host. A `.View(render, { initial, reduce })` host ' +
+              'folds the stream into ONE accumulator and retains no chunk log, so ' +
+              'it cannot serve a second, independent fold; its render function ' +
+              'already receives the folded state.'
+          : 'live loader.useData(initial, reduce) must be called inside a `loader.Boundary` host.'
+      );
+    }
+    const resultRef = useRef<ReadonlySignal<StreamState<Acc>> | null>(null);
+    if (resultRef.current === null) {
+      resultRef.current = foldStream(ctx, initial, reduce);
+    }
+    return resultRef.current;
+  }
+
+  // `useData`'s public type is adaptive on `Live` (never a union at any one
+  // call site: single-value loaders get the no-arg form, live loaders get
+  // `(initial, reduce)`). ONE runtime implementation has to serve both static
+  // shapes, so it is declared here with real overload signatures (matching
+  // `defineLoader`'s own overload style) and referenced below, rather than
+  // written inline as an object-literal method: an inline method's inferred
+  // return type would be the UNION of both branches' return types, which is
+  // not assignable back to either narrow field type.
+  function useDataDispatch(): ReadonlySignal<LoaderState<unknown>>;
+  function useDataDispatch<Acc>(
+    initial: Acc,
+    reduce: (acc: Acc, chunk: unknown) => Acc
+  ): ReadonlySignal<StreamState<Acc>>;
+  function useDataDispatch(
+    initial?: unknown,
+    reduce?: (acc: unknown, chunk: unknown) => unknown
+  ):
+    | ReadonlySignal<LoaderState<unknown>>
+    | ReadonlySignal<StreamState<unknown>> {
+    if (isStreaming) {
+      if (typeof reduce !== 'function') {
+        throw new Error(
+          'This is a streaming loader: useData(initial, reduce) requires a reduce function; call `loader.useData(initial, reduce)`.'
+        );
+      }
+      return readLiveDataSignal(initial, reduce);
+    }
+    return readDataSignal();
+  }
+
   const ref: LoaderRef<unknown> = {
     __id,
     __moduleKey: opts?.__moduleKey,
@@ -620,31 +801,7 @@ function makeLoaderRef(
     use: (opts?.use ?? []) as ReadonlyArray<
       Middleware | StreamObserver<unknown, never>
     >,
-    useData() {
-      if (isStreaming) {
-        throw new Error(
-          'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.useData()`.'
-        );
-      }
-      const ctx = useContext(LoaderDataContext);
-      if (!ctx) {
-        throw new Error(
-          'loader.useData() must be called inside a `loader.View` render function or inside a `loader.Boundary`.'
-        );
-      }
-      // The context carries the already-projected union (built once in
-      // `loader.tsx`); return it BY REFERENCE so consumers see a referentially
-      // stable value across re-renders (review #7) rather than a fresh
-      // projection each call. A non-streaming loader always carries a `LoaderState`
-      // (the runner never projects `toStreamState` for it); `isLoaderState`
-      // narrows to that without a cast, and the throw is unreachable defense.
-      if (!isLoaderState(ctx)) {
-        throw new Error(
-          'loader.useData() read a streaming state on a non-streaming loader; this is an internal invariant violation.'
-        );
-      }
-      return ctx;
-    },
+    useData: useDataDispatch,
     useError() {
       return useContext(LoaderErrorContext);
     },
@@ -655,29 +812,17 @@ function makeLoaderRef(
     // and only deref at call time (component render), so the cycle is safe;
     // both are fully initialized before any consumer can invoke them.
     Boundary: (props) => {
-      // The same `accumulate` <-> `isStreaming` invariant `View` enforces,
-      // applied to the lower-level escape hatch (`View` delegates here, so
-      // these guards must allow streaming+accumulate, which is exactly what
-      // `View` passes).
-      if (isStreaming && !props.accumulate) {
-        // A streaming loader has no single value; a bare `.Boundary` would
-        // suspend forever on the infinite generator. Defense-in-depth for JS
-        // callers: the discriminated `LoaderRef<T, true>` already makes this a
-        // type error (and `Boundary` is `never` on a streaming loader). Keyed
-        // on the fn prototype check, which is reliable across both SSR and
-        // client paths.
-        throw new Error(
-          'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`, not `loader.Boundary`.'
-        );
-      }
-      // Non-streaming + accumulate is valid on the server: `DataReader` keys the
-      // SSR projection on the consumption form (accumulate), so an accumulating
-      // consumer renders the `connecting` StreamState on the server, matching the
-      // client's first render (it reconnects on mount).
+      // The ONE place a host's mode is decided. `resolveLoaderMode` owns the
+      // three-way (and the order it tests in, which is load-bearing): with
+      // `accumulate` this is the fold-mode path `View` delegates here (it always
+      // passes the reducer) AND the non-streaming accumulating host, which is
+      // supported; without it, a streaming loader collects (the host provides
+      // the raw chunk-log context and children fold it via `useData(initial,
+      // reduce)`) and a single-value loader provides its `LoaderState`.
       return h(LoaderHost<unknown>, {
         loader: ref,
         errorFallback: props.errorFallback,
-        accumulate: props.accumulate,
+        mode: resolveLoaderMode(props.accumulate, isStreaming),
         children: props.children,
       });
     },
@@ -712,10 +857,10 @@ function makeLoaderRef(
           'This is a streaming loader: consume it via `loader.View(render, { initial, reduce })`.'
         );
       }
-      // Non-streaming + accumulate is valid on the server: `DataReader` keys the
-      // SSR projection on the consumption form (accumulate), so an accumulating
-      // consumer renders the `connecting` StreamState on the server, matching the
-      // client's first render (it reconnects on mount).
+      // `accumulate` is built ONCE per `View(...)` call, not per render, so its
+      // `initial`/`reduce` identities are fixed for the life of the returned
+      // component. That is what lets the runner's `useStableLoaderMode` hold the
+      // resolved fold mode stable across renders.
       const Wrapped: FunctionComponent<any> = (props) =>
         h(ref.Boundary, {
           errorFallback: viewOpts?.errorFallback,

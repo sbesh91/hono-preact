@@ -97,7 +97,7 @@ export default function Chat() {
 
 The free `useSocket(ref, opts)` export also works and is equivalent; the method form is the idiomatic choice when the ref is a `serverSockets` entry.
 
-`useSocket` manages the WebSocket lifecycle: it connects on mount, reconnects with exponential backoff on unexpected drops, and closes cleanly on unmount. `send` queues messages if the socket is not yet open, flushing them once the connection is established (up to 128 queued messages); beyond that cap, further sends while not open are dropped, with a dev-mode console warning rather than a silent loss. Toggling `enabled` to `false` on an open socket tears the connection down and `status` becomes `'closed'`.
+`useSocket` manages the WebSocket lifecycle: it connects on mount, reconnects with exponential backoff on unexpected drops, and closes cleanly on unmount. `send` queues messages if the socket is not yet open, flushing them once the connection is established (up to 128 queued messages); beyond that cap, further sends while not open are dropped. The drop is silent in production and logs a console warning in development, and `send` returns nothing either way, so an app that must not lose messages while disconnected should watch `status` and hold them itself rather than rely on the queue. Toggling `enabled` to `false` on an open socket tears the connection down and `status` becomes `'closed'`.
 
 `status` is reactive and drives UI affordances:
 

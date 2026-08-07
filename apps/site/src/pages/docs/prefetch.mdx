@@ -16,7 +16,7 @@ function onMovieLinkHover(id: number) {
 }
 ```
 
-The result is written into the loader's cache (when one is configured) and the next navigation reads from cache instead of refetching.
+The result is written into the loader's cache (when one is configured), and a navigation that mounts the loader fresh reads it instead of refetching.
 
 ## Common patterns
 
@@ -26,7 +26,9 @@ The result is written into the loader's cache (when one is configured) and the n
 
 **Programmatic prefetch** works anywhere: a router transition listener, a search-as-you-type debounce, an intersection observer for cards scrolling into view.
 
-`prefetch` checks the loader's cache first and returns immediately when the destination is already warm. A hover handler firing repeatedly (mouse over → off → back over the same link), an intersection observer re-entering visibility, or duplicate idle-callback scheduling will not issue redundant network requests. The cache key combines path with whatever `searchParams` the loader's `params` option declares, so two prefetches for `/movies/41` and `/movies/42` each hit the network exactly once.
+`prefetch` checks the loader's cache first and returns immediately when the destination is already warm. A hover handler firing repeatedly (mouse over → off → back over the same link), an intersection observer re-entering visibility, or duplicate idle-callback scheduling will not issue redundant network requests. The cache key combines path with whatever `searchParams` the loader's `params` option declares.
+
+The cache holds **one entry per loader**, so warming a second key evicts the first: prefetching `/movies/41` and then `/movies/42` leaves only `42` warm, and returning to `41` fetches again. Prefetching pays off for the next destination, not for a set of them. See [#360](https://github.com/sbesh91/hono-preact/issues/360).
 
 ## Why pass `url` and `route`?
 

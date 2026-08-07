@@ -3,7 +3,8 @@ import {
   setLastActionResult,
   clearLastActionResult,
   getLastActionResult,
-  subscribeLastActionResult,
+  lastActionResultSignal,
+  pickLastActionResult,
 } from '../internal/action-result-store.js';
 
 describe('action-result-store', () => {
@@ -87,23 +88,30 @@ describe('action-result-store', () => {
     expect(getLastActionResult({ __module: 'm', __action: 'a' })).toBeNull();
   });
 
-  it('subscribers fire on set and clear', () => {
-    let count = 0;
-    const unsub = subscribeLastActionResult(() => count++);
+  it('the store signal updates on set and clear', () => {
+    const before = lastActionResultSignal.value;
     setLastActionResult('m', 'a', {
       kind: 'success',
       data: 1,
       submittedPayload: null,
     });
+    const afterSet = lastActionResultSignal.value;
+    expect(afterSet).not.toBe(before);
+    expect(
+      pickLastActionResult(afterSet, { __module: 'm', __action: 'a' })
+    ).toMatchObject({ kind: 'success', data: 1 });
+
     clearLastActionResult('m', 'a');
-    expect(count).toBeGreaterThanOrEqual(2);
-    unsub();
-    setLastActionResult('m', 'a', {
-      kind: 'success',
-      data: 2,
-      submittedPayload: null,
-    });
-    // Count should not have increased after unsubscribing.
-    expect(count).toBeGreaterThanOrEqual(2);
+    const afterClear = lastActionResultSignal.value;
+    expect(afterClear).not.toBe(afterSet);
+    expect(
+      pickLastActionResult(afterClear, { __module: 'm', __action: 'a' })
+    ).toBeNull();
+  });
+
+  it('clearing an absent key leaves the signal identity unchanged', () => {
+    const before = lastActionResultSignal.value;
+    clearLastActionResult('does-not', 'exist');
+    expect(lastActionResultSignal.value).toBe(before);
   });
 });

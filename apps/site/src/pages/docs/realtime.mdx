@@ -169,6 +169,8 @@ Returns a `Channel<Name, Payload>` with one method:
 
 Publishes to a typed topic from a server action or server agent. Every live loader subscribed to `topic` re-runs its `load` and pushes the result to connected clients.
 
+`publish` addresses **live loaders, not rooms.** The two are separate namespaces even when they share a channel key, so publishing to the key a [room](/docs/rooms) is bound to does not reach that room's members, and a room's own traffic does not re-run live loaders on the same key. To send to a room's members, broadcast from inside the room (`conn.broadcast`).
+
 ```ts
 import { publish } from 'hono-preact';
 

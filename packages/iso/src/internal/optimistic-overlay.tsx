@@ -1,11 +1,16 @@
 import type { ComponentChildren } from 'preact';
-import { useContext } from 'preact/hooks';
-import { LoaderDataContext } from './contexts.js';
+import { useContext, useRef } from 'preact/hooks';
+import { LoaderDataContext, type LoaderData } from './contexts.js';
+import { LoaderDataProvider } from './loader-data-provider.js';
 import type { LoaderRef } from '../define-loader.js';
-import type { LoaderState, StreamState } from '../loader-state.js';
+import { shallowEqual } from './shallow-equal.js';
 
-/** The consumption union <Page> puts on `LoaderDataContext`. */
-type ConsumptionState = LoaderState<unknown> | StreamState<unknown>;
+/**
+ * The consumption union <Page> puts on `LoaderDataContext`, minus the cold-error
+ * `null` (which `loader.tsx` routes to the `errorFallback` instead of rendering
+ * the children this overlay lives among).
+ */
+type ConsumptionState = NonNullable<LoaderData>;
 
 /** The data-bearing arms: everything but the cold `loading` / `connecting`. */
 type DataBearing = Exclude<
@@ -41,12 +46,27 @@ type OverlayProps<T, A> = {
   children: ComponentChildren;
 };
 
+/**
+ * Are these two re-provided arms equivalent to a consumer? Same status, and
+ * data that matches one level deep, which is where a re-`reduce` of unchanged
+ * `pending` lands (a fresh array or object holding the same entries).
+ */
+function sameArm(a: ConsumptionState, b: ConsumptionState): boolean {
+  if (a === b) return true;
+  if (a.status !== b.status) return false;
+  const aData = isDataBearing(a) ? a.data : undefined;
+  const bData = isDataBearing(b) ? b.data : undefined;
+  return shallowEqual(aData, bData);
+}
+
 export function OptimisticOverlay<T, A>({
   reducer,
   pending = [],
   children,
 }: OverlayProps<T, A>) {
-  const ctx = useContext(LoaderDataContext);
+  // Reading `.value` subscribes the overlay to the loader's state, so a settled
+  // load re-projects here even when nothing re-renders the overlay from above.
+  const ctx = useContext(LoaderDataContext)?.value ?? null;
   if (!ctx)
     throw new Error(
       '<OptimisticOverlay> must be inside a route page that has a loader'
@@ -63,34 +83,56 @@ export function OptimisticOverlay<T, A>({
     base
   );
 
-  // Data-bearing arm (`success` / `revalidating` / `error`): re-provide the SAME
-  // discriminated arm with the data replaced (load status unchanged).
-  if (isDataBearing(ctx)) {
-    return (
-      <LoaderDataContext.Provider value={{ ...ctx, data: projected }}>
-        {children}
-      </LoaderDataContext.Provider>
-    );
-  }
+  // The arm this overlay re-provides:
+  //
+  //  - Data-bearing (`success` / `revalidating` / `error`): the SAME
+  //    discriminated arm with the data replaced (load status unchanged).
+  //  - Cold first load (`loading` / `connecting`, no underlying value yet) WITH
+  //    pending actions: surface their projection so descendants reading
+  //    `loader.useData()` see the optimistic items DURING the first load,
+  //    restoring parity with the overlay before the loader state machine landed
+  //    (which always projected). It rides the `revalidating` arm: data is
+  //    available but PROVISIONAL while the real first load is still in flight,
+  //    which is the honest status (`success` would falsely claim the load
+  //    completed). The reduce seeds from the absent base; the reducer is
+  //    responsible for tolerating an empty base, so the overlay never builds an
+  //    invalid value itself.
+  //  - Cold first load with nothing pending: nothing to project, so the genuine
+  //    `loading` / `connecting` arm passes through unchanged.
+  //
+  // When the projection did not change the data (nothing pending, so `reduce`
+  // returned the base untouched) the HOST's own arm is re-provided by
+  // reference. Spreading a fresh `{...ctx, data: projected}` there publishes a
+  // new object with identical contents, and `LoaderDataProvider`'s signal
+  // compares by identity, so every `loader.useData()` consumer below would be
+  // woken for nothing -- disabling the granularity this data layer exists for,
+  // across the whole optimistic subtree.
+  //
+  // The identity guard above only covers the case where the projection was a
+  // no-op. With something pending, `reduce` builds a FRESH value every render,
+  // so the arm was a new object on every render of the overlay itself and woke
+  // every `useData()` consumer below for a projection that had not changed.
+  // Retaining the last published arm and reusing it when the contents match
+  // closes that, the same output-dedupe `useOptimistic` and `foldStream` use.
+  const nextArm: ConsumptionState = isDataBearing(ctx)
+    ? projected === ctx.data
+      ? ctx
+      : { ...ctx, data: projected }
+    : pending.length > 0
+      ? { status: 'revalidating', data: projected }
+      : ctx;
 
-  // Cold first load (`loading` / `connecting`, no underlying value yet). When
-  // there ARE pending actions, surface their projection so descendants reading
-  // `loader.useData()` see the optimistic items DURING the first load, restoring
-  // parity with the overlay before the loader state machine landed (which always
-  // projected). It rides the `revalidating` arm: data is available but
-  // PROVISIONAL while the real first load is still in flight, which is the honest
-  // status (`success` would falsely claim the load completed). With no pending
-  // actions there is nothing to project, so the genuine `loading` / `connecting`
-  // arm passes through unchanged. The reduce seeds from the absent base; the
-  // reducer is responsible for tolerating an empty base, so the overlay never
-  // builds an invalid value itself.
-  return (
-    <LoaderDataContext.Provider
-      value={
-        pending.length > 0 ? { status: 'revalidating', data: projected } : ctx
-      }
-    >
-      {children}
-    </LoaderDataContext.Provider>
-  );
+  const lastArm = useRef<ConsumptionState | null>(null);
+  const arm: ConsumptionState =
+    lastArm.current !== null && sameArm(lastArm.current, nextArm)
+      ? lastArm.current
+      : nextArm;
+  lastArm.current = arm;
+
+  // Re-provide the ONE loader channel with the projected arm, so every reader
+  // below (a `.View` render function, a descendant's `loader.useData()`) sees
+  // the projection rather than the host's raw loader state. `LoaderDataProvider`
+  // owns the stable-identity contract that a consumer's memoized projection
+  // depends on.
+  return <LoaderDataProvider state={arm}>{children}</LoaderDataProvider>;
 }

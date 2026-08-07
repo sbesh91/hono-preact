@@ -265,12 +265,15 @@ See [Streaming](/docs/streaming) and [Live Loaders](/docs/live-loaders) for the 
 
 ### `loader.useData()` and `loader.Boundary`
 
-`loader.useData()` returns the same `LoaderState` for descendants that need it without prop-drilling. Call it inside a `.View()` render function or inside an explicit `loader.Boundary`:
+`loader.useData()` gives descendants the loader's data as a `ReadonlySignal`, without prop-drilling. Call it inside a `.View()` render function or inside an explicit `loader.Boundary`, and read `.value` to get the current state:
 
 ```tsx
 function HeaderWithSummary() {
-  const { data } = serverLoaders.summary.useData();
-  if (!data) return <Skeleton />;
+  const { status, data } = serverLoaders.summary.useData().value;
+  // Narrow on `status`, the discriminant. Testing `data` for presence looks
+  // equivalent and is not: a loader that legitimately resolves to `0`, `''` or
+  // `null` would render the skeleton forever on a settled `success`.
+  if (status !== 'success') return <Skeleton />;
   return <h1>{data.title}</h1>;
 }
 
@@ -283,7 +286,38 @@ function Header() {
 }
 ```
 
-`loader.useData()` is not available on streaming loaders (they have no single value). Calling it on a streaming loader throws with a clear error message; use the accumulating `.View` form instead.
+Because `useData()` returns a signal, a binding that reads only `.value` inside a small leaf (or a `useComputed`) re-renders on its own, independent of the surrounding tree. Project a field with `useComputed`:
+
+```tsx
+import { useComputed } from 'hono-preact';
+
+function Title() {
+  const state = serverLoaders.summary.useData();
+  const title = useComputed(() => state.value.data?.title ?? 'Loading...');
+  return <h1>{title}</h1>;
+}
+```
+
+`useData` is available on streaming loaders too, in a different shape: `loader.useData(initial, reduce)` folds each chunk through `reduce` (the same reducer shape the accumulating `.View(render, { initial, reduce })` form takes) and returns a `ReadonlySignal<StreamState<Acc>>`. `loader.Boundary` on a streaming loader runs in collect-mode: it provides the raw chunk stream on context, and every `useData(initial, reduce)` call underneath folds that same stream independently:
+
+```tsx
+function ActivityTotal() {
+  const total = serverLoaders.activity.useData(0, (acc) => acc + 1);
+  return (
+    <p>{total.value.status === 'connecting' ? '...' : total.value.data}</p>
+  );
+}
+
+function ActivityPanel() {
+  return (
+    <serverLoaders.activity.Boundary>
+      <ActivityTotal />
+    </serverLoaders.activity.Boundary>
+  );
+}
+```
+
+`@preact/signals` primitives (`signal`, `computed`, `useComputed`, `effect`, and the rest) are available directly from `hono-preact`, so a component that reads loader signals does not need a separate dependency. See [Signals](/docs/signals) for what they are and where the sharp edges are.
 
 ## The serverLoaders container
 
@@ -521,7 +555,11 @@ Pass `'auto'` to invalidate the current page's loader only. Use `loader.invalida
 
 ## Caching navigation results
 
-Every loader gets its own cache automatically. Repeated navigations to the same route (with the same cache key) hit the cache and skip the RPC call. To clear the cache:
+Every loader gets its own cache automatically. It holds the most recent result, and it is read when a loader mounts: leaving a route and coming back to the same cache key skips the RPC call.
+
+Two limits are worth knowing, because both are easy to assume away. The cache holds **one entry per loader**, so visiting a second key evicts the first. And it is read only on a loader's **first render**, so changing params without leaving the route (`/movies/1` to `/movies/2` under `/movies/:id`) refetches every time, including back to a key you just visited. Neither is a deliberate policy; see [#360](https://github.com/sbesh91/hono-preact/issues/360).
+
+To clear the cache:
 
 ```ts
 serverLoaders.default.invalidate();

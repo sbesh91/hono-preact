@@ -18,6 +18,14 @@ export type LoaderState<T> =
 export type StreamState<T> =
   | { status: 'connecting'; data?: never }
   | { status: 'open'; data: T }
+  // A resubscribe is in flight over chunks the previous connection already
+  // delivered. Distinct from `connecting`, which is the COLD pre-first-chunk
+  // arm and carries no value: here the last good fold is still on screen while
+  // the reconnect runs, which is what makes retrying safe to offer as a button.
+  // Reusing `open` (or holding whatever the status was) left an author nothing
+  // to branch on and, after a failure, stranded a cleared error under
+  // `status: 'error'` so the placeholder below fired.
+  | { status: 'reconnecting'; data: T }
   | { status: 'closed'; data: T }
   // `data` is optional: a COLD stream error (the connect rejects before any
   // chunk) surfaces here with no accumulated value. A post-chunk error still
@@ -81,6 +89,34 @@ export function hasPhaseValue<T>(p: LoaderPhase<T>): p is ValuedPhase<T> {
   return (
     p.tag === 'success' || p.tag === 'revalidating' || p.tag === 'staleError'
   );
+}
+
+/**
+ * The statuses that appear ONLY on a streaming `StreamState`, never on a
+ * single-value `LoaderState` (the shared `error` status stays on the
+ * `LoaderState` side). Derived from the status union via `Exclude`, so the
+ * exclusion set has ONE source of truth: adding a `StreamStatus` member forces
+ * this map to list it (a missing key is a compile error) and it cannot drift.
+ */
+type StreamOnlyStatus = Exclude<StreamStatus, LoaderState<unknown>['status']>;
+const STREAM_ONLY_STATUSES: Record<StreamOnlyStatus, true> = {
+  connecting: true,
+  open: true,
+  closed: true,
+  reconnecting: true,
+};
+
+/**
+ * Type predicate: is this consumption state the single-value `LoaderState` half
+ * of the union? Narrows by excluding the stream-only statuses, so a consumer
+ * that only ever sees a non-streaming loader (`useData()`'s no-arg arm, which
+ * a streaming loader never reaches) can read the value as a `LoaderState`
+ * without a cast. Structural, on the discriminant, like `hasPhaseValue` above.
+ */
+export function isLoaderState(
+  s: LoaderState<unknown> | StreamState<unknown>
+): s is LoaderState<unknown> {
+  return !(s.status in STREAM_ONLY_STATUSES);
 }
 
 /**
@@ -178,6 +214,13 @@ export function toStreamState<T>(
     case 'closed':
       return value.present
         ? { status: 'closed', data: value.value }
+        : { status: 'connecting' };
+    case 'reconnecting':
+      // Only reachable WITH a retained value: the runner reports `connecting`
+      // instead when nothing has been delivered, so the absent fallback is
+      // unreachable defense rather than a value-presence decision.
+      return value.present
+        ? { status: 'reconnecting', data: value.value }
         : { status: 'connecting' };
     case 'error': {
       // `error` is the streaming error OBJECT, not a value-presence test. The

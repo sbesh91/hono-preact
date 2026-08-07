@@ -102,7 +102,7 @@ describe('Page errorFallback catches loader errors', () => {
     function PageContent() {
       // State-based: children render eagerly during the pending window, so
       // `useData()` returns undefined until the loader resolves. Guard for it.
-      const s = failing.useData();
+      const s = failing.useData().value;
       if (s.status === 'loading') return null;
       return <p data-testid="content">{s.data.msg}</p>;
     }
@@ -143,7 +143,7 @@ describe('Page renders loader content', () => {
     function PageContent() {
       // State-based: children render eagerly during the pending window, so
       // `useData()` returns undefined until the loader resolves. Guard for it.
-      const s = ok.useData();
+      const s = ok.useData().value;
       if (s.status === 'loading') return null;
       return <p data-testid="content">{s.data.msg}</p>;
     }

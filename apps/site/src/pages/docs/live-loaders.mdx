@@ -115,8 +115,8 @@ Persistent UI is expressed as a child of a layout. A layout stays mounted across
 
 Two pieces of the same loader API drive this pattern:
 
-- `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form. The single-value `.View(render)` form, `.useData()`, and `.Boundary` are not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
-- `loader.View(render, { initial, reduce })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state, and the render function receives a `StreamState<Acc>` discriminated union to match on `status`. `status === 'connecting'` on SSR and before the first chunk arrives (this arm carries no data); after the first chunk `status` is `'open'`, with the accumulator on `data`. Switch on `status` inside the render function to show a connecting affordance.
+- `defineLoader(fn, { live: true })` marks a loader as live. A live loader is never invoked during SSR (an infinite generator cannot hang the document response), and its timeout defaults to `false` (no 30-second cap) unless `timeoutMs` is set explicitly. A live loader is consumed with the accumulating `loader.View(render, { initial, reduce })` form, or with `loader.useData(initial, reduce)` inside `loader.Boundary` (collect-mode; see [Server Loaders](/docs/loaders#loaderusedata-and-loaderboundary)) for descendants that fold the same stream independently. The single-value `.View(render)` form (no `reduce`) is not available on a live loader (it has no single value): the form is fixed by the loader's type (`defineLoader({ live: true })` returns a `LoaderRef<T, true>`), so using the wrong form is a compile error.
+- `loader.View(render, { initial, reduce })` is the accumulating form of the standard consumption convention. It folds every chunk into accumulated state, and the render function receives a `StreamState<Acc>` discriminated union to match on `status`. `status === 'connecting'` on SSR and before the first chunk arrives (this arm carries no data); after the first chunk `status` is `'open'`, with the accumulator on `data`. A `.Boundary` consumer additionally sees `'reconnecting'` while a `reload()` resubscribes over chunks it already has. Switch on `status` inside the render function to show a connecting affordance.
 
 ## On Cloudflare
 
@@ -158,13 +158,15 @@ When the user navigates out of the layout's scope, the layout unmounts and the s
 
 A live loader opens the stream once and does not auto-reconnect. If the connection drops mid-session (a network blip, a server restart, an idle proxy timeout), `status` becomes `'error'` or `'closed'` and stays there until the layout unmounts and remounts (scope exit and re-entry). To recover in place, branch on `status` and call `reload()` from `useReload()` (for example, a "Reconnect" button shown when `status === 'error'`); `reload()` resets `data` to `initial` and re-opens the stream.
 
+A `reload()` that fails to reconnect does not cost you what is already on screen. Under `.Boundary` + `useData(initial, reduce)`, the retained chunks are kept until the new connection delivers its first chunk. While the resubscribe is in flight `status` is `'reconnecting'` and the arm still carries `data`, so you can show a "reconnecting" affordance over the last good fold; if the reconnect fails you get `status === 'error'` with that fold intact, and if it succeeds the new stream swaps in. Retrying is therefore safe to offer as a button: the worst case is that nothing changes.
+
 ### Failure or close before the first chunk
 
 A stream lifecycle event is **data, not an exception**: failures and clean ends always travel through the render function's `status` field, at every point in the stream's life. A failure on the **initial** connect (the stream fails or times out before its first chunk arrives) surfaces as `status === 'error'`, exactly like a mid-stream drop; because no chunk has arrived, that cold-connect error carries no accumulated value, so its `data` is `undefined`. Branch on it (show an error UI rather than handing your render an empty accumulator), the way the `'error'` row in the table below describes. A stream that ends cleanly before its first chunk simply stays on the `connecting` affordance: there is no accumulator to show.
 
 Because the cold-connect error surfaces in-view, the reconnect-on-error pattern above works on the very first connect too: a "Reconnect" button shown when `status === 'error'` calls `reload()` to re-open the stream. A failed `reload()` behaves identically, so the in-place recovery pattern is uniform across the first connect and every later reconnect.
 
-`errorFallback` does **not** catch a stream connect failure. It only catches a **render-time throw** from the render subtree (and, during SSR, a throw raised while the document renders). Stream lifecycle errors never reach it.
+`errorFallback` does **not** catch a stream connect failure. It only catches a **render-time throw** from the render subtree (and, during SSR, a throw raised while the document renders). Stream lifecycle errors never reach it, in either consumption form: under `.Boundary` + `useData(initial, reduce)` a failed connect surfaces the same way, as `status === 'error'` with no data, and the children stay mounted to render it.
 
 ## API reference
 
@@ -214,12 +216,85 @@ The `connecting` arm declares `data?: never`, so `data` is readable on the un-na
 
 `StreamStatus` values:
 
-| Value          | Meaning                                                       |
-| -------------- | ------------------------------------------------------------- |
-| `'connecting'` | SSR or pre-hydration; the first chunk has not arrived yet.    |
-| `'open'`       | At least one chunk has arrived; the stream is active.         |
-| `'closed'`     | The generator returned normally; no more chunks are expected. |
-| `'error'`      | The stream errored. `error` holds the cause.                  |
+| Value            | Meaning                                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `'connecting'`   | SSR or pre-hydration; the first chunk has not arrived yet.                                                                  |
+| `'open'`         | At least one chunk has arrived; the stream is active.                                                                       |
+| `'reconnecting'` | A `reload()` resubscribe is in flight and the previous fold is STILL PRESENT. `data` is the last good value, not `initial`. |
+| `'closed'`       | The generator returned normally; no more chunks are expected.                                                               |
+| `'error'`        | The stream errored. `error` holds the cause.                                                                                |
+
+`reconnecting` is the arm that keeps a reload from blanking the screen: it carries `data`, so a view that was showing a fold keeps showing it while the resubscribe is in flight. That means a two-way test is wrong:
+
+```diff
+-{s.value.status === 'open' ? <Feed data={s.value.data} /> : <Spinner />}
++{s.value.status === 'connecting' ? <Spinner /> : <Feed data={s.value.data} />}
+```
+
+The first replaces a live fold with a spinner on every `reload()`, which is exactly what `reconnecting` exists to prevent. Narrow on the arm that has no data, not on the one that does.
+
+### `loader.useData(initial, reduce)` and `loader.Boundary` (collect-mode)
+
+`loader.Boundary` on a live loader hosts the stream in collect-mode: it renders its children eagerly and puts the raw chunk stream on context. Each descendant calls `loader.useData(initial, reduce)` with its own `reduce`, folding the same underlying subscription independently:
+
+```tsx
+function EventCount() {
+  const count = activityLoader.useData(0, (n) => n + 1);
+  return (
+    <span>{count.value.status === 'connecting' ? '-' : count.value.data}</span>
+  );
+}
+
+function LatestActor() {
+  const latest = activityLoader.useData('', (_prev, e) => e.actor);
+  return <span>{latest.value.data ?? 'waiting...'}</span>;
+}
+
+function ActivityHeader() {
+  return (
+    <activityLoader.Boundary>
+      <EventCount />
+      <LatestActor />
+    </activityLoader.Boundary>
+  );
+}
+```
+
+`useData(initial, reduce)` returns a `ReadonlySignal<StreamState<Acc>>`, the same discriminated union `.View`'s render function receives; read `.value` and switch on `.value.status`. A component that mounts after chunks have already arrived still folds the full retained log, so a late mount never misses earlier chunks. This is the same `.Boundary` + `useData` pattern the single-value form uses; see [Server Loaders](/docs/loaders#loaderusedata-and-loaderboundary).
+
+### Keep the reducer pure
+
+Write `reduce` as a function of `(acc, chunk)` and nothing else. The fold is created on the first render and reused for the life of the subscription, so a reducer that closes over a prop or piece of state keeps using the value it captured then:
+
+```tsx
+// WRONG: `rate` is captured once. Ticks arriving after the user switches
+// currency are still folded at the old rate, and the total is quietly wrong.
+const total = ticker.useData(0, (acc, tick) => acc + tick.qty * rate);
+```
+
+Fold the raw numbers instead, and apply the changing part where you render:
+
+```tsx
+const qty = ticker.useData(0, (acc, tick) => acc + tick.qty); // pure
+return <p>{qty.value.data * rate}</p>; // rate applied here
+```
+
+Nothing warns you about the first version, which is why it is worth knowing. We keep the fold pinned on purpose: honouring a new reducer means re-folding every chunk received so far, and since an inline arrow is a new function on every render that re-fold would happen on every render too. On a long stream that is quadratic work for a value that was already correct.
+
+### Which form to reach for
+
+The two consumption forms differ in what they keep, and on a long stream that difference is the whole decision.
+
+|                                          | Keeps                                                           | Reach for it when                                      |
+| ---------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------ |
+| `.View(render, { initial, reduce })`     | One accumulator. Constant memory, however long the stream runs. | One consumer folds the stream.                         |
+| `.Boundary` + `useData(initial, reduce)` | Every chunk, for the life of the subscription.                  | Several components fold the same stream their own way. |
+
+`.Boundary` retains the chunks because that is the only way a component mounting at minute ten can arrive at the same answer as one that mounted at minute zero. Each consumer folds forward from its own cursor, so folding is cheap no matter how many consumers there are, but **the log itself grows with the stream and is released only when the subscription resets** (a reload, or the component unmounting).
+
+For a bounded stream (a progressive result set, a job's progress events) that is exactly what you want. For an endless one (a live feed that runs as long as the tab is open) with a single consumer, prefer `.View`, which never accumulates a log at all.
+
+We do not truncate the log for you, and that is deliberate: a fold is arbitrary user code, so dropping chunks from underneath it would quietly produce a wrong answer rather than an error. A running total would simply be too small, with nothing to indicate it.
 
 ### Type exports
 

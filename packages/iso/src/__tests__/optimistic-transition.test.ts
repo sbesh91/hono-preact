@@ -90,6 +90,6 @@ describe('useOptimistic transition option', () => {
       handle = result.current[1](5);
     });
     act(() => handle.settle());
-    expect(result.current[0]).toBe(5);
+    expect(result.current[0].value).toBe(5);
   });
 });

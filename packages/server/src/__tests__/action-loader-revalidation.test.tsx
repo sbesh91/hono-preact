@@ -144,7 +144,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
       // value is always present, as the pre-state Suspense model did. (`'data'
       // in s` does NOT narrow: the cold arm declares `data?: never`, so the key
       // is present on every arm of the union.)
-      const s = countLoader.useData();
+      const s = countLoader.useData().value;
       const { mutate } = useAction(incrementStub, { invalidate: 'auto' });
       return (
         <div>
@@ -158,7 +158,7 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
 
     render(
       <LocationProvider>
-        <Loader loader={countLoader} location={loc}>
+        <Loader mode={{ kind: 'single' }} loader={countLoader} location={loc}>
           <CountView />
         </Loader>
       </LocationProvider>
