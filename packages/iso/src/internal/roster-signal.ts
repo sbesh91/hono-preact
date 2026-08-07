@@ -25,58 +25,121 @@ export type RosterStore<S> = {
   member(id: string): ReadonlySignal<PresenceMember<S> | undefined>;
   /** Release retained reactive state. Called from `useRoom`'s effect cleanup. */
   dispose(): void;
+  /**
+   * How many member cells this store is still holding: present members plus
+   * departed ones something else is still reading. The retention bound is only
+   * a claim if it can be observed, and this is how the tests observe it.
+   */
+  retainedCellCount(): number;
 };
 
 /**
  * The signal-backed roster: `member(id)` is a per-member signal, so a presence
  * update patches one bound row instead of re-rendering every consumer.
  */
-// RETENTION: `byId` holds one cell per id ever seen OR ever asked about, and
-// only `dispose()` clears it. `leave` and `snapshot` blank a cell rather than
-// deleting it, and `member(id)` get-or-creates on READ, both deliberately: a
-// held binding has to survive its member leaving and rejoining, and deleting
-// the cell is what made a departed member render forever.
+// RETENTION. A cell must outlive its member: a consumer may hold `member(id)`
+// across any roster mutation, so leave and snapshot BLANK a cell (write
+// `undefined` into it, notifying whoever holds it) rather than dropping it.
+// Dropping it outright is what made a departed member render forever, because
+// the holder stayed subscribed to a cell nothing would ever write again.
 //
-// The trade is that a long-lived room with high id churn grows this map for the
-// life of the hook instance. Unlike `createFieldErrorStore`, whose key space is
-// one form's fields, a presence roster's key space is unbounded. Acceptable
-// because the map holds one small signal per id and a room's membership is
-// bounded in practice, but it is a trade, not a free win. `dispose()` on the
-// hook's effect cleanup is what bounds it across mounts.
+// But a presence key space is unbounded, unlike `createFieldErrorStore`'s (one
+// form's fields), so holding every cell for the life of the hook grows the
+// store by ids ever seen. A long-lived room with churn has no bound at all.
+//
+// So a blanked cell moves from `live` to `departed`, which holds it WEAKLY.
+// That splits the two requirements cleanly:
+//
+//  - Something still reading the cell keeps it reachable, so `member(id)`
+//    returns the SAME cell on a rejoin and the holder simply updates. The
+//    guarantee above is unchanged, and it is enforced by reachability rather
+//    than by a policy that has to be remembered.
+//  - Nothing reading it makes it garbage, and the id's entry is removed when
+//    it is collected. Churn costs one weak entry per departed id in the
+//    interval before the GC runs, not one live signal forever.
+//
+// Reclamation is therefore the GC's call and not immediate: this bounds the
+// store asymptotically, it does not cap it at any instant. That is the honest
+// trade, and it is the right one here, because the alternatives either cap the
+// map and silently orphan an old held binding, or keep introspecting
+// subscribers, which @preact/signals does not expose.
 export function createSignalRoster<S>(): RosterStore<S> {
   const ids = signal<readonly string[]>([]);
-  // One STABLE cell per id ever asked about. Absence is `undefined` IN the
-  // cell, never a missing map entry: a consumer may hold `member(id)` across
-  // any roster mutation, so leave/snapshot must WRITE the cell rather than drop
-  // it (same policy, and same reasoning, as `createFieldErrorStore`).
-  const byId = new Map<string, Signal<PresenceMember<S> | undefined>>();
+  // Cells for members currently in the roster, held strongly.
+  const live = new Map<string, Signal<PresenceMember<S> | undefined>>();
+  // Cells for departed members, held weakly: present only while someone else
+  // is reading them. `member(id)` promotes one back into `live` on a rejoin.
+  const departed = new Map<
+    string,
+    WeakRef<Signal<PresenceMember<S> | undefined>>
+  >();
+  // Drops the id's weak entry once its cell is collected. Guarded on the entry
+  // still being the one that died, so a rejoin that promoted the id back into
+  // `live` (and later blanked a NEW cell) is not clobbered by a late callback
+  // for the old one.
+  const finalizers = new FinalizationRegistry<string>((id) => {
+    if (departed.get(id)?.deref() === undefined) departed.delete(id);
+  });
   // The whole roster as one derived array. Reading it subscribes to `ids` AND
   // every member signal, so a coarse `members` consumer updates on any change.
   // A granular consumer reads `member(id)` instead and updates per member.
   const members = computed<ReadonlyArray<PresenceMember<S>>>(() => {
     const out: PresenceMember<S>[] = [];
     for (const id of ids.value) {
-      const v = byId.get(id)?.value;
+      // Every id in `ids` is a present member, and a present member's cell is
+      // always in `live`, so this needs no departed lookup.
+      const v = live.get(id)?.value;
       if (v !== undefined) out.push(v);
     }
     return out;
   });
 
-  function cell(id: string): Signal<PresenceMember<S> | undefined> {
-    let s = byId.get(id);
-    if (!s) {
-      s = signal<PresenceMember<S> | undefined>(undefined);
-      byId.set(id, s);
-    }
+  /**
+   * The one cell for this id: live, else the departed one if it is still
+   * reachable, else a fresh one. A fresh cell starts DEPARTED (weak), so a
+   * `member(id)` probe for someone who is not in the room is retained by the
+   * caller holding it and by nothing else.
+   */
+  function resolve(id: string): Signal<PresenceMember<S> | undefined> {
+    const alive = live.get(id);
+    if (alive) return alive;
+    const held = departed.get(id)?.deref();
+    if (held) return held;
+    const s = signal<PresenceMember<S> | undefined>(undefined);
+    departed.set(id, new WeakRef(s));
+    // Registered once, at creation: a cell moves between the two maps over its
+    // life, but it only ever dies once.
+    finalizers.register(s, id);
     return s;
+  }
+
+  /** This id is in the roster now: hold its cell strongly. */
+  function promote(id: string, s: Signal<PresenceMember<S> | undefined>): void {
+    departed.delete(id);
+    live.set(id, s);
+  }
+
+  /**
+   * This id has left: blank its cell so anyone holding it is notified, and
+   * downgrade the store's own reference to a weak one. Returns whether it was
+   * actually a present member, which is what decides if `ids` changes.
+   */
+  function blank(id: string): boolean {
+    const s = live.get(id);
+    if (!s) return false;
+    live.delete(id);
+    departed.set(id, new WeakRef(s));
+    if (s.peek() === undefined) return false;
+    s.value = undefined;
+    return true;
   }
 
   return {
     snapshot(members) {
       batch(() => {
         // First-occurrence order, last-value wins: a snapshot carrying a
-        // duplicate id collapses to one cell AND one id, so `ids` and `byId`
-        // stay in step.
+        // duplicate id collapses to one cell AND one id, so `ids` and the cell
+        // maps stay in step.
         const nextIds: string[] = [];
         const present = new Set<string>();
         for (const m of members) {
@@ -84,50 +147,65 @@ export function createSignalRoster<S>(): RosterStore<S> {
             present.add(m.id);
             nextIds.push(m.id);
           }
-          cell(m.id).value = m;
+          const s = resolve(m.id);
+          promote(m.id, s);
+          s.value = m;
         }
         // Anyone no longer listed is blanked THROUGH their existing cell, so a
-        // held binding is notified instead of orphaned.
-        for (const [id, s] of byId) {
-          if (!present.has(id) && s.peek() !== undefined) s.value = undefined;
+        // held binding is notified instead of orphaned. Snapshotting the keys
+        // first: `blank` mutates `live` as it goes.
+        for (const id of [...live.keys()]) {
+          if (!present.has(id)) blank(id);
         }
         ids.value = nextIds;
       });
     },
     upsert(id, state) {
-      const existing = byId.get(id);
+      const existing = live.get(id);
       if (existing && existing.peek() !== undefined) {
         // Existing member: touch ONLY this member's signal, never `ids`.
         existing.value = { id, state };
         return;
       }
       batch(() => {
-        cell(id).value = { id, state };
+        const s = resolve(id);
+        promote(id, s);
+        s.value = { id, state };
         ids.value = [...ids.value, id];
       });
     },
     leave(id) {
-      const s = byId.get(id);
-      if (s && s.peek() !== undefined) {
-        batch(() => {
-          s.value = undefined;
-          ids.value = ids.value.filter((x) => x !== id);
-        });
-      }
+      batch(() => {
+        if (blank(id)) ids.value = ids.value.filter((x) => x !== id);
+      });
     },
     memberIds: ids,
     members,
     member(id): ReadonlySignal<PresenceMember<S> | undefined> {
-      return cell(id);
+      // Deliberately does NOT promote: asking about an id says nothing about
+      // whether they are in the room.
+      return resolve(id);
     },
     dispose() {
       batch(() => {
-        for (const s of byId.values()) {
+        for (const s of live.values()) {
           if (s.peek() !== undefined) s.value = undefined;
         }
-        byId.clear();
+        for (const ref of departed.values()) {
+          const s = ref.deref();
+          if (s && s.peek() !== undefined) s.value = undefined;
+        }
+        live.clear();
+        departed.clear();
         ids.value = [];
       });
+    },
+    retainedCellCount() {
+      let n = live.size;
+      for (const ref of departed.values()) {
+        if (ref.deref() !== undefined) n++;
+      }
+      return n;
     },
   };
 }
