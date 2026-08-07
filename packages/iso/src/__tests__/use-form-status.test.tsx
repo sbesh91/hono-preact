@@ -68,7 +68,7 @@ describe('useFormStatus', () => {
 // whose module the Vite plugin never processed carries no `__module`/`__action`,
 // and keying off the derived ref alone made it indistinguishable from "no stub",
 // whose branch is `counts.size > 0` -- is ANY form submitting.
-describe('T1: a stub with no injected identity is never pending', () => {
+describe('a stub with no injected identity is never pending', () => {
   it('stays idle while a DIFFERENT action is in flight', () => {
     const unrewritten = {} as { __module: string; __action: string };
     const { container } = render(<Reader stub={unrewritten} />);

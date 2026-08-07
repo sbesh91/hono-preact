@@ -33,7 +33,7 @@ export function useFormStatus<TPayload = unknown, TResult = unknown>(
     const { ref, unmatchable } = stubKey.value;
     // No identity to match, so no submission can be attributed to this stub.
     // Falling through would report `pending` whenever ANY form on the page is
-    // submitting (review round 3, T1).
+    // submitting.
     if (unmatchable) return IDLE;
     return isBrowser() && pickIsPending(pendingSignal.value, ref)
       ? PENDING

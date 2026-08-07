@@ -24,7 +24,7 @@ export type StreamState<T> =
   // the reconnect runs, which is what makes retrying safe to offer as a button.
   // Reusing `open` (or holding whatever the status was) left an author nothing
   // to branch on and, after a failure, stranded a cleared error under
-  // `status: 'error'` so the placeholder below fired -- see #349 R4/R5.
+  // `status: 'error'` so the placeholder below fired.
   | { status: 'reconnecting'; data: T }
   | { status: 'closed'; data: T }
   // `data` is optional: a COLD stream error (the connect rejects before any

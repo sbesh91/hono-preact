@@ -163,7 +163,7 @@ describe('P1-2 store level: a HELD member binding survives roster mutation', () 
     expect(held.value).toEqual({ id: 'a', state: 5 });
   });
 
-  // R15: the JSDoc used to warn that re-reading `member(id)` "silently discards
+  // the JSDoc used to warn that re-reading `member(id)` "silently discards
   // the subscription each render". It does not -- the same cell is returned every
   // time -- and the warning sent readers to restructure working code. This pins
   // the property the corrected doc now states, so the claim cannot drift back.

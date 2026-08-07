@@ -461,7 +461,7 @@ export function useLoaderRunner<T>(
   // would mean THIS host subscribing to the collect run -- the re-render collect
   // mode exists to avoid (see `collectRef` above). A collect consumer branches
   // on its own `StreamState.status`, which now reports `reconnecting` while a
-  // resubscribe is in flight and re-renders only that consumer (#349 R5).
+  // resubscribe is in flight and re-renders only that consumer.
   const reloading = phase.tag === 'revalidating';
 
   const view: RunnerView<T> = projectRunnerView(

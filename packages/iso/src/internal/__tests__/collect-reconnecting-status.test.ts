@@ -24,7 +24,7 @@ import {
 const sum = (acc: number, chunk: unknown) => acc + (chunk as number);
 
 describe('a reconnect over retained chunks reports `reconnecting`', () => {
-  it('R5: the status moves, so an author has something to branch on', () => {
+  it('the status moves, so an author has something to branch on', () => {
     const s = createCollectSignals();
     const folded = foldStream(s, 0, sum);
     appendCollectChunk(s, 7);
@@ -37,7 +37,7 @@ describe('a reconnect over retained chunks reports `reconnecting`', () => {
     expect(folded.value.data).toBe(7);
   });
 
-  it('R4: a reconnect after a failure does NOT fabricate a placeholder error', () => {
+  it('a reconnect after a failure does NOT fabricate a placeholder error', () => {
     const s = createCollectSignals();
     const folded = foldStream(s, 0, sum);
     appendCollectChunk(s, 7);

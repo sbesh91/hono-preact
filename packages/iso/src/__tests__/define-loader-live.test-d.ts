@@ -28,7 +28,7 @@ function _liveProbes() {
   live.View<number[]>(
     (s) => {
       // Pins the PUBLIC status vocabulary. `reconnecting` was added for a
-      // resubscribe over already-delivered chunks (#349 R4/R5); it belongs here
+      // resubscribe over already-delivered chunks; it belongs here
       // because this assertion is what makes such an addition a deliberate,
       // reviewed change to the surface rather than a silent one.
       expectTypeOf(s.status).toEqualTypeOf<

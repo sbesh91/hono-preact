@@ -711,7 +711,7 @@ function makeLoaderRef(
   //
   // The memo PINS the first render's `reduce`/`initial`, so a reducer that
   // closes over changing state silently keeps folding with the captured value.
-  // That is a known trade, decided rather than overlooked (#349 R6): the two
+  // That is a known trade, decided rather than overlooked: the two
   // alternatives were measured and both are worse. Refolding the log to honour
   // a new reducer runs on EVERY render (an inline arrow is a fresh reference
   // each time) -- 12,502,500 reducer calls against 5,000 at a 5,000-chunk

@@ -136,7 +136,7 @@ export function createFieldErrorStore(): FieldErrorStore {
  * nothing ever writes to this one. As the context DEFAULT it also lives at
  * module scope, shared by every SSR request in a long-lived worker isolate, so
  * reading it was an unbounded leak for any page whose field names come from the
- * request (`items.0.email`, `items.1.email`, ...). See #349 R10.
+ * request (`items.0.email`, `items.1.email`, ...).
  *
  * Since no field can ever differ from any other, one shared signal serves them
  * all and a read allocates nothing. The array it carries is FROZEN: sharing it

@@ -109,7 +109,7 @@ export function useActionResult<TPayload = unknown, TResult = unknown>(
     // A stub was passed but carries no identity, so nothing can honestly be
     // attributed to it. Without this, `ref` is `undefined` and the lookup falls
     // through to the any-action branch, handing this reader whatever unrelated
-    // action wrote last (review round 3, T1).
+    // action wrote last.
     if (unmatchable) return null;
     const client = isBrowser()
       ? pickLastActionResult(lastActionResultSignal.value, ref)

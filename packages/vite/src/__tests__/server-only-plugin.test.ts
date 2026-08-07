@@ -151,7 +151,7 @@ describe('unknown specifiers from .server.* imports', () => {
     );
   });
 
-  // F1: the "Allowed: ..." list in the error message is derived from the
+  // the "Allowed: ..." list in the error message is derived from the
   // shared contract constant. A regression that splits the list back into
   // a hard-coded string and drifts from the validation plugin would
   // surface here.

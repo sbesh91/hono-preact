@@ -15,7 +15,7 @@
 export { Loader } from './internal/loader.js';
 // `Loader`'s `mode` prop is required, so the type and the resolver that builds it
 // have to be reachable from the same entry point: without these a consumer of
-// this subpath could not construct the prop at all (#349 R12). `resolveLoaderMode`
+// this subpath could not construct the prop at all. `resolveLoaderMode`
 // is what `.Boundary` / `.View` use, so a direct `<Loader>` gets the same
 // derivation rather than guessing a literal.
 export {

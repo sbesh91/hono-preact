@@ -166,7 +166,7 @@ describe('serverLoaderValidationPlugin', () => {
     expect(error).not.toContain("'cache'");
   });
 
-  // F8: pin the iteration order of the allowed-names list against the
+  // pin the iteration order of the allowed-names list against the
   // shared contract. A future reorder of RECOGNIZED_SERVER_EXPORTS that
   // breaks the readable grouping would slip past the unordered toContain
   // assertions.

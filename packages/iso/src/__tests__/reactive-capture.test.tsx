@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Two instances of "a reactive input captured wrong", from review round 2.
+// Two instances of "a reactive input captured wrong", from an earlier review.
 // Both have the same shape as defects this branch already fixed twice
 // (`useOptimistic`'s `base`/`reducer`, `useFormStatus`'s `stub`): a value that
 // can change is read into a `useComputed` closure, which only re-evaluates when
@@ -28,7 +28,7 @@ const deny = (message: string): ActionResultContextValue => ({
   submittedPayload: {},
 });
 
-describe('R7: useActionResult tracks the ActionResultContext value', () => {
+describe('useActionResult tracks the ActionResultContext value', () => {
   it('picks up a provider value change', async () => {
     function Read() {
       const r = useActionResult().value;
@@ -54,7 +54,7 @@ describe('R7: useActionResult tracks the ActionResultContext value', () => {
   });
 });
 
-describe('R9: OptimisticOverlay does not churn the loader channel', () => {
+describe('OptimisticOverlay does not churn the loader channel', () => {
   it('passes the host arm through UNCHANGED when nothing is pending', () => {
     // With no pending actions the projection IS the base, so re-providing a
     // freshly spread `{...ctx, data: projected}` publishes a new object with

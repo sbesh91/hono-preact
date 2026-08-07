@@ -124,7 +124,7 @@ export function guardStripPlugin(): Plugin {
     enforce: 'pre',
     transform(code: string, id: string, options?: { ssr?: boolean }) {
       if (!/\.[jt]sx?$/.test(id)) return;
-      // F7: `.server.*` files are intentionally skipped in both bundles.
+      // `.server.*` files are intentionally skipped in both bundles.
       // In the client bundle the server-only stub plugin already rewrites
       // imports of these files; in the server bundle the file's own
       // body stays as-authored. The validation plugin restricts a

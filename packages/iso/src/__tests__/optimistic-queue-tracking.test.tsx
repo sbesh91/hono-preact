@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// T6 (review round 3): `useOptimistic` read `queue.value` during render in the
+// `useOptimistic` read `queue.value` during render in the
 // base-changed branch, subscribing the CALLING component to the queue. A caller
 // that holds the returned signal and passes it to a leaf -- the pattern
 // /docs/signals teaches as the point of the migration -- then re-rendered on the
@@ -10,7 +10,7 @@ import { useOptimistic } from '../optimistic.js';
 
 afterEach(cleanup);
 
-describe('T6: holding the signal does not subscribe the host to the queue', () => {
+describe('holding the signal does not subscribe the host to the queue', () => {
   it('does not re-render the caller on dispatch after `base` changed', async () => {
     let hostRenders = 0;
     let dispatch!: (p: number) => unknown;

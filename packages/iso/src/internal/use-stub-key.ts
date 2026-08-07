@@ -18,7 +18,7 @@ import type { ReadonlySignal } from '@preact/signals';
  * |                      |             | cannot tell which one                |
  *
  * Collapsing the third into the first is a cross-action leak: the reader adopts
- * whatever unrelated action wrote last (review round 3, T1).
+ * whatever unrelated action wrote last.
  */
 export type StubKey = {
   /** The identity to match on, or `undefined` when there is nothing to match. */

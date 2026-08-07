@@ -112,7 +112,7 @@ describe('useRoom roster store wiring', () => {
   });
 });
 
-// T3 (review round 3). `members` used to be a lazy getter returning the array
+// T3 (an earlier review). `members` used to be a lazy getter returning the array
 // itself. Reading it DURING RENDER subscribed the reader and worked; reading it
 // from an effect returned a dead snapshot, and since `useRoom` no longer
 // re-renders on presence frames (the granularity win), nothing ever re-ran the
@@ -124,7 +124,7 @@ describe('useRoom roster store wiring', () => {
 // `memberIds` and a `member(id)` that both announced themselves as signals.
 // `.subscribe()` is the read path that works from ANY context, and it only
 // exists if the type admits there is a signal.
-describe('T3: the roster is observable from outside render', () => {
+describe('the roster is observable from outside render', () => {
   it('notifies a subscriber taken in an effect on join and on leave', async () => {
     vi.stubGlobal('WebSocket', FakeWS as unknown as typeof WebSocket);
     const seen: number[] = [];

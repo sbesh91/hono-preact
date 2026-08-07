@@ -291,7 +291,7 @@ export function useRoom<R extends AnyRoomRefShape>(
   // tracking context subscribes that reader, and outside one the signal is
   // still there to `.subscribe()` from.
   //
-  // `members` was a lazy getter returning the array itself (review round 3, T3).
+  // `members` used to be a lazy getter returning the array itself.
   // That read subscribed a consumer during render, but an imperative consumer
   // reading it in a `useEffect` got a dead snapshot and no way to notice: the
   // type said `ReadonlyArray`, so nothing suggested there was anything to

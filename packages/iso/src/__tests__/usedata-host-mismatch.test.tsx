@@ -42,7 +42,7 @@ function silenceRenderError() {
 }
 
 describe('useData() under a mismatched host', () => {
-  it('R2: a non-streaming loader hosted with `accumulate` reports the mismatch instead of loading forever', () => {
+  it('a non-streaming loader hosted with `accumulate` reports the mismatch instead of loading forever', () => {
     const loader = defineLoader<{ n: number }>(async () => ({ n: 1 }), {
       __moduleKey: 'r2',
     });
@@ -69,7 +69,7 @@ describe('useData() under a mismatched host', () => {
     ).toThrow(/accumulate/);
   });
 
-  it('R2: the message names `.View` as the way to read an accumulating host', () => {
+  it('the message names `.View` as the way to read an accumulating host', () => {
     const loader = defineLoader<{ n: number }>(async () => ({ n: 1 }), {
       __moduleKey: 'r2b',
     });
@@ -98,7 +98,7 @@ describe('useData() under a mismatched host', () => {
 });
 
 describe('live useData(initial, reduce) under a mismatched host', () => {
-  it('R3: the error names `.Boundary`, not the `.View` host the caller is already inside', async () => {
+  it('the error names `.Boundary`, not the `.View` host the caller is already inside', async () => {
     async function* gen(): AsyncGenerator<number, void, unknown> {
       yield 1;
     }

@@ -111,15 +111,15 @@ export type AccumulatorGuard = {
  * previous stream: the next stream folds onto the last one and history
  * duplicates on every reconnect, growing without bound.
  *
- * **Why a fingerprint and not identity.** The original guard (R8) asked whether
- * `reduce` returned the object it was handed. That flags a mutating reducer,
- * but it equally flags an ordinary FILTERING one:
+ * **Why a fingerprint and not identity.** Asking whether `reduce` returned the
+ * object it was handed flags a mutating reducer, but it equally flags an
+ * ordinary FILTERING one:
  *
  *     (acc, ev) => ev.type === 'tick' ? [...acc, ev] : acc
  *
  * whose first chunk is a heartbeat. It returns `acc` untouched, which is
- * correct and common, and the guard threw at it (review round 3, T2). Identity
- * cannot separate the two; only whether `initial` still holds what it held can.
+ * correct and common, and an identity check throws at it. Identity cannot
+ * separate the two; only whether `initial` still holds what it held can.
  * So the check compares `initial` against a fingerprint taken before any fold.
  *
  * That is also strictly stronger: it catches a reducer that mutates `initial`
@@ -305,11 +305,11 @@ export function beginCollectResubscribe(s: CollectSignals): void {
     // retains the value, when one is present and `loading` only when none is).
     //
     // With chunks retained this is `reconnecting`, NOT the previous status.
-    // Holding the previous status was the F3 shortcut for "keep the fold on
-    // screen", and it cost two things: an author had nothing to branch on
-    // during the reconnect, and after a failure `status` stayed `error` while
-    // `error` was cleared here, so `toStreamState` fabricated a placeholder
-    // over the user's real diagnostic (#349 R4/R5).
+    // Holding the previous status is the tempting shortcut for "keep the fold
+    // on screen", and it costs two things: an author has nothing to branch on
+    // during the reconnect, and after a failure `status` stays `error` while
+    // `error` is cleared here, so `toStreamState` fabricates a placeholder over
+    // the user's real diagnostic.
     status: run.length === 0 ? 'connecting' : 'reconnecting',
   };
 }

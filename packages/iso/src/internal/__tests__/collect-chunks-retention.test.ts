@@ -154,7 +154,7 @@ describe('the guarantee the log pays for', () => {
   });
 });
 
-// R8: a reducer that MUTATES its accumulator and returns it aliases the
+// a reducer that MUTATES its accumulator and returns it aliases the
 // caller's `initial`, so the generation reset (`acc = initial`) restores an
 // object the reducer has already filled. The fold then appends the new stream
 // onto the old one, duplicating history on every reconnect and growing without
@@ -216,11 +216,11 @@ describe('a mutating reducer is rejected, not silently corrupted', () => {
   });
 });
 
-// T2 (review round 3): the guard above keyed on `next === initial`, which a
+// the guard above keyed on `next === initial`, which a
 // MUTATING reducer and an ordinary FILTERING one both satisfy on the first
 // chunk of a generation. Identity alone cannot tell them apart; only whether
 // `initial` was actually mutated can.
-describe('T2: a filtering reducer that passes its accumulator through is legal', () => {
+describe('a filtering reducer that passes its accumulator through is legal', () => {
   it('does not throw when the first chunk of a generation is filtered out', () => {
     const s = createCollectSignals();
     // The canonical shape: keep `tick` frames, drop everything else. The stream
@@ -253,7 +253,7 @@ describe('T2: a filtering reducer that passes its accumulator through is legal',
 // The fingerprint check is strictly stronger than the identity check it
 // replaced, not merely narrower: this reducer corrupts `initial` and then
 // returns a COPY, so `next !== initial` and the old guard let it through.
-describe('T2: mutation is detected however the reducer returns', () => {
+describe('mutation is detected however the reducer returns', () => {
   it('rejects a reducer that mutates `initial` but returns a copy', () => {
     const s = createCollectSignals();
     const folded = foldStream<readonly number[]>(s, [], (acc, n) => {
@@ -331,7 +331,7 @@ describe('an unchanged fold does not wake its consumers', () => {
   it('still notifies when the STATUS moves but the data does not', () => {
     // The comparison covers `status`, so a reconnect over an unchanged fold
     // stays observable. That is the whole point of `reconnecting` being its own
-    // arm (#349 R4/R5), and a data-only dedupe would swallow it.
+    // arm, and a data-only dedupe would swallow it.
     const s = createCollectSignals();
     const folded = foldStream<unknown[]>(s, [], keepTicks);
     appendCollectChunk(s, { type: 'tick' });

@@ -182,7 +182,7 @@ describe('useActionResult', () => {
   });
 });
 
-// T1 (review round 3). `defineAction` attaches `__module`/`__action` only when
+// T1 (an earlier review). `defineAction` attaches `__module`/`__action` only when
 // the Vite `moduleKeyPlugin` injected them (`action.ts:152-153` guards both with
 // `!== undefined`), so a stub from an unprocessed module carries NEITHER.
 //
@@ -192,7 +192,7 @@ describe('useActionResult', () => {
 // the second must mean "nothing", because the caller named an action and we
 // cannot tell which. On `main` the identity guard tested `stub` (the object), so
 // this returned null.
-describe('T1: a stub with no injected identity matches NOTHING', () => {
+describe('a stub with no injected identity matches NOTHING', () => {
   it("does not adopt another action's result", () => {
     setLastActionResult('pages/other.server', 'submit', {
       kind: 'deny',
@@ -242,7 +242,7 @@ describe('T1: a stub with no injected identity matches NOTHING', () => {
 // `<Form action={mode === 'edit' ? updateTodo : undefined}>` is the shape: a
 // reader that latched `given` at mount keeps answering for the wrong branch,
 // and in the no-stub-then-unrewritten-stub direction that is the T1 leak again.
-describe('T1: the any-action fallback follows a stub that appears or vanishes', () => {
+describe('the any-action fallback follows a stub that appears or vanishes', () => {
   it('stops reporting another action once an unkeyed stub is supplied', () => {
     setLastActionResult('pages/other.server', 'submit', {
       kind: 'deny',
