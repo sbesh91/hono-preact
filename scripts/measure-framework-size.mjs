@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Measures framework client-JS size for the PR comment: Section A (framework
-// runtime per feature) and Section C (per UI component), as isolated esbuild
-// bundles with peers external, sized with gzip. Marginal cost is over the
+// runtime per feature) and Section C (per UI component), as isolated Vite
+// production bundles with peers external, sized with gzip. Marginal cost is over the
 // `core` / `ui-core` base bundle. No site-chunk bucketing, no brotli, no
 // committed baseline: the CI job builds both refs and diffs live.
 //
@@ -12,9 +12,9 @@
 // The --iso-dist / --ui-dist args let this HEAD script measure another ref's
 // build (e.g. a base-branch worktree) so deltas need no committed baseline.
 
-import { build } from 'esbuild';
+import { build } from 'vite';
 import { gzipSync } from 'node:zlib';
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -27,32 +27,90 @@ import {
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// Bundle an entry source string in isolation and return its gzip size in bytes.
-// `external` defaults to the peers a consumer already ships. A caller passes a
-// narrower list when it wants a dependency's bytes COUNTED rather than assumed
-// (the core-size-floor test does this for @preact/signals).
+/**
+ * Bundle an entry source string in isolation and return its gzip size in bytes.
+ * `external` defaults to the peers a consumer already ships. A caller passes a
+ * narrower list when it wants a dependency's bytes COUNTED rather than assumed
+ * (the core-size-floor test does this for @preact/signals).
+ *
+ * Built with **Vite in production mode**, not esbuild directly, and that is
+ * load-bearing rather than incidental. Framework code guards author-facing
+ * prose with the #338 gate:
+ *
+ *     typeof import.meta.env === 'undefined' || import.meta.env.SSR || import.meta.env.DEV
+ *
+ * whose first arm exists so the message survives in a non-Vite consumer. No
+ * esbuild `define` can fold that arm: an object-valued `define` is hoisted to a
+ * variable and `typeof v > "u"` is left alone, `typeof {...}` is not folded
+ * inline either, and `typeof import.meta.env` is rejected as a define key. So
+ * esbuild kept BOTH branches and every row counted the DEV-only prose as
+ * shipped bytes, which made the gate look free of benefit in the `client-size`
+ * comment -- backwards, since removing those bytes is the entire point of it.
+ *
+ * Resolving `import.meta.env` is the app toolchain's job, so the probe uses the
+ * app toolchain. This costs roughly 8ms per bundle over raw esbuild (Vite 8
+ * bundles with Rolldown), which is nothing against the build steps around it.
+ *
+ * `NODE_ENV` is forced to `production` for the duration of the build. Passing
+ * `mode: 'production'` is NOT sufficient: Vite derives `isProduction` (and
+ * therefore the `import.meta.env.DEV` it defines) from `process.env.NODE_ENV`
+ * when it is set, so running the probe from a harness that sets it to anything
+ * else -- vitest sets `test` -- measures DEV output while reporting production
+ * numbers, with nothing to indicate it happened.
+ *
+ * Vite's lib mode needs an entry on disk rather than a string, hence the temp
+ * file; `write: false` keeps the output in memory. The temp directory is placed
+ * INSIDE `resolveDir` rather than in the OS temp dir: bare specifiers
+ * (`preact`, `@preact/signals`) resolve by walking up from the entry file, so an
+ * entry outside the workspace cannot see its `node_modules` and the build fails
+ * to resolve. This is what esbuild's `resolveDir` did for us.
+ */
 export async function bundleSize(
   entryContents,
   resolveDir,
   external = EXTERNAL
 ) {
-  const result = await build({
-    stdin: { contents: entryContents, resolveDir, loader: 'js' },
-    bundle: true,
-    minify: true,
-    format: 'esm',
-    platform: 'browser',
-    write: false,
-    external,
-    // Match Vite's production `define` so DEV-gated framework code (the
-    // inert-class warning, ws-lifecycle dev traps, etc.) is dropped before we
-    // measure. Without this the probe over-reports: it sizes code Vite would
-    // strip from a consumer's production build.
-    define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true' },
-    legalComments: 'none',
-    logLevel: 'silent',
-  });
-  return gzipSync(Buffer.from(result.outputFiles[0].contents)).length;
+  const dir = mkdtempSync(join(resolveDir, '.hp-size-probe-'));
+  const priorNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    const entry = join(dir, 'entry.js');
+    writeFileSync(entry, entryContents);
+    const result = await build({
+      configFile: false,
+      logLevel: 'silent',
+      mode: 'production',
+      root: resolveDir,
+      build: {
+        write: false,
+        minify: true,
+        target: 'esnext',
+        lib: { entry, formats: ['es'], fileName: 'probe' },
+        rollupOptions: { external: (id) => isExternal(id, external) },
+      },
+    });
+    // A lib build emits one chunk here, but concatenating is correct for any
+    // split the bundler decides to make and matches what a consumer downloads.
+    const code = result[0].output
+      .filter((o) => o.type === 'chunk')
+      .map((o) => o.code)
+      .join('');
+    return gzipSync(Buffer.from(code)).length;
+  } finally {
+    if (priorNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = priorNodeEnv;
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * esbuild's `external` matched a bare specifier and its subpaths; Rollup's
+ * predicate form does not, so subpath imports (`preact/hooks`) have to be
+ * matched explicitly or they get bundled and the row silently inflates by a
+ * whole peer.
+ */
+function isExternal(id, external) {
+  return external.some((e) => id === e || id.startsWith(`${e}/`));
 }
 
 // Re-export each dist module by namespace so sideEffects:false tree-shaking
