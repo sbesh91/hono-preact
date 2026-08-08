@@ -225,6 +225,128 @@ All of these are exported from `hono-preact`.
 | `Signal<T>`         | `value: T`, `peek(): T`, `subscribe(fn): () => void`            | A readable and writable signal. Assign to `value` to update it; `peek()` reads without subscribing. |
 | `ReadonlySignal<T>` | `value: T` (readonly), `peek(): T`, `subscribe(fn): () => void` | What the data hooks and `computed` return. Same reads, no assignment.                               |
 
+## Rendering helpers
+
+`<For>` and `<Show>` are two small components for the two things every list-and-condition UI needs to do, written so the reactivity rules above stay easy to follow instead of something you have to hand-roll with `.map` and `useMemo`.
+
+### `<For>`
+
+`<For>` renders a keyed list bound to a signal:
+
+```tsx
+import { For } from 'hono-preact';
+import type { ReadonlySignal } from 'hono-preact';
+
+const Movies = ({ movies }: { movies: ReadonlySignal<Movie[]> }) => (
+  <ul>
+    <For each={movies} by={(m) => m.id}>
+      {(movie, index) => (
+        <li>
+          {index}. {movie.value.title}
+        </li>
+      )}
+    </For>
+  </ul>
+);
+```
+
+Rows reconcile by key: a key that survives from one render to the next keeps its DOM and component state, and only a key that appears or disappears mounts or unmounts. The default key is the item itself, which is exact for an array of ids like `memberIds`. Supply `by` whenever the array holds objects re-created per payload (deserialised loader data, for instance), or every row remounts on each new array because no two objects are ever `===`.
+
+The child receives `item` and `index` as signals, not plain values. Each is a per-row cell: object-stable for as long as that row's key survives, its `.value` tracking the current item and position. Read `.value` where you display the item, same as any other signal. The row render itself runs again with a fresh closure on every list change, so nothing you capture in it can go stale, the cells exist so a row can hand a stable reactive identity down to its own subcomponents and effects rather than passing a value that changes identity every render.
+
+A duplicate key throws, since two rows cannot share one slot of state.
+
+### `<Show>`
+
+`<Show>` renders one of two branches based on a signal, in its own boundary:
+
+```tsx
+import { Show } from 'hono-preact';
+
+const Banner = ({ error }: { error: ReadonlySignal<string | null> }) => (
+  <Show when={error} fallback={<p>All good.</p>}>
+    {(message) => <p role="alert">{message}</p>}
+  </Show>
+);
+```
+
+`children` can be a plain node, shown whenever `when.value` is truthy, or a function that receives the truthy value narrowed to `NonNullable`. `fallback` renders when `when.value` is falsy and defaults to nothing. Either form runs inside its own component boundary, so a signal read inside `children` re-renders that branch alone, not whatever contains the `<Show>`.
+
+### Rooms example
+
+[Realtime Rooms](/docs/rooms) hands out `memberIds` (a signal of ids, changing only on join and leave) and `member(id)` (a signal per member, changing only on that member's presence updates). `<For>` fits that shape directly, no `by` needed since the array already holds ids:
+
+```tsx
+import { For } from 'hono-preact';
+import { serverRooms } from './board.server.js';
+
+export default function Board() {
+  const { memberIds, member } = serverRooms.cursors.useRoom({
+    key: { boardId: 'main' },
+  });
+
+  return (
+    <For each={memberIds}>
+      {(id) => {
+        const m = member(id.value).value;
+        if (!m) return null;
+        return (
+          <div
+            style={`position:absolute;left:${m.state?.x}px;top:${m.state?.y}px`}
+          >
+            {m.state?.name}
+          </div>
+        );
+      }}
+    </For>
+  );
+}
+```
+
+Membership changes reconcile the rows; a member moving their cursor only touches `member(id).value` inside the one row for that id.
+
+### API reference
+
+| Export | Signature                           | Description                              |
+| ------ | ----------------------------------- | ---------------------------------------- |
+| `For`  | `<T>(props: ForProps<T>) => VNode`  | Keyed list rendering bound to a signal.  |
+| `Show` | `<C>(props: ShowProps<C>) => VNode` | Conditional rendering bound to a signal. |
+
+#### `ForProps<T>`
+
+```ts
+type ForProps<T> = {
+  each: ReadonlySignal<readonly T[]>;
+  by?: (item: T, index: number) => unknown;
+  children: (
+    item: ReadonlySignal<T>,
+    index: ReadonlySignal<number>
+  ) => ComponentChildren;
+};
+```
+
+| Prop       | Signature                                                                       | Description                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `each`     | `ReadonlySignal<readonly T[]>`                                                  | The list. Read as a signal, so `<For>` re-renders when it changes.                                                     |
+| `by`       | `(item: T, index: number) => unknown` (optional)                                | Derives a stable, unique key per item. Defaults to the item itself; supply this when items are re-created per payload. |
+| `children` | `(item: ReadonlySignal<T>, index: ReadonlySignal<number>) => ComponentChildren` | Renders one row. `item` and `index` are per-row signal cells, object-stable while the key survives.                    |
+
+#### `ShowProps<C>`
+
+```ts
+type ShowProps<C> = {
+  when: ReadonlySignal<C>;
+  fallback?: ComponentChildren;
+  children: ComponentChildren | ((value: NonNullable<C>) => ComponentChildren);
+};
+```
+
+| Prop       | Signature                                                             | Description                                                                |
+| ---------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `when`     | `ReadonlySignal<C>`                                                   | The condition. `<Show>` re-renders when it changes.                        |
+| `fallback` | `ComponentChildren` (optional)                                        | Rendered when `when.value` is falsy. Defaults to nothing.                  |
+| `children` | `ComponentChildren \| ((value: NonNullable<C>) => ComponentChildren)` | Rendered when truthy. A function child receives the narrowed truthy value. |
+
 ## Related
 
 - [Server Loaders](/docs/loaders) - `useData()` and the loader state union
