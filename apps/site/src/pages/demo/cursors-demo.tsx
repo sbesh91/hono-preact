@@ -89,8 +89,8 @@ const CursorsDemo: FunctionComponent = () => {
           />
           <span>
             {room.status === 'open' ? 'Connected' : 'Connecting...'} &middot;{' '}
-            {memberCount.value}{' '}
-            {memberCount.value === 1 ? 'member' : 'members'} in room
+            {memberCount.value} {memberCount.value === 1 ? 'member' : 'members'}{' '}
+            in room
           </span>
         </div>
 
