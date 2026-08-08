@@ -1,8 +1,4 @@
-import type {
-  ServerMiddleware,
-  ClientMiddleware,
-  Scope,
-} from './define-middleware.js';
+import type { ServerMiddleware, Scope } from './define-middleware.js';
 import type { StreamObserver } from './define-stream-observer.js';
 
 // App-level `use` is the outermost layer of EVERY server chain, not just the
@@ -17,9 +13,14 @@ import type { StreamObserver } from './define-stream-observer.js';
 // is rejected, because the two scopes it did not sign up for are exactly the
 // ones where its ctx reads (`ctx.location` on the bare-action path, `ctx.module`
 // / `ctx.loader` on the page path) are absent.
+//
+// No `ClientMiddleware` arm: app config never enters the client module graph
+// (the generated client entry imports only routes; `bootClient()` takes no
+// config), so an app-level client middleware would typecheck and then never
+// run. Client middleware belongs on route nodes, whose `use` the client
+// dispatcher does see (#359).
 export type AppUseElement =
   | ServerMiddleware<Scope>
-  | ClientMiddleware
   | StreamObserver<unknown, never>;
 
 export type AppConfig = {
