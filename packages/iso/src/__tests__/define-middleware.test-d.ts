@@ -5,6 +5,7 @@
 import { expectTypeOf } from 'vitest';
 import {
   defineServerMiddleware,
+  type ClientMiddleware,
   type ServerMiddleware,
   type ServerCtx,
   type ServerPageCtx,
@@ -13,6 +14,7 @@ import {
   type Scope,
 } from '../define-middleware.js';
 import type { AppUseElement } from '../define-app.js';
+import type { RouteUseElement } from '../internal/use-types.js';
 import type { RouteDef } from '../define-routes.js';
 
 // `ServerCtx<Scope>` is the union of the three scope contexts: what an
@@ -28,6 +30,17 @@ declare const pageMw: ServerMiddleware<'page'>;
 declare const loaderMw: ServerMiddleware<'loader'>;
 declare const actionMw: ServerMiddleware<'action'>;
 declare const allMw: ServerMiddleware<Scope>;
+declare const clientMw: ClientMiddleware;
+
+// A route node's `use` still admits client middleware: the route tree IS in
+// the client module graph and `startChain` dispatches the `runs === 'client'`
+// entries there. `RouteUseElement` is the exported name for that element
+// union, and it must actually BE the element type of `RouteDef['use']`, or
+// the annotation the docs prescribe drifts from the slot it annotates.
+expectTypeOf<ClientMiddleware>().toExtend<RouteUseElement>();
+expectTypeOf<RouteUseElement>().toEqualTypeOf<
+  NonNullable<RouteDef['use']>[number]
+>();
 
 // `S` is CONTRAVARIANT: the `fn` parameter is the only place it appears. An
 // all-scope middleware satisfies any single-scope slot...
@@ -44,6 +57,12 @@ void appUse;
 // @ts-expect-error page-only middleware cannot be app-level: the loader and
 // action dispatches would hand it a ctx it did not sign up for.
 const rejectPage: AppUseElement = pageMw;
+// @ts-expect-error client middleware cannot be app-level either: app config
+// never enters the client module graph, so nothing would ever dispatch it
+// (#359). Client middleware belongs on route nodes, where the client
+// dispatcher actually sees it.
+const rejectClient: AppUseElement = clientMw;
+void rejectClient;
 // @ts-expect-error loader-only middleware cannot be app-level: the page
 // dispatch would hand it a ServerPageCtx with no `module` / `loader`.
 const rejectLoader: AppUseElement = loaderMw;

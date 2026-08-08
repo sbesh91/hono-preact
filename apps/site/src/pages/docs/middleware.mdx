@@ -30,6 +30,9 @@ accepts only middleware that handles all three: write
 `ctx.scope` before touching anything scope-specific. A
 `defineServerMiddleware<'page'>(...)` is a type error there, because the loader
 and action dispatches would hand it a context it never signed up for.
+`defineClientMiddleware(...)` is also a type error at the app level: app config
+never reaches the browser, so client middleware attaches to route nodes, whose
+`use` the client dispatcher does see.
 
 The context field that catches people out is `location`. Page and loader scope
 always carry one; action scope carries one only for a route-bound action

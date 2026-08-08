@@ -175,6 +175,7 @@ export type {
 
 export { defineApp } from './define-app.js';
 export type { AppConfig, AppUseElement } from './define-app.js';
+export type { RouteUseElement } from './internal/use-types.js';
 
 export {
   redirect,

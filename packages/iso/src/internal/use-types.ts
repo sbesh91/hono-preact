@@ -35,9 +35,20 @@ export type Use<
 //
 // Non-distributive spelling is still deliberate, so the union stays exactly
 // these three arms.
-export type PageUse = ReadonlyArray<
-  ServerMiddleware<Scope> | ClientMiddleware | StreamObserver<unknown, never>
->;
+//
+// Unlike `AppUseElement`, this union keeps `ClientMiddleware`: the route tree
+// is in the client module graph and `startChain` dispatches the
+// `runs === 'client'` entries of a route node's `use` on navigation. The two
+// unions coincided until #359 narrowed the app tier, which is why
+// `RouteUseElement` is exported by name: `RouteUseElement[]` is the correct
+// annotation for a route node's `use`, where `AppUseElement[]` would reject
+// the client middleware this tier supports.
+export type RouteUseElement =
+  | ServerMiddleware<Scope>
+  | ClientMiddleware
+  | StreamObserver<unknown, never>;
+
+export type PageUse = ReadonlyArray<RouteUseElement>;
 
 export type LoaderUse<T, Streaming extends boolean> = Use<
   'loader',
