@@ -3,6 +3,7 @@ import type { ComponentChildren, VNode } from 'preact';
 import { useRef } from 'preact/hooks';
 import { batch, signal } from '@preact/signals';
 import type { ReadonlySignal, Signal } from '@preact/signals';
+import { publish } from './internal/publish.js';
 
 export type ForProps<T> = {
   /** A reactive array. Read as a signal, so `<For>` re-renders when it changes. */
@@ -25,6 +26,20 @@ export type ForProps<T> = {
 };
 
 type RowCells<T> = { item: Signal<T>; index: Signal<number> };
+
+// A readable spelling of a duplicate key for the error message. Objects
+// stringify as JSON where possible; String() would collapse every object key
+// to "[object Object]", which hides exactly the case most likely to collide.
+function formatKey(key: unknown): string {
+  if (typeof key === 'object' && key !== null) {
+    try {
+      return JSON.stringify(key);
+    } catch {
+      return String(key);
+    }
+  }
+  return String(key);
+}
 
 // A per-row component boundary. The child render runs HERE, inside a
 // component, so a signal read in it subscribes THIS row (which re-renders
@@ -53,22 +68,36 @@ export function For<T>({ each, by, children }: ForProps<T>): VNode {
   // Lazy first-render init so later renders do not allocate a throwaway Map.
   const prev = (cellsRef.current ??= new Map());
   const items = each.value; // subscribes <For> to the list signal
+  // Keys are computed and validated BEFORE any cell is written, so a
+  // duplicate-key throw aborts the render without having published anything
+  // from it: an error-boundary-recovering tree never sees cells from a render
+  // that did not commit.
+  const keys: unknown[] = [];
+  const seen = new Set<unknown>();
+  items.forEach((item, i) => {
+    const key = by ? by(item, i) : item;
+    if (seen.has(key)) {
+      throw new Error(
+        `<For>: duplicate key ${formatKey(key)}; keys must be unique.`
+      );
+    }
+    seen.add(key);
+    keys.push(key);
+  });
   const next = new Map<unknown, RowCells<T>>();
   const out: VNode[] = [];
   // Cell writes are batched so subscribers see one consistent update per list
   // change, not one per row.
   batch(() => {
     items.forEach((item, i) => {
-      const key = by ? by(item, i) : item;
-      if (next.has(key)) {
-        throw new Error(
-          `<For>: duplicate key ${String(key)}; keys must be unique.`
-        );
-      }
+      const key = keys[i];
       let cells = prev.get(key);
       if (cells) {
-        // Signal `===` dedupe makes unchanged writes free.
-        cells.item.value = item;
+        // A deserialised payload rebuilds row objects, so an unchanged row
+        // arrives as a fresh, deep-equal reference; publish compares contents
+        // (shallowEqual) so those writes stay silent. The index is a
+        // primitive, so its === dedupe is exact.
+        publish(cells.item, item);
         cells.index.value = i;
       } else {
         cells = { item: signal(item), index: signal(i) };
