@@ -64,10 +64,7 @@ describe('<For>', () => {
   });
 
   it('index is reactive under reorder', async () => {
-    const each = signal<readonly { id: string }[]>([
-      { id: 'x' },
-      { id: 'y' },
-    ]);
+    const each = signal<readonly { id: string }[]>([{ id: 'x' }, { id: 'y' }]);
     render(
       <For each={each} by={(t) => t.id}>
         {(item, index) => (
@@ -159,7 +156,11 @@ describe('<For>', () => {
     // cell along is not re-invoked when the item content changes; the reader
     // component updates from the cell.
     const bodyRuns: Record<string, number> = { '1': 0, '2': 0 };
-    function Label({ item }: { item: ReadonlySignal<{ id: string; label: string }> }) {
+    function Label({
+      item,
+    }: {
+      item: ReadonlySignal<{ id: string; label: string }>;
+    }) {
       return <li data-testid={`l-${item.value.id}`}>{item.value.label}</li>;
     }
     const each = signal<readonly { id: string; label: string }[]>([
@@ -191,7 +192,11 @@ describe('<For>', () => {
     // reference is unchanged, so its cell write dedupes on ===; both rows
     // still render correct content through their cells.
     const readerRuns: Record<string, number> = { '1': 0, '2': 0 };
-    function Reader({ item }: { item: ReadonlySignal<{ id: string; label: string }> }) {
+    function Reader({
+      item,
+    }: {
+      item: ReadonlySignal<{ id: string; label: string }>;
+    }) {
       readerRuns[item.peek().id]++;
       return <li data-testid={`g-${item.peek().id}`}>{item.value.label}</li>;
     }
