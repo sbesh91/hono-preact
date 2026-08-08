@@ -1,4 +1,4 @@
-import { definePage, useTitle } from 'hono-preact';
+import { definePage, useTitle, useComputed, For, Show } from 'hono-preact';
 import type { JSX, FunctionComponent } from 'preact';
 import { useCallback, useEffect, useRef } from 'preact/hooks';
 import { serverRooms } from './cursors-demo.server.js';
@@ -60,7 +60,14 @@ const CursorsDemo: FunctionComponent = () => {
     []
   );
 
-  const others = room.members.value.filter((m) => m.id !== room.self.value?.id);
+  // Membership only: the page subscribes to WHO is here (memberIds, changes on
+  // join/leave), never to presence. Each cursor row binds to member(id) below,
+  // so pointer traffic re-renders one dot, not this page.
+  const otherIds = useComputed(() =>
+    room.memberIds.value.filter((id) => id !== room.self.value?.id)
+  );
+  const othersEmpty = useComputed(() => otherIds.value.length === 0);
+  const memberCount = useComputed(() => room.memberIds.value.length);
 
   return (
     <div class="grid min-h-screen place-items-center bg-background px-4">
@@ -82,8 +89,8 @@ const CursorsDemo: FunctionComponent = () => {
           />
           <span>
             {room.status === 'open' ? 'Connected' : 'Connecting...'} &middot;{' '}
-            {room.members.value.length}{' '}
-            {room.members.value.length === 1 ? 'member' : 'members'} in room
+            {memberCount.value} {memberCount.value === 1 ? 'member' : 'members'}{' '}
+            in room
           </span>
         </div>
 
@@ -98,41 +105,50 @@ const CursorsDemo: FunctionComponent = () => {
           class="rounded-lg border border-border bg-background"
           onPointerMove={handlePointerMove}
         >
-          {others.length === 0 && room.status === 'open' && (
-            <span class="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none select-none">
-              No other members yet. Open a second tab.
-            </span>
+          {room.status === 'open' && (
+            <Show when={othersEmpty}>
+              <span class="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none select-none">
+                No other members yet. Open a second tab.
+              </span>
+            </Show>
           )}
           {room.status !== 'open' && (
             <span class="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none select-none">
               Connecting to room...
             </span>
           )}
-          {others.map((member) => (
-            <div
-              key={member.id}
-              style={{
-                position: 'absolute',
-                left: `${member.state?.x ?? 0}px`,
-                top: `${member.state?.y ?? 0}px`,
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                background: 'var(--accent)',
-                transform: 'translate(-50%, -50%)',
-                pointerEvents: 'none',
-              }}
-              title={member.id.slice(0, 6)}
-            />
-          ))}
+          <For each={otherIds}>
+            {(id) => {
+              // member(id) is a per-member signal: presence moves re-render
+              // this row (one dot) and nothing else.
+              const member = room.member(id.value).value;
+              return (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${member?.state?.x ?? 0}px`,
+                    top: `${member?.state?.y ?? 0}px`,
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: 'var(--accent)',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                  }}
+                  title={id.value.slice(0, 6)}
+                />
+              );
+            }}
+          </For>
         </div>
 
-        {room.self.value && (
-          <p class="text-xs text-muted">
-            You are{' '}
-            <code class="font-mono">{room.self.value.id.slice(0, 8)}</code>
-          </p>
-        )}
+        <Show when={room.self}>
+          {(self) => (
+            <p class="text-xs text-muted">
+              You are <code class="font-mono">{self.id.slice(0, 8)}</code>
+            </p>
+          )}
+        </Show>
 
         <footer class="border-t border-border pt-4 text-xs text-muted">
           Powered by{' '}

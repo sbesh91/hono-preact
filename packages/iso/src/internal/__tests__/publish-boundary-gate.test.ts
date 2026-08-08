@@ -86,9 +86,9 @@ const INVENTORY: Record<string, { writes: number; kind: Kind; why: string }> = {
     why: 'clearing a dropped field; the two publishing writes go through publish(sameMessages/sameNameSet)',
   },
   'iso/src/for.tsx': {
-    writes: 2,
+    writes: 1,
     kind: 'render-driven',
-    why: 'per-row item/index cells rebuilt each list render; @preact/signals dedupes the write by ===, which only catches an unchanged item reference or a primitive key. A freshly-deserialised object that is deep-equal to the old item is a different reference, so it still publishes',
+    why: 'the per-row index cell, rebuilt each list render; the value is a primitive, so the === dedupe is exact. The item cell goes through publish (shallowEqual), so a freshly-deserialised deep-equal row stays silent',
   },
 };
 

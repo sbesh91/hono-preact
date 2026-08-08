@@ -26,6 +26,21 @@ describe('rendering helpers SSR', () => {
     expect(html).toBe('<ul></ul>');
   });
 
+  it('<For> renders keyed object rows through renderToString', () => {
+    const each = signal<readonly { id: string; label: string }[]>([
+      { id: '1', label: 'one' },
+      { id: '2', label: 'two' },
+    ]);
+    const html = renderToString(
+      <ul>
+        <For each={each} by={(t) => t.id}>
+          {(t) => <li>{t.value.label}</li>}
+        </For>
+      </ul>
+    );
+    expect(html).toBe('<ul><li>one</li><li>two</li></ul>');
+  });
+
   it('<Show> renders the branch on the server', () => {
     const on = signal(true);
     const off = signal(false);

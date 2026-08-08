@@ -240,4 +240,92 @@ describe('<For>', () => {
     expect(effectRuns).toEqual({ '1': 2, '2': 1 });
     disposers.forEach((dispose) => dispose());
   });
+
+  it('a deep-equal fresh object dedupes its cell write (no notification)', async () => {
+    // Deserialised payloads rebuild every row object, so an unchanged row
+    // arrives as a fresh, deep-equal literal. The cell write must compare
+    // contents, not identity, or every consumer holding the cell wakes for a
+    // value it cannot tell apart from the last one.
+    const each = signal<readonly { id: string; label: string }[]>([
+      { id: '1', label: 'one' },
+      { id: '2', label: 'two' },
+    ]);
+    const effectRuns: Record<string, number> = { '1': 0, '2': 0 };
+    const subscribed = new Set<string>();
+    const disposers: (() => void)[] = [];
+    render(
+      <For each={each} by={(t) => t.id}>
+        {(item) => {
+          const id = item.peek().id;
+          if (!subscribed.has(id)) {
+            subscribed.add(id);
+            disposers.push(
+              effect(() => {
+                item.value;
+                effectRuns[id]++;
+              })
+            );
+          }
+          return <li data-testid={`f-${id}`}>{item.value.label}</li>;
+        }}
+      </For>
+    );
+    expect(effectRuns).toEqual({ '1': 1, '2': 1 });
+    await act(async () => {
+      each.value = [
+        { id: '1', label: 'uno' },
+        { id: '2', label: 'two' },
+      ];
+    });
+    expect(screen.getByTestId('f-1').textContent).toBe('uno');
+    // Row 1's content changed, so it published. Row 2 is a fresh object with
+    // identical content, so the write deduped and its effect stayed quiet.
+    expect(effectRuns).toEqual({ '1': 2, '2': 1 });
+    disposers.forEach((dispose) => dispose());
+  });
+
+  it('names the colliding key readably when it is an object', () => {
+    const dup = { id: 1 };
+    const each = signal<readonly { id: number }[]>([dup, dup]);
+    expect(() =>
+      render(<For each={each}>{(t) => <li>{t.value.id}</li>}</For>)
+    ).toThrow(/\{"id":1\}/);
+  });
+
+  it('a duplicate-key throw publishes nothing from the aborted render', async () => {
+    const each = signal<readonly { id: string; label: string }[]>([
+      { id: '1', label: 'one' },
+    ]);
+    let runs = 0;
+    let dispose = () => {};
+    render(
+      <For each={each} by={(t) => t.id}>
+        {(item) => {
+          if (runs === 0) {
+            dispose = effect(() => {
+              item.value;
+              runs++;
+            });
+          }
+          return <li>{item.value.label}</li>;
+        }}
+      </For>
+    );
+    expect(runs).toBe(1);
+    // The update both changes row 1's content and introduces a duplicate key.
+    // The render must throw WITHOUT having published row 1's new value: keys
+    // are validated before any cell is written, so an aborted render leaves
+    // every surviving cell untouched.
+    expect(() => {
+      act(() => {
+        each.value = [
+          { id: '1', label: 'uno' },
+          { id: '2', label: 'x' },
+          { id: '2', label: 'y' },
+        ];
+      });
+    }).toThrow(/duplicate key/i);
+    expect(runs).toBe(1);
+    dispose();
+  });
 });

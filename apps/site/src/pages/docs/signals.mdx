@@ -242,7 +242,7 @@ const Movies = ({ movies }: { movies: ReadonlySignal<Movie[]> }) => (
     <For each={movies} by={(m) => m.id}>
       {(movie, index) => (
         <li>
-          {index}. {movie.value.title}
+          {index.value}. {movie.value.title}
         </li>
       )}
     </For>
@@ -253,6 +253,8 @@ const Movies = ({ movies }: { movies: ReadonlySignal<Movie[]> }) => (
 Rows reconcile by key: a key that survives from one render to the next keeps its DOM and component state, and only a key that appears or disappears mounts or unmounts. The default key is the item itself, which is exact for an array of ids like `memberIds`. Supply `by` whenever the array holds objects re-created per payload (deserialised loader data, for instance), or every row remounts on each new array because no two objects are ever `===`.
 
 The child receives `item` and `index` as signals, not plain values. Each is a per-row cell: object-stable for as long as that row's key survives, its `.value` tracking the current item and position. Read `.value` where you display the item, same as any other signal. The row render itself runs again with a fresh closure on every list change, so nothing you capture in it can go stale, the cells exist so a row can hand a stable reactive identity down to its own subcomponents and effects rather than passing a value that changes identity every render.
+
+Cell writes are content-compared (shallow), so a re-delivered payload whose row did not change writes nothing: an effect or subcomponent bound to that row's cell stays quiet.
 
 A duplicate key throws, since two rows cannot share one slot of state.
 
