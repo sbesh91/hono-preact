@@ -45,15 +45,31 @@ export function serverLoaderValidationPlugin(): Plugin {
                 : s.exported.value
             );
           }
-          if (
-            named.declaration?.type === 'FunctionDeclaration' &&
-            named.declaration.id
-          ) {
-            namedExports.push(named.declaration.id.name);
-          } else if (named.declaration?.type === 'VariableDeclaration') {
-            for (const decl of named.declaration.declarations) {
-              if (decl.id.type === 'Identifier')
-                namedExports.push(decl.id.name);
+          const decl = named.declaration;
+          if (decl) {
+            switch (decl.type) {
+              case 'FunctionDeclaration':
+              case 'ClassDeclaration':
+              case 'TSEnumDeclaration':
+                if (decl.id) namedExports.push(decl.id.name);
+                break;
+              case 'VariableDeclaration':
+                for (const d of decl.declarations) {
+                  if (d.id.type === 'Identifier')
+                    namedExports.push(d.id.name);
+                }
+                break;
+              case 'TSInterfaceDeclaration':
+              case 'TSTypeAliasDeclaration':
+                // Type-only shapes that can slip past exportKind === 'type' in
+                // some parser configurations; erased at runtime, nothing to
+                // whitelist.
+                break;
+              default:
+                errors.push(
+                  `${id}: unsupported export declaration (${decl.type}) in a .server file. ` +
+                    `.server files may only export ${ALLOWED_NAMED_EXPORTS_LIST}.`
+                );
             }
           }
         }

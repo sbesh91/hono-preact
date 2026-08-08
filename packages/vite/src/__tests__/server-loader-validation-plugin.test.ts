@@ -224,6 +224,51 @@ describe('serverLoaderValidationPlugin', () => {
     });
   });
 
+  describe('exhaustive declaration node type handling (#335)', () => {
+    it('rejects `export class` in a .server.ts like any unrecognized export', () => {
+      const code = [
+        'export class Sneaky {}',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('may only export');
+      expect(error).toContain('Sneaky');
+    });
+
+    it('rejects `export enum` in a .server.ts', () => {
+      const code = [
+        'export enum Mode { A }',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('may only export');
+      expect(error).toContain('Mode');
+    });
+
+    it('fails loudly on an unhandled exported declaration node type', () => {
+      const code = [
+        'export namespace NS { export const x = 1; }',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).not.toBeNull();
+      expect(error).toContain('TSModuleDeclaration');
+      expect(error).toContain('movies.server.ts');
+    });
+
+    it('regression: export function / export const still collect', () => {
+      const code = [
+        'export function f() {}',
+        'export const c = 1;',
+        'export const serverLoaders = {};',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toContain('may only export');
+      expect(error).toContain('f');
+      expect(error).toContain('c');
+    });
+  });
+
   describe('legacy loader and cache named exports', () => {
     it('rejects legacy "loader" named export (use serverLoaders instead)', () => {
       const code = [
