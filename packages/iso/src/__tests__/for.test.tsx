@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, act, cleanup } from '@testing-library/preact';
-import { signal } from '@preact/signals';
+import { signal, effect } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 import { For } from '../for.js';
 
@@ -151,75 +151,93 @@ describe('<For>', () => {
     expect(by.mock.calls.length).toBe(byCallsAfterMount);
   });
 
-  it('a consumer subcomponent driven by the item cell updates without re-invoking siblings', async () => {
-    // The cell is a stable reactive identity: a row body that only passes the
-    // cell along is not re-invoked when the item content changes; the reader
-    // component updates from the cell.
-    const bodyRuns: Record<string, number> = { '1': 0, '2': 0 };
-    function Label({
-      item,
-    }: {
-      item: ReadonlySignal<{ id: string; label: string }>;
-    }) {
-      return <li data-testid={`l-${item.value.id}`}>{item.value.label}</li>;
-    }
+  it('the item cell is a stable reactive identity: a subcomponent outside the row closure updates from it, not from re-invocation', async () => {
+    // Capture row 1's cell once, at mount, into a test-local variable, then
+    // hand it to a Holder that lives OUTSIDE the <For> subtree entirely: the
+    // Holder never re-runs the row's render prop and is never re-invoked by
+    // <For>. If it still picks up the new label, the update can only have
+    // come from the cell itself being the same mutable signal across
+    // renders, not from a fresh closure or a fresh cell each render.
+    let capturedCell: ReadonlySignal<{ id: string; label: string }> | undefined;
     const each = signal<readonly { id: string; label: string }[]>([
       { id: '1', label: 'one' },
       { id: '2', label: 'two' },
     ]);
-    render(
-      <For each={each} by={(t) => t.id}>
-        {(item) => {
-          bodyRuns[item.peek().id]++;
-          return <Label item={item} />;
-        }}
-      </For>
+    function Holder() {
+      return <div data-testid="holder">{capturedCell!.value.label}</div>;
+    }
+    function rows() {
+      return (
+        <For each={each} by={(t) => t.id}>
+          {(item) => {
+            if (item.peek().id === '1') capturedCell = item;
+            return <li data-testid={`l-${item.peek().id}`} />;
+          }}
+        </For>
+      );
+    }
+    const { rerender } = render(rows());
+    expect(capturedCell).toBeDefined();
+    rerender(
+      <>
+        {rows()}
+        <Holder />
+      </>
     );
-    expect(bodyRuns).toEqual({ '1': 1, '2': 1 });
+    expect(screen.getByTestId('holder').textContent).toBe('one');
     await act(async () => {
       each.value = [
         { id: '1', label: 'uno' },
         { id: '2', label: 'two' },
       ];
     });
-    expect(screen.getByTestId('l-1').textContent).toBe('uno');
-    // Both rows re-invoke (no vnode cache; <For> re-rendered), so assert the
-    // DOM outcome, not a bail. The granular path is exercised below.
+    expect(screen.getByTestId('holder').textContent).toBe('uno');
   });
 
   it('an unchanged item dedupes its cell write on a list change', async () => {
-    // Push a new array where only row 1's object changed. Row 2's item
-    // reference is unchanged, so its cell write dedupes on ===; both rows
-    // still render correct content through their cells.
-    const readerRuns: Record<string, number> = { '1': 0, '2': 0 };
-    function Reader({
-      item,
-    }: {
-      item: ReadonlySignal<{ id: string; label: string }>;
-    }) {
-      readerRuns[item.peek().id]++;
-      return <li data-testid={`g-${item.peek().id}`}>{item.value.label}</li>;
-    }
+    // Push a new array where only row 1's object changed. Row 2 keeps the
+    // exact same object reference (not just a deep-equal one; a fresh
+    // literal would still be a different reference and still publish), so
+    // its cell write dedupes on ===. A rendered row re-runs regardless
+    // (<For> re-rendered), so counting renders cannot discriminate a real
+    // dedupe from none at all; subscribe to each cell via effect() instead,
+    // since a signal notification is what a dedupe actually suppresses, and
+    // effect firings cannot coalesce into a render.
+    const row2 = { id: '2', label: 'two' };
     const each = signal<readonly { id: string; label: string }[]>([
       { id: '1', label: 'one' },
-      { id: '2', label: 'two' },
+      row2,
     ]);
+    const effectRuns: Record<string, number> = { '1': 0, '2': 0 };
+    const subscribed = new Set<string>();
+    const disposers: (() => void)[] = [];
     render(
       <For each={each} by={(t) => t.id}>
-        {(item) => <Reader item={item} />}
+        {(item) => {
+          const id = item.peek().id;
+          if (!subscribed.has(id)) {
+            subscribed.add(id);
+            disposers.push(
+              effect(() => {
+                item.value; // subscribe to this row's stable cell
+                effectRuns[id]++;
+              })
+            );
+          }
+          return <li data-testid={`g-${id}`}>{item.value.label}</li>;
+        }}
       </For>
     );
-    expect(readerRuns).toEqual({ '1': 1, '2': 1 });
+    expect(effectRuns).toEqual({ '1': 1, '2': 1 });
     await act(async () => {
-      each.value = [
-        { id: '1', label: 'uno' },
-        { id: '2', label: 'two' },
-      ];
+      each.value = [{ id: '1', label: 'uno' }, row2];
     });
     expect(screen.getByTestId('g-1').textContent).toBe('uno');
-    // Row 2's item reference is unchanged (same object), so its cell write
-    // deduped; its Reader re-ran only because the keyed wrapper re-invoked it,
-    // never from a cell notification. Sanity: content unchanged.
     expect(screen.getByTestId('g-2').textContent).toBe('two');
+    // Row 1's item reference changed, so its cell publishes and the effect
+    // fires again. Row 2's item reference is unchanged, so the write dedupes
+    // on === and its effect does not fire again.
+    expect(effectRuns).toEqual({ '1': 2, '2': 1 });
+    disposers.forEach((dispose) => dispose());
   });
 });
