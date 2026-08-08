@@ -12,6 +12,7 @@ type MinimalResolvedConfig = {
   root: string;
   command?: string;
   build?: { cssCodeSplit?: boolean };
+  base?: string;
 };
 
 function configResolvedOf(plugin: ReturnType<typeof clientEntryPlugin>) {
@@ -259,5 +260,41 @@ describe('clientEntryPlugin css.global validation', () => {
     // Also fine when `build` is entirely absent from the resolved config
     // fixture (matches the other tests in this file, and Vite's real default).
     expect(() => configResolvedOf(plugin)?.({ root: tmpRoot })).not.toThrow();
+  });
+
+  it('throws at config time when base is set (route CSS would silently 404)', () => {
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+    });
+    expect(() =>
+      configResolvedOf(plugin)?.({
+        root: tmpRoot,
+        base: '/app/',
+      })
+    ).toThrow(/base/);
+    expect(() =>
+      configResolvedOf(plugin)?.({
+        root: tmpRoot,
+        base: '/app/',
+      })
+    ).toThrow(/route CSS/);
+  });
+
+  it("accepts the default base ('/' and '')", () => {
+    const plugin = clientEntryPlugin({
+      routes: 'src/routes.ts',
+    });
+    expect(() =>
+      configResolvedOf(plugin)?.({
+        root: tmpRoot,
+        base: '/',
+      })
+    ).not.toThrow();
+    expect(() =>
+      configResolvedOf(plugin)?.({
+        root: tmpRoot,
+        base: '',
+      })
+    ).not.toThrow();
   });
 });

@@ -123,6 +123,13 @@ export function clientEntryPlugin(opts: ClientEntryPluginOptions): Plugin {
           );
         }
       }
+      if (config.base && config.base !== '/' && config.base !== '') {
+        throw new Error(
+          `[hono-preact] a custom Vite \`base\` (${JSON.stringify(config.base)}) is not supported: ` +
+            `route CSS hrefs are emitted root-relative, so every route stylesheet would 404 ` +
+            `(a silently broken page). Remove \`base\`, or file an issue if you need base support.`
+        );
+      }
       isBuild = config.command === 'build';
     },
     resolveId(id) {
