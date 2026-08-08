@@ -38,3 +38,34 @@ export function publish<T>(
   if (eq(signal.peek(), next)) return;
   signal.value = next;
 }
+
+/**
+ * The read-side counterpart to `publish`: retain the last value returned, and
+ * hand it back whenever the next one is equivalent.
+ *
+ * This exists because a `computed` dedupes on `===` and a fold rebuilds its
+ * result from scratch on every recompute, so a projection that produced the
+ * SAME content still notified every consumer. Two places had grown their own
+ * copy of it: `foldStream`'s retained `last` (a filtering `reduce` returns the
+ * accumulator untouched on a heartbeat, and without retention every consumer
+ * re-rendered on every heartbeat anyway) and `useOptimistic`'s projection (an
+ * inline reducer invalidates the computed on every render of the caller).
+ *
+ * Distinct from `publish` and NOT a substitute for it. `publish` decides
+ * whether to WRITE a signal; this decides which object a computed RETURNS.
+ * Collapsing the two was the mistake in this idea's first framing: a boundary
+ * on writes cannot dedupe a derived value, because nothing is written.
+ *
+ * Retention is boxed rather than compared against a sentinel, so `undefined`
+ * and `null` are ordinary retained values instead of meaning "nothing yet".
+ */
+export function retainEquivalent<T>(
+  eq: (a: T, b: T) => boolean = shallowEqual
+): (next: T) => T {
+  let last: { v: T } | null = null;
+  return (next) => {
+    if (last !== null && eq(last.v, next)) return last.v;
+    last = { v: next };
+    return next;
+  };
+}
