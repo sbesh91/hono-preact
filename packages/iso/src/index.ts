@@ -199,6 +199,9 @@ export type {
   DenyCode,
 } from './outcomes.js';
 
+// Rendering helpers (signals DX)
+export { Show, type ShowProps } from './show.js';
+
 // Utilities.
 export { prefetch } from './prefetch.js';
 export { usePrefetch } from './use-prefetch.js';
