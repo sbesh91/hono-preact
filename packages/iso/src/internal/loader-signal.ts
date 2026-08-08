@@ -2,6 +2,7 @@ import { signal, computed } from '@preact/signals';
 import type { ReadonlySignal, Signal } from '@preact/signals';
 import type { StreamState, StreamStatus } from '../loader-state.js';
 import { toStreamState } from '../loader-state.js';
+import { retainEquivalent } from './publish.js';
 
 /**
  * One collect-mode subscription, as a single immutable record.
@@ -230,13 +231,12 @@ export function foldStream<Acc>(
   let index = 0;
   let acc = initial;
   let seenChunks: readonly unknown[] | null = null;
-  // The last state this fold PUBLISHED. Held so an unchanged fold republishes
-  // the same object and `computed` can dedupe it (see `sameStreamState`). A
-  // filtering `reduce` is the case that needs it: `(acc, ev) => ev.type ===
-  // 'tick' ? [...acc, ev] : acc` returns `acc` untouched on a heartbeat, so
-  // there is nothing new to show, and without this every consumer re-rendered
-  // on every heartbeat anyway.
-  let last: StreamState<Acc> | null = null;
+  // Republish the SAME object when the fold produced an equivalent state, so
+  // `computed` can dedupe it. A filtering `reduce` is the case that needs it:
+  // `(acc, ev) => ev.type === 'tick' ? [...acc, ev] : acc` returns `acc`
+  // untouched on a heartbeat, so there is nothing new to show, and without this
+  // every consumer re-rendered on every heartbeat anyway.
+  const retain = retainEquivalent<StreamState<Acc>>(sameStreamState);
   const guard = createAccumulatorGuard(initial, 'live');
   return computed(() => {
     const run = s.run.value;
@@ -257,9 +257,7 @@ export function foldStream<Acc>(
       { present: index > 0, value: acc },
       run.error
     );
-    if (last !== null && sameStreamState(last, state)) return last;
-    last = state;
-    return state;
+    return retain(state);
   });
 }
 

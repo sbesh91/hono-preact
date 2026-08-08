@@ -1,4 +1,5 @@
 import { signal, computed, batch } from '@preact/signals';
+import { publish } from './publish.js';
 import type { ReadonlySignal, Signal } from '@preact/signals';
 
 /**
@@ -89,7 +90,7 @@ export function createFieldErrorStore(): FieldErrorStore {
           const value = map[name]!;
           const existing = byName.get(name);
           if (existing) {
-            if (!sameMessages(existing.peek(), value)) existing.value = value;
+            publish(existing, value, sameMessages);
           } else {
             byName.set(name, signal<readonly string[]>(value));
           }
@@ -106,9 +107,7 @@ export function createFieldErrorStore(): FieldErrorStore {
           }
         }
 
-        if (!sameNameSet(presentNames.peek(), nextNames)) {
-          presentNames.value = nextNames;
-        }
+        publish(presentNames, nextNames, sameNameSet);
       });
     },
     fieldError(name) {

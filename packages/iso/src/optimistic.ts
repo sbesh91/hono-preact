@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'preact/hooks';
 import { useComputed, useSignal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 import { shallowEqual } from './internal/shallow-equal.js';
+import { retainEquivalent } from './internal/publish.js';
 
 type Status = 'active' | 'ready';
 type Entry<TPayload> = { id: number; payload: TPayload; status: Status };
@@ -119,19 +120,19 @@ export function useOptimistic<TBase, TPayload>(
   // is the bound leaf that pays, which is precisely the granularity the signal
   // return exists to buy.)
   //
-  // Same shape as `foldStream`'s retained `last` in `loader-signal.ts`.
-  const lastValue = useRef<{ v: TBase } | null>(null);
+  // One retainer for this hook instance; `useComputed` is `useMemo(..., [])`,
+  // so the closure below is created once and this must outlive each recompute.
+  const retain = useRef<((next: TBase) => TBase) | null>(null);
+  retain.current ??= retainEquivalent<TBase>();
 
-  const value = useComputed(() => {
-    const next = queue.value.reduce(
-      (acc, e) => reducerState.value(acc, e.payload),
-      baseState.value
-    );
-    const prev = lastValue.current;
-    if (prev !== null && shallowEqual(prev.v, next)) return prev.v;
-    lastValue.current = { v: next };
-    return next;
-  });
+  const value = useComputed(() =>
+    retain.current!(
+      queue.value.reduce(
+        (acc, e) => reducerState.value(acc, e.payload),
+        baseState.value
+      )
+    )
+  );
 
   // Reads `transitionRef.current` at invocation time, not capture time, so it
   // is safe to close over from the memoized `addOptimistic` (useCallback([]))

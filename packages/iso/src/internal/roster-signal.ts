@@ -1,5 +1,6 @@
 import { signal, computed, batch, type Signal } from '@preact/signals';
 import { shallowEqual } from './shallow-equal.js';
+import { publish } from './publish.js';
 import type { PresenceMember } from './room-envelope.js';
 import type { ReadonlySignal } from '@preact/signals';
 
@@ -64,6 +65,21 @@ export type RosterStore<S> = {
 // trade, and it is the right one here, because the alternatives either cap the
 // map and silently orphan an old held binding, or keep introspecting
 // subscribers, which @preact/signals does not expose.
+/**
+ * Two roster entries are equivalent when the same member carries equivalent
+ * state. Compares one level INTO `state`, not the member: `state` is a fresh
+ * object off the wire every time, so a member-level compare would never dedupe
+ * and a reconnect snapshot would republish the whole roster.
+ */
+function sameMember<S>(
+  a: PresenceMember<S> | undefined,
+  b: PresenceMember<S> | undefined
+): boolean {
+  if (a === b) return true;
+  if (a === undefined || b === undefined) return false;
+  return a.id === b.id && shallowEqual(a.state, b.state);
+}
+
 export function createSignalRoster<S>(): RosterStore<S> {
   const ids = signal<readonly string[]>([]);
   // Cells for members currently in the roster, held strongly.
@@ -158,9 +174,7 @@ export function createSignalRoster<S>(): RosterStore<S> {
     cell: Signal<PresenceMember<S> | undefined>,
     next: PresenceMember<S>
   ): void {
-    const prev = cell.peek();
-    if (prev !== undefined && shallowEqual(prev.state, next.state)) return;
-    cell.value = next;
+    publish(cell, next, sameMember);
   }
 
   return {

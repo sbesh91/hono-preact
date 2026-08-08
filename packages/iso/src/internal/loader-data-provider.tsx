@@ -1,6 +1,29 @@
 import type { ComponentChildren } from 'preact';
 import { useSignal } from '@preact/signals';
 import { LoaderDataContext, type LoaderData } from './contexts.js';
+import { publish } from './publish.js';
+import { shallowEqual } from './shallow-equal.js';
+
+/**
+ * Are these two arms equivalent to a consumer? Same status, and data that
+ * matches one level deep.
+ *
+ * The depth is the whole point. A generic one-level compare of the ARM tests
+ * `data` by identity, and `data` is exactly what a re-projection rebuilds, so
+ * it would never dedupe the case this exists for. Comparing one level INTO
+ * `data` is what makes a re-`reduce` over unchanged input inert.
+ */
+function sameLoaderData(a: LoaderData, b: LoaderData): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  if (a.status !== b.status) return false;
+  const aData = 'data' in a ? a.data : undefined;
+  const bData = 'data' in b ? b.data : undefined;
+  if (!shallowEqual(aData, bData)) return false;
+  const aErr = 'error' in a ? a.error : undefined;
+  const bErr = 'error' in b ? b.error : undefined;
+  return aErr === bErr;
+}
 
 /**
  * Puts one loader's projected consumption union on `LoaderDataContext` as a
@@ -13,23 +36,21 @@ import { LoaderDataContext, type LoaderData } from './contexts.js';
  *    (`readDataSignal` in `define-loader.ts` reads it inside a `useComputed`),
  *    so a fresh identity per render would freeze every consumer at the first
  *    value.
- *  - An unchanged state is a no-op. `LoaderHost` memoizes the union it passes
- *    in, so an unchanged render writes the SAME reference and the signal skips
- *    the notify.
+ *  - An unchanged state is a no-op, ENFORCED here rather than delegated. The
+ *    write goes through `publish` with an arm-aware comparator, so handing this
+ *    an equivalent-but-fresh arm wakes nobody.
  *
  * Every site that puts loader data on context goes through here (`LoaderHost`
  * on the client, `DataReader` on the server, `OptimisticOverlay` when it
- * rewrites the data).
+ * rewrites the data), so neither property can be got wrong by a caller.
  *
- * NOTE what that does and does not buy. The signal's IDENTITY is owned here, so
- * no caller can get that wrong. The no-op-on-unchanged property is NOT: this
- * writes whatever it is handed, so it holds only as long as every caller passes
- * a stable reference for an unchanged state. That is a convention, not an
- * invariant, and it has already been broken once (`OptimisticOverlay` published
- * a fresh arm on every render whenever anything was pending, waking every
- * consumer below it). `LoaderHost` memoizes its union, `DataReader` renders
- * once on the server, and the overlay now retains its last arm. Moving the
- * comparison in here so a caller cannot forget it is tracked in #361.
+ * The second one used to be a convention: this wrote whatever it was handed and
+ * relied on every caller memoizing. `OptimisticOverlay` broke it, publishing a
+ * fresh arm on every render whenever anything was pending and waking every
+ * consumer below it, and nothing failed, because over-notifying costs renders
+ * and never correctness. Callers may still memoize (`LoaderHost` does, which
+ * saves building the arm at all); they no longer have to for correctness of the
+ * notify. See #361.
  */
 export function LoaderDataProvider({
   state,
@@ -39,7 +60,7 @@ export function LoaderDataProvider({
   children: ComponentChildren;
 }) {
   const cell = useSignal<LoaderData>(state);
-  cell.value = state;
+  publish(cell, state, sameLoaderData);
   return (
     <LoaderDataContext.Provider value={cell}>
       {children}
