@@ -85,6 +85,11 @@ const INVENTORY: Record<string, { writes: number; kind: Kind; why: string }> = {
     kind: 'event-driven',
     why: 'clearing a dropped field; the two publishing writes go through publish(sameMessages/sameNameSet)',
   },
+  'iso/src/for.tsx': {
+    writes: 2,
+    kind: 'render-driven',
+    why: 'per-row item/index cells rebuilt each list render; @preact/signals dedupes the write by ===, which is exact for a surviving primitive key and for an unchanged item reference',
+  },
 };
 
 function sourceFiles(dir: string): string[] {

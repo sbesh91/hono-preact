@@ -200,6 +200,7 @@ export type {
 } from './outcomes.js';
 
 // Rendering helpers (signals DX)
+export { For, type ForProps } from './for.js';
 export { Show, type ShowProps } from './show.js';
 
 // Utilities.
