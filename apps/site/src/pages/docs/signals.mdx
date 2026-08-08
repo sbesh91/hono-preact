@@ -314,6 +314,17 @@ Membership changes reconcile the rows; a member moving their cursor only touches
 
 #### `ForProps<T>`
 
+```ts
+type ForProps<T> = {
+  each: ReadonlySignal<readonly T[]>;
+  by?: (item: T, index: number) => unknown;
+  children: (
+    item: ReadonlySignal<T>,
+    index: ReadonlySignal<number>
+  ) => ComponentChildren;
+};
+```
+
 | Prop       | Signature                                                                       | Description                                                                                                            |
 | ---------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `each`     | `ReadonlySignal<readonly T[]>`                                                  | The list. Read as a signal, so `<For>` re-renders when it changes.                                                     |
@@ -321,6 +332,14 @@ Membership changes reconcile the rows; a member moving their cursor only touches
 | `children` | `(item: ReadonlySignal<T>, index: ReadonlySignal<number>) => ComponentChildren` | Renders one row. `item` and `index` are per-row signal cells, object-stable while the key survives.                    |
 
 #### `ShowProps<C>`
+
+```ts
+type ShowProps<C> = {
+  when: ReadonlySignal<C>;
+  fallback?: ComponentChildren;
+  children: ComponentChildren | ((value: NonNullable<C>) => ComponentChildren);
+};
+```
 
 | Prop       | Signature                                                             | Description                                                                |
 | ---------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
