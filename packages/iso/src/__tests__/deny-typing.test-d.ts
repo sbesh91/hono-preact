@@ -203,6 +203,22 @@ describe('defineAction deny inference', () => {
     >();
   });
 
+  it('G4b: a guard that types its own deny data `any` demotes to unknown for the caller', () => {
+    // The guard's author is not the party who pays: `any` here would land on
+    // `deny.data` in the CALLER's MutateResult and switch off checking for
+    // someone who never wrote it. It must arrive as `unknown`, still narrowable.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sloppyGuard = defineServerMiddleware('action', async () =>
+      deny({ status: 403, message: 'no', data: {} as any })
+    );
+    const ref = defineAction(async (_ctx, _p: { title: string }) => 1, {
+      use: [sloppyGuard],
+    });
+    expectTypeOf(ref.useAction().mutate).returns.resolves.toEqualTypeOf<
+      MutateResult<number, unknown>
+    >();
+  });
+
   it('G5: the narrow deny data is readable off the deny arm', async () => {
     const ref = defineAction(async (_ctx, _p: { title: string }) => 1, {
       use: [authGuard],

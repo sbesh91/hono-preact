@@ -89,9 +89,14 @@ export type ActionUseElement<TChunk = unknown, TResult = unknown> =
  * chunk type to `never`. `use`'s declared type intersects this tuple capture
  * with the ordinary `ActionUse<TChunk, TResult, boolean>`, so the observer
  * arms are still checked against the action's own chunk and result types.
+ *
+ * `never` for the observer's chunk and result is the exact supertype, not a
+ * widening: both sit in parameter position on `onChunk` / `onEnd`, so they are
+ * contravariant, and `StreamObserver<never, never>` therefore admits every
+ * observer. (`unknown` would be the supertype only in a covariant slot, and
+ * here it rejects real observers.)
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ActionUseElements = ReadonlyArray<ActionUseElement<any, any>>;
+export type ActionUseElements = ReadonlyArray<ActionUseElement<never, never>>;
 
 // Per-element extraction in its OWN single-parameter alias, which is the whole
 // trick. Instantiating `DenyOfElement<U[K]>` passes a fresh type argument, and
@@ -102,22 +107,20 @@ export type ActionUseElements = ReadonlyArray<ActionUseElement<any, any>>;
 // pattern in one shot, fail on the observer arm, and collapse the entire
 // result to `never`.
 //
-// The `any` in the pattern's scope position is required too. `ServerMiddleware<
-// Scope, infer D>` cannot match a single-scope middleware: `fn` holds a
-// function type, so matching requires the element's `fn` (one specific ctx) to
-// accept the pattern's `fn` parameter (the union of all three ctx shapes) at a
-// contravariant position, which no single-scope middleware can. `ServerCtx<any>`
-// collapses to `any`, so the ctx comparison stops gating the match and `D`
-// unifies from the TDeny position as intended.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// The scope in the pattern is `never` for the same variance reason. `fn` takes
+// `ctx: ServerCtx<S>`, so `S` is contravariant, and `ServerCtx<never>` is
+// `never` (an indexed access on a `never` key). A parameter of type `never`
+// accepts every concrete ctx, so the pattern matches a middleware of ANY
+// scope and `D` unifies from the TDeny position as intended. Naming a scope
+// (`'action'`, or the `Scope` union) instead makes the ctx comparison gate the
+// match and collapses the result to `never`.
 type DenyOfElement<X> =
-  X extends ServerMiddleware<any, infer D> ? DemoteAny<D> : never;
+  X extends ServerMiddleware<never, infer D> ? DemoteAny<D> : never;
 
-// `any` in a TDeny position is never something a user wrote: it comes from the
-// erased element constraint (`ServerMiddleware<'action', any>`), which is what
-// `U` falls back to when no `use` array is present to infer from. Demote it to
-// `unknown` so the escape hatch stays inside the constraint and an `any` can
-// never reach a public type, where it would disable checking on `deny.data`.
+// A guard is free to type its own deny data `any`. Its author is not the party
+// who pays: `D` lands on `deny.data` in the ACTION CALLER's `MutateResult`,
+// where an `any` would silently switch off checking for someone who never
+// wrote it. Demote it to `unknown` so the caller still has to narrow.
 // `0 extends 1 & D` is only ever true for `any`.
 type DemoteAny<D> = 0 extends 1 & D ? unknown : D;
 
