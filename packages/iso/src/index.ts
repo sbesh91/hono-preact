@@ -32,6 +32,7 @@ export type {
   RegisteredSubtrees,
 } from './internal/typed-routes.js';
 export type { Serialize } from './internal/serialize.js';
+export type { DenyRecord } from './internal/deny-record.js';
 
 // Inference helpers over action/loader refs.
 export type {
@@ -101,6 +102,7 @@ export { useActionResult, type ActionResult } from './use-action-result.js';
 export { getValidationIssues } from './get-validation-issues.js';
 export type { ValidationIssue } from './validate.js';
 export { LoaderValidationError } from './loader-validation-error.js';
+export { LoaderDenyError } from './loader-deny-error.js';
 export {
   ActionResultContext,
   type ActionResultContextValue,

@@ -1,6 +1,6 @@
 import type { Ref } from 'preact';
 
-type AnyRef<T> = Ref<T> | null | undefined;
+export type AnyRef<T> = Ref<T> | null | undefined;
 
 // Combine several refs into one callback ref. Function refs are invoked with
 // the node; object refs have `.current` assigned; null/undefined are skipped.

@@ -7,6 +7,8 @@ import {
   setLastActionResult,
   clearLastActionResult,
 } from '../internal/action-result-store.js';
+import { VALIDATION_ISSUES_KEY } from '../internal/contract.js';
+import { getValidationIssues } from '../get-validation-issues.js';
 
 function Reader({ stub }: { stub?: { __module: string; __action: string } }) {
   const r = useActionResult(stub as never);
@@ -46,6 +48,52 @@ describe('useActionResult', () => {
       data: { fieldErrors: { x: ['nope'] } },
       submittedPayload: { text: 'hi' },
     });
+  });
+
+  it('surfaces a schema failure on `issues`, and an app deny only on `data`', () => {
+    // Same split `mutate`'s deny arm enforces: the framework's reserved
+    // validation envelope is never the action's own deny payload. The stored
+    // record is unchanged (still carries the bag under `data`), so
+    // `getValidationIssues` and <FieldError> keep reading it as before.
+    const value = {
+      module: 'pages/foo.server',
+      action: 'submit',
+      kind: 'deny' as const,
+      status: 422,
+      message: 'Validation failed',
+      data: { [VALIDATION_ISSUES_KEY]: [{ path: ['x'], message: 'nope' }] },
+      submittedPayload: { x: '' },
+    };
+    const { container } = render(
+      <ActionResultContext.Provider value={value}>
+        <Reader />
+      </ActionResultContext.Provider>
+    );
+    const validation = JSON.parse(container.textContent!);
+    expect(validation.issues).toEqual([{ path: ['x'], message: 'nope' }]);
+    expect(getValidationIssues(validation)).toEqual([
+      { path: ['x'], message: 'nope' },
+    ]);
+
+    cleanup();
+
+    const appDeny = {
+      module: 'pages/foo.server',
+      action: 'submit',
+      kind: 'deny' as const,
+      status: 403,
+      message: 'no',
+      data: { loginUrl: '/login' },
+      submittedPayload: { x: '' },
+    };
+    const second = render(
+      <ActionResultContext.Provider value={appDeny}>
+        <Reader />
+      </ActionResultContext.Provider>
+    );
+    const parsed = JSON.parse(second.container.textContent!);
+    expect(parsed.issues).toBeUndefined();
+    expect(parsed.data).toEqual({ loginUrl: '/login' });
   });
 
   it('filters by stub identity when stub passed', () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { eventStream } from '../event-stream.js';
 import { publish } from '../pubsub.js';
 import { defineChannel } from '../define-channel.js';
@@ -143,5 +143,28 @@ describe('eventStream', () => {
     await gen.return();
     expect(unsubbed).toBe(true);
     expect(ac.signal.aborted).toBe(false);
+  });
+
+  it('caps the queue at 128 buffered payloads and warns exactly once', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const ch = defineChannel('es-cap')<{ n: number }>();
+      const ac = new AbortController();
+      const gen = eventStream(ch.key(), ac.signal);
+      for (let i = 0; i < 130; i++) {
+        publish(ch.key(), { n: i });
+      }
+      const drained: number[] = [];
+      for (let i = 0; i < 128; i++) {
+        const result = await gen.next();
+        if (result.done) throw new Error('generator ended early');
+        drained.push(result.value.n);
+      }
+      expect(drained).toEqual(Array.from({ length: 128 }, (_, i) => i));
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      ac.abort();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

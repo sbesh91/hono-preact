@@ -222,6 +222,8 @@ export const serverLoaders = {
 
 Returns `AsyncGenerator<Serialize<Payload>, void, unknown>`. Payloads arrive in publish order and buffer while the consumer is busy. The yield type is the JSON wire shape (`Serialize<Payload>`): on Cloudflare a payload crosses isolates as JSON, so a `Date` arrives as its ISO string. If the underlying subscription drops, the generator throws, terminating the stream rather than going silently stale.
 
+The per-subscription buffer is capped at 128 payloads. A stalled consumer (a streaming loader that stops pulling) can't grow the queue without bound: once the buffer is full, further publishes are dropped (the newest is dropped, the oldest kept) and a one-time warning is logged. A loader consuming `eventStream` should drain the generator continuously rather than pausing for long stretches between reads.
+
 ### Type exports
 
 ```ts

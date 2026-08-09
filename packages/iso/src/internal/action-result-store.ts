@@ -1,4 +1,4 @@
-import type { DenyCode } from '../outcomes.js';
+import type { DenyRecord } from './deny-record.js';
 import { signal } from '@preact/signals';
 import type { ReadonlySignal } from '@preact/signals';
 
@@ -6,14 +6,7 @@ type Key = string; // `${module}::${action}`
 
 export type StoredActionResult =
   | { kind: 'success'; data: unknown; submittedPayload: unknown }
-  | {
-      kind: 'deny';
-      status: number;
-      message: string;
-      data?: unknown;
-      code?: DenyCode;
-      submittedPayload: unknown;
-    }
+  | (DenyRecord & { kind: 'deny'; submittedPayload: unknown })
   | {
       kind: 'error';
       message: string;

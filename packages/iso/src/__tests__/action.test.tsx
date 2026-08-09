@@ -59,6 +59,11 @@ import {
   clearLastActionResult,
 } from '../internal/action-result-store.js';
 import { getValidationIssues } from '../get-validation-issues.js';
+import { denyArm, errorArm } from './mutate-arm-helpers.js';
+import {
+  VALIDATION_ISSUES_KEY,
+  VALIDATION_FAILED_MESSAGE,
+} from '../internal/contract.js';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
 const stub = {
@@ -493,11 +498,11 @@ describe('useAction', () => {
         )
     );
 
-    let captured: { ok: boolean } | undefined;
+    let captured: MutateResult<{ id: string }> | undefined;
     const mutateRef = {
       current: null as unknown as (p: {
         x: number;
-      }) => Promise<{ ok: true; data: unknown } | { ok: false; error: Error }>,
+      }) => Promise<MutateResult<{ id: string }>>,
     };
 
     function TestComponent() {
@@ -513,11 +518,8 @@ describe('useAction', () => {
       captured = await mutateRef.current({ x: 1 });
     });
     expect(captured?.ok).toBe(false);
-    if (captured && !captured.ok) {
-      // Narrowing: when ok is false the result has an `error` field.
-      expect((captured as { ok: false; error: Error }).error.message).toBe(
-        'nope'
-      );
+    if (captured) {
+      expect(errorArm(captured).message).toBe('nope');
     }
   });
 
@@ -619,10 +621,7 @@ describe('useAction — outcome envelope decoding', () => {
     await act(async () => {
       mutateResult = await result.current.mutate({ title: 'Dune' });
     });
-    expect(mutateResult!.ok).toBe(false);
-    if (!mutateResult!.ok) {
-      expect(mutateResult!.error.message).toBe('Forbidden');
-    }
+    expect(denyArm(mutateResult!).message).toBe('Forbidden');
   });
 
   it('falls back to a deny-aware label when the envelope lacks a message (C7 defense in depth)', async () => {
@@ -641,10 +640,7 @@ describe('useAction — outcome envelope decoding', () => {
     await act(async () => {
       mutateResult = await result.current.mutate({ title: 'Dune' });
     });
-    expect(mutateResult!.ok).toBe(false);
-    if (!mutateResult!.ok) {
-      expect(mutateResult!.error.message).toMatch(/Request denied \(403\)/);
-    }
+    expect(denyArm(mutateResult!).message).toMatch(/Request denied \(403\)/);
   });
 
   it('calls window.location.assign and returns a never-settling promise when the response is a redirect outcome (C8)', async () => {
@@ -737,10 +733,7 @@ describe('useAction — outcome envelope decoding', () => {
         poster: new File(['data'], 'poster.jpg') as never,
       } as never);
     });
-    expect(mutateResult!.ok).toBe(false);
-    if (!mutateResult!.ok) {
-      expect(mutateResult!.error.message).toBe('Upload forbidden');
-    }
+    expect(denyArm(mutateResult!).message).toBe('Upload forbidden');
   });
 
   it('cross-origin redirect error names the same-origin fix', async () => {
@@ -766,12 +759,9 @@ describe('useAction — outcome envelope decoding', () => {
     await act(async () => {
       mutateResult = await result.current.mutate({ title: 'Dune' });
     });
-    expect(mutateResult!.ok).toBe(false);
-    if (!mutateResult!.ok) {
-      expect(mutateResult!.error.message).toContain(
-        'redirect() must target a same-origin path (e.g. "/dashboard"), not an absolute URL to another origin.'
-      );
-    }
+    expect(errorArm(mutateResult!).message).toContain(
+      'redirect() must target a same-origin path (e.g. "/dashboard"), not an absolute URL to another origin.'
+    );
   });
 
   it('surfaces a non-envelope body as a malformed-envelope error', async () => {
@@ -789,12 +779,9 @@ describe('useAction — outcome envelope decoding', () => {
     await act(async () => {
       mutateResult = await result.current.mutate({ title: 'Dune' });
     });
-    expect(mutateResult!.ok).toBe(false);
-    if (!mutateResult!.ok) {
-      expect(mutateResult!.error.message).toMatch(
-        /Malformed envelope \(HTTP 502\)/
-      );
-    }
+    expect(errorArm(mutateResult!).message).toMatch(
+      /Malformed envelope \(HTTP 502\)/
+    );
   });
 });
 
@@ -1196,8 +1183,15 @@ describe('useAction client pre-validation (schema)', () => {
     });
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.error.message).toBe('Validation failed');
+    // The client gate reports the same arm the server's authoritative 422
+    // would, so a caller's `kind === 'deny'` branch is not spelling-dependent.
+    const record = denyArm(outcome);
+    expect(record.data).toBeUndefined();
+    expect(record).toEqual({
+      status: 422,
+      message: 'Validation failed',
+      issues: [{ path: ['title'], message: 'title is required' }],
+    });
     expect(result.current.pending).toBe(false);
     expect(result.current.error?.message).toBe('Validation failed');
     expect(onMutate).not.toHaveBeenCalled();
@@ -1362,8 +1356,7 @@ describe('useAction client pre-validation (schema)', () => {
     });
 
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok)
-      expect(outcome.error.message).not.toBe('Validation failed');
+    expect(errorArm(outcome).message).not.toBe('Validation failed');
     expect(result.current.error?.message).not.toBe('Validation failed');
 
     const recorded = getLastActionResult({
@@ -1406,8 +1399,7 @@ describe('useAction client pre-validation (schema)', () => {
 
     // Cancelled: no spurious validation error, no deny recorded, no request.
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok)
-      expect(outcome.error.message).not.toBe('Validation failed');
+    expect(errorArm(outcome).message).not.toBe('Validation failed');
     expect(result.current.error?.message).not.toBe('Validation failed');
     expect(fetchSpy).not.toHaveBeenCalled();
 
@@ -1416,5 +1408,230 @@ describe('useAction client pre-validation (schema)', () => {
       __action: stub.__action,
     });
     expect(getValidationIssues(recorded)).toBeNull();
+  });
+});
+
+describe('mutate result arms', () => {
+  afterEach(() => clearLastActionResult('movies', 'create'));
+
+  function jsonResponse(status: number, body: unknown): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  it('returns a structural deny arm preserving status, message, code and data', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(403, {
+          __outcome: 'deny',
+          status: 403,
+          message: 'Nope',
+          code: 'FORBIDDEN',
+          data: { reason: 'quota' },
+        })
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: 'Dune' });
+    });
+
+    expect(outcome).toEqual({
+      ok: false,
+      kind: 'deny',
+      deny: {
+        status: 403,
+        message: 'Nope',
+        code: 'FORBIDDEN',
+        data: { reason: 'quota' },
+      },
+    });
+  });
+
+  it('keeps the hook error state and onError firing on a deny (behavior parity)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(403, { __outcome: 'deny', status: 403, message: 'Nope' })
+        )
+    );
+
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAction(stub, { onError }));
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+    expect(result.current.error?.message).toBe('Nope');
+    // ...and the action-result store still records the deny for
+    // useActionResult / <FieldError> readers.
+    expect(
+      getLastActionResult({ __module: 'movies', __action: 'create' })
+    ).toMatchObject({ kind: 'deny', status: 403, message: 'Nope' });
+  });
+
+  it('returns the error arm for a server error envelope', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(500, { __outcome: 'error', message: 'Boom' })
+        )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: 'Dune' });
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('expected a failure');
+    expect(outcome.kind).toBe('error');
+    if (outcome.kind !== 'error') throw new Error('expected the error arm');
+    expect(outcome.error.message).toBe('Boom');
+  });
+
+  it('returns the error arm for a transport failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+
+    const { result } = renderHook(() => useAction(stub));
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: 'Dune' });
+    });
+
+    expect(outcome).toMatchObject({ ok: false, kind: 'error' });
+  });
+
+  it('keeps the success arm free of a kind discriminant', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(200, { __outcome: 'success', data: { ok: true } })
+        )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: 'Dune' });
+    });
+
+    expect(outcome).toEqual({ ok: true, data: { ok: true } });
+  });
+});
+
+describe('the deny arm keeps the validation envelope out of the typed data channel', () => {
+  afterEach(() => clearLastActionResult('movies', 'create'));
+
+  // The exact wire shape `pageActionsHandler` emits when an action's `input`
+  // schema rejects the payload (pinned server-side by
+  // packages/server/src/__tests__/standard-schema-validation.test.ts: a 422
+  // deny whose `data` is the reserved issues bag). Nothing about that envelope
+  // is derived from the action's guards, so claiming it as the guard-inferred
+  // deny data would be a type lie a caller can dereference.
+  const serverValidationDeny = {
+    __outcome: 'deny',
+    status: 422,
+    message: VALIDATION_FAILED_MESSAGE,
+    data: {
+      [VALIDATION_ISSUES_KEY]: [{ path: ['title'], message: 'Required' }],
+    },
+  };
+
+  it('routes a server-side schema failure to `issues`, leaving `data` unset', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(serverValidationDeny), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: '' });
+    });
+
+    const record = denyArm(outcome);
+    expect(record.data).toBeUndefined();
+    expect(record.issues).toEqual([{ path: ['title'], message: 'Required' }]);
+    expect(record).toEqual({
+      status: 422,
+      message: VALIDATION_FAILED_MESSAGE,
+      issues: [{ path: ['title'], message: 'Required' }],
+    });
+  });
+
+  it('leaves a guard deny in `data` with no `issues`', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            __outcome: 'deny',
+            status: 401,
+            message: 'auth',
+            code: 'UNAUTHORIZED',
+            data: { loginUrl: '/login' },
+          }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: 'Dune' });
+    });
+
+    const record = denyArm(outcome);
+    expect(record.issues).toBeUndefined();
+    expect(record.data).toEqual({ loginUrl: '/login' });
+  });
+
+  it('keeps getValidationIssues working off the action-result store (regression)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(serverValidationDeny), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    await act(async () => {
+      await result.current.mutate({ title: '' });
+    });
+
+    // The store is a separate, type-erased channel and is deliberately
+    // unchanged: <FieldError> / useFieldErrors still read the issues from
+    // `data` there.
+    const recorded = getLastActionResult({
+      __module: 'movies',
+      __action: 'create',
+    });
+    expect(getValidationIssues(recorded)).toEqual([
+      { path: ['title'], message: 'Required' },
+    ]);
   });
 });

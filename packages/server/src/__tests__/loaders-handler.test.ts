@@ -298,6 +298,62 @@ describe('loadersHandler', () => {
     expect(body.data).toEqual({ x: 1 });
   });
 
+  it('carries deny.code in the loader RPC envelope (action-path parity)', async () => {
+    // The action envelope has shipped `code` since the DenyCode vocabulary
+    // landed; the loader envelope dropped it, so a loader guard could not tell
+    // an errorFallback WHY it denied without parsing the message.
+    const { deny } = await import('@hono-preact/iso');
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverLoaders: {
+          default: async () => {
+            throw deny('FORBIDDEN', 'no', { data: { x: 1 } });
+          },
+        },
+      },
+    });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as {
+      __outcome: string;
+      message: string;
+      code?: string;
+      data: unknown;
+    };
+    expect(body).toEqual({
+      __outcome: 'deny',
+      message: 'no',
+      code: 'FORBIDDEN',
+      data: { x: 1 },
+    });
+  });
+
+  it('omits code from the loader RPC envelope when the deny declared none', async () => {
+    const { deny } = await import('@hono-preact/iso');
+    const app = makeApp({
+      './pages/movies.server.ts': {
+        __moduleKey: 'pages/movies',
+        serverLoaders: {
+          default: async () => {
+            throw deny(403, 'no');
+          },
+        },
+      },
+    });
+    const res = await post(app, {
+      module: 'pages/movies',
+      loader: 'default',
+      location: loc,
+    });
+    const body = (await res.json()) as Record<string, unknown>;
+    expect('code' in body).toBe(false);
+  });
+
   it('maps redirect() thrown from a loader to a redirect outcome envelope', async () => {
     const app = makeApp({
       './pages/movies.server.ts': {

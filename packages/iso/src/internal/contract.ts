@@ -87,9 +87,12 @@ export const FORM_ACTION_FIELD = '__action';
 
 /**
  * Reserved key under `deny.data` carrying normalized validation issues
- * (`ValidationIssue[]`). Consumers: server `page-actions-handler.ts` (writes it
- * on a schema-failure `deny(422)`), iso `get-validation-issues.ts` (reads it).
- * A schema-failure deny is otherwise indistinguishable from an app-level deny;
+ * (`ValidationIssue[]`). Writers: iso `action.ts` (coerceActionPayload) and
+ * iso `loader-schema.ts` (coerceLoaderLocation, coerceLoaderPayload). Readers:
+ * `readValidationIssues` in `internal/validation-issues.ts` (consumed by
+ * `use-action-result.ts`, `action-envelope.ts`, `loader-fetch.ts`). Also read
+ * by public `get-validation-issues.ts` for field-error rendering. A
+ * schema-failure deny is otherwise indistinguishable from an app-level deny;
  * this framework-owned key is the contract that keeps them apart.
  */
 export const VALIDATION_ISSUES_KEY = '__hpValidationIssues';

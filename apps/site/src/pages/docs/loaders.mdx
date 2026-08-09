@@ -237,6 +237,36 @@ This `error` arm handles a reload that fails after the first load succeeded. A c
 
 During SSR, a cold first-load failure with a local `errorFallback` (including a loader that throws `deny(status, message)`) renders that `errorFallback` into the full document at the failure's status, and hydrates without refetching. A loader that fails without a local `errorFallback` responds with the status and a plain-text body.
 
+### Reading a denied loader
+
+On the client-navigation path a `deny()` from a loader or one of its guards
+reaches the boundary as a `LoaderDenyError`, carrying the whole envelope rather
+than only a message:
+
+```tsx
+import { LoaderDenyError } from 'hono-preact';
+
+function errorFallback({ error }) {
+  if (error instanceof LoaderDenyError) {
+    if (error.code === 'UNAUTHORIZED') return <SignInPrompt />;
+    return <Denied status={error.status} message={error.message} />;
+  }
+  return <GenericError />;
+}
+```
+
+| Property  | Type                    | Description                                               |
+| --------- | ----------------------- | --------------------------------------------------------- |
+| `status`  | `number`                | The HTTP status the deny carried. Authoritative.          |
+| `code`    | `DenyCode \| undefined` | The typed reason, when the deny declared one.             |
+| `data`    | `unknown`               | Whatever the guard attached.                              |
+| `message` | `string`                | The deny message (`Error.message`).                       |
+| `name`    | `string`                | Always `'LoaderDenyError'`, for `instanceof`-free checks. |
+
+A deny whose `data` carries validation issues raises the more specific
+[`LoaderValidationError`](/docs/validation) instead, so schema failures keep
+reaching `getValidationIssues()`.
+
 ### `.View(render, { initial, reduce })`: streaming loaders
 
 Streaming loaders use the accumulating form. Each chunk is folded into accumulated state and the render function receives a `StreamState<Acc>` discriminated union:

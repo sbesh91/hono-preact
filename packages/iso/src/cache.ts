@@ -125,6 +125,17 @@ export function captureRequestScope(): <R>(
 
 type CacheEntry<T> = { value: T; locKey: string | null };
 
+let warnedFallback = false;
+function warnFallbackOnce(): void {
+  if (warnedFallback) return;
+  warnedFallback = true;
+  console.warn(
+    'hono-preact: createCache is running without a request store (AsyncLocalStorage absent); ' +
+      'falling back to a module-global store shared across requests. ' +
+      'Cache reads may leak between requests. Ensure the server entry initializes the request store.'
+  );
+}
+
 export function createCache<T>(): LoaderCache<T> {
   const key = Symbol('cache');
   let fallbackStore: CacheEntry<T> | null = null;
@@ -147,6 +158,7 @@ export function createCache<T>(): LoaderCache<T> {
         else reqStore.set(key, entry);
         return;
       }
+      warnFallbackOnce();
     }
     fallbackStore = entry;
   }
