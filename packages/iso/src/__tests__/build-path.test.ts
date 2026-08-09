@@ -83,4 +83,24 @@ describe('buildPath', () => {
       buildPath('/posts/:id', { id: 0 } as unknown as { id: string })
     ).toBe('/posts/0');
   });
+
+  it('rest param accepts a string[] and joins with real separators', () => {
+    expect(buildPath('/docs/:rest*', { rest: ['a', 'b', 'c'] })).toBe(
+      '/docs/a/b/c'
+    );
+  });
+
+  it('rest param encodes each segment individually', () => {
+    expect(buildPath('/docs/:rest*', { rest: ['a b', 'c/d'] })).toBe(
+      '/docs/a%20b/c%2Fd'
+    );
+  });
+
+  it('an empty array drops the segment rather than emitting //', () => {
+    expect(buildPath('/docs/:rest*', { rest: [] })).toBe('/docs');
+  });
+
+  it('a plain string rest param keeps its existing whole-value encoding', () => {
+    expect(buildPath('/docs/:rest*', { rest: 'a/b' })).toBe('/docs/a%2Fb');
+  });
 });

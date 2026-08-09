@@ -18,7 +18,7 @@ import { matchParamSegment } from './param-slots.js';
 // grammar alone.
 export function interpolatePattern(
   pattern: string,
-  values: Record<string, string | undefined>
+  values: Record<string, string | string[] | undefined>
 ): string {
   return pattern
     .split('/')
@@ -30,6 +30,15 @@ export function interpolatePattern(
       // `class M { get id() { return '1' } }`); an own-property check
       // (`Object.hasOwn`) wrongly dropped a getter-supplied value.
       const value = values[m[1]];
+      // A rest param supplied as segments: encode each individually and join
+      // with real separators, so `['a', 'b']` builds `a/b` rather than the
+      // `a%2Cb` a whole-value encode would produce. An empty array is absent,
+      // and drops the segment like `''` does below (no `//` in the output).
+      if (Array.isArray(value)) {
+        return value.length === 0
+          ? null
+          : value.map((part) => encodeURIComponent(part)).join('/');
+      }
       // Drop the segment (avoids emitting `//`) only when the value is truly
       // absent (`null`/`undefined`) or an empty string. A numeric `0` is a
       // real, distinct value and MUST be kept (`encodeURIComponent(0)` ->
