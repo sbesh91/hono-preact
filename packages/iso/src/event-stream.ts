@@ -2,6 +2,23 @@ import type { Topic } from './define-channel.js';
 import type { Serialize } from './internal/serialize.js';
 import { getPubSubBackend } from './internal/pubsub.js';
 
+// Caps the per-subscription FIFO buffer so a stalled consumer (a streaming
+// loader that stops pulling) cannot grow the queue without bound. Not gated
+// on `import.meta.env.DEV`: this module runs on the server, where the
+// overflow signal matters in production too, unlike ws-lifecycle's
+// DEV-only warning, which guards a client-side path.
+const QUEUE_LIMIT = 128;
+let warnedOverflow = false;
+function warnQueueOverflowOnce(): void {
+  if (warnedOverflow) return;
+  warnedOverflow = true;
+  console.warn(
+    `hono-preact: eventStream queue exceeded ${QUEUE_LIMIT} buffered payloads; ` +
+      'dropping the newest payload until the consumer catches up. ' +
+      'A streaming loader should drain the stream continuously.'
+  );
+}
+
 /**
  * Subscribe to a typed channel topic as an async generator of its published
  * payloads. The fine-grained sibling of `liveStream`: where `liveStream`
@@ -33,8 +50,10 @@ import { getPubSubBackend } from './internal/pubsub.js';
  *
  * The subscription is registered eagerly (at call time), so a publish landing
  * before the first pull is buffered, not missed. Payloads queue FIFO while
- * the consumer is busy (unbounded; a streaming loader drains continuously).
- * Teardown is idempotent and wired to BOTH the abort listener and the
+ * the consumer is busy, capped at `QUEUE_LIMIT` (128): once full, further
+ * publishes are dropped (newest dropped, oldest kept) and a one-time warning
+ * is logged, so a stalled consumer cannot grow the queue unbounded. Teardown
+ * is idempotent and wired to BOTH the abort listener and the
  * generator's `finally`, so the subscription is removed when `signal` aborts
  * even if the iterable was never pulled. A backend-reported subscription drop
  * (e.g. a CF worker->DO topic socket dying) throws out of the generator so
@@ -58,7 +77,11 @@ export function eventStream<P>(
       // it is a JSON round-trip over the Durable Object socket). `Topic<P>`
       // binds the payload type at the publish site, so this is the sanctioned
       // untrusted-wire boundary where the type re-enters.
-      queue.push(message as Serialize<P>);
+      if (queue.length < QUEUE_LIMIT) {
+        queue.push(message as Serialize<P>);
+      } else {
+        warnQueueOverflowOnce();
+      }
       wake?.();
       wake = null;
     },

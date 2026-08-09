@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createCache, runRequestScope } from '../cache.js';
 import { env } from '../is-browser.js';
 
@@ -99,5 +99,24 @@ describe('createCache request-scoped storage on the server', () => {
     const cache = createCache<{ val: number }>();
     cache.set({ val: 7 });
     expect(cache.get()).toEqual({ val: 7 });
+  });
+
+  it('warns exactly once when the server-side ALS fallback engages (no request store)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const previousEnv = env.current;
+    env.current = 'server';
+    try {
+      const cache = createCache<{ val: number }>();
+      cache.set({ val: 1 });
+      cache.set({ val: 2 });
+      expect(cache.get()).toEqual({ val: 2 });
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain(
+        'AsyncLocalStorage absent'
+      );
+    } finally {
+      env.current = previousEnv;
+      warnSpy.mockRestore();
+    }
   });
 });
