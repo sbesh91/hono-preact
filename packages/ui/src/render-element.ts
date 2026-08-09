@@ -115,9 +115,12 @@ function isDisableableElement(
 }
 
 function isFocusable(el: HTMLElement): boolean {
-  // An explicit tabindex attribute always wins: it puts (or, at -1, keeps)
-  // the element in a programmatically focusable state regardless of tag.
-  if (el.hasAttribute('tabindex')) return el.tabIndex >= 0;
+  // An explicit tabindex attribute always wins: an author-set tabindex, even
+  // -1, declares focusability intent regardless of tag. Roving-tabindex
+  // parts (e.g. Menu.Item) set tabIndex={-1} while unhighlighted, and menu
+  // popup/popover/combobox parts use tabindex="-1" intentionally while
+  // remaining focusable via script, so -1 must not count as non-focusable.
+  if (el.hasAttribute('tabindex')) return true;
   if (!FOCUSABLE_TAG.test(el.tagName)) return false;
   // An <a> is only focusable when it is a real hyperlink: without an href
   // it renders but never enters the tab order.

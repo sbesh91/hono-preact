@@ -216,5 +216,16 @@ describe('renderElement', () => {
       render(<TriggerWidget render={<input disabled />} />);
       expect(warn).toHaveBeenCalledTimes(1);
     });
+
+    it('does not warn for a render-override element with tabIndex={-1} (roving tabindex)', () => {
+      // Menu.Item and other roving-tabindex parts set tabIndex={-1} while
+      // unhighlighted, and menu popup/popover/combobox parts use
+      // tabindex="-1" intentionally while remaining focusable via script.
+      // An author-set tabindex, even -1, declares focusability intent and
+      // must not trip the dev-warn.
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TriggerWidget render={<span tabIndex={-1} />} />);
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 });
