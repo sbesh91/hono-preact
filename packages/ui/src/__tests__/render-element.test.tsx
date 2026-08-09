@@ -118,6 +118,32 @@ describe('renderElement', () => {
     expect(calls).toEqual(['user', 'part']);
   });
 
+  it('does not compose a colliding non-handler function prop; the framework function wins outright', () => {
+    const frameworkFormat = (): string => 'framework';
+    const userFormat = (): string => 'user';
+    interface FormattableProps {
+      format?: () => string;
+    }
+    const vnode = renderElement<{ active: boolean }>({
+      render: h<FormattableProps>('button', { format: userFormat }),
+      defaultTag: 'button',
+      props: { format: frameworkFormat },
+      state: { active: false },
+      children: 'label',
+    });
+    const props: unknown = vnode.props;
+    const hasFormat = (p: unknown): p is FormattableProps =>
+      typeof p === 'object' &&
+      p !== null &&
+      'format' in p &&
+      typeof p.format === 'function';
+    expect(hasFormat(props)).toBe(true);
+    // A key that does not match the /^on[A-Z]/ handler convention must not be
+    // composed: the framework's own function replaces the user's outright,
+    // not a wrapper that calls both.
+    if (hasFormat(props)) expect(props.format).toBe(frameworkFormat);
+  });
+
   it('still lets framework win for non-function prop collisions', () => {
     // Widget's framework props set data-fw='yes'; the user side never
     // provides that key here, so use `type` (framework sets 'button') to
@@ -160,6 +186,34 @@ describe('renderElement', () => {
     it('still warns for a render-override span with a framework onClick', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<TriggerWidget render={<span />} />);
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('warns for an <a> without an href (not focusable)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { container } = render(<TriggerWidget render={<a />} />);
+      expect(container.querySelector('a')).toBeTruthy();
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not warn for an <a> with an href (focusable)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TriggerWidget render={<a href="/x" />} />);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('warns for a disabled button (not focusable)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { container } = render(
+        <TriggerWidget render={<button disabled />} />
+      );
+      expect(container.querySelector('button')).toBeTruthy();
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('warns for a disabled input (not focusable)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TriggerWidget render={<input disabled />} />);
       expect(warn).toHaveBeenCalledTimes(1);
     });
   });

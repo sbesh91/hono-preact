@@ -32,6 +32,7 @@ export type {
   RegisteredSubtrees,
 } from './internal/typed-routes.js';
 export type { Serialize } from './internal/serialize.js';
+export type { DenyRecord } from './internal/deny-record.js';
 
 // Inference helpers over action/loader refs.
 export type {

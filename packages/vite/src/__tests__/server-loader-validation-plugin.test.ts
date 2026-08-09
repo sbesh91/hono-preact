@@ -297,4 +297,25 @@ describe('serverLoaderValidationPlugin', () => {
       expect(error).toContain('may not use a default export');
     });
   });
+
+  describe('erased declare-only exports', () => {
+    it('accepts `export declare function f(): void` (erased at runtime)', () => {
+      const code = [
+        'export const serverLoaders = {};',
+        'export declare function f(): void;',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+
+    it('accepts overload signatures (TSDeclareFunction with a real implementation)', () => {
+      const code = [
+        'export function serverLoaders(x: string): void;',
+        'export function serverLoaders(x: number): void;',
+        'export function serverLoaders(x: any): void {}',
+      ].join('\n');
+      const { error } = transform(code, 'movies.server.ts');
+      expect(error).toBeNull();
+    });
+  });
 });

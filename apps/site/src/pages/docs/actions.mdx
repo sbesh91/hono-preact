@@ -408,9 +408,23 @@ type MutateResult<TResult, TDenyData> =
 
 #### The deny arm
 
-`deny` is a `DenyRecord`: `status`, `message`, an optional `code` from the
-[`DenyCode`](/docs/actions#deny-codes) vocabulary, and the optional `data`
-the guard attached.
+`deny` is a `DenyRecord`:
+
+```ts
+type DenyRecord<TData> = {
+  status: number;
+  message: string;
+  code?: DenyCode;
+  data?: TData;
+  issues?: ValidationIssue[];
+};
+```
+
+`status` is authoritative and `code` is the optional typed decoration from the
+[`DenyCode`](/docs/actions#deny-codes) vocabulary. `data` is whatever the
+guard attached, and `issues` is the normalized field issues of a framework
+schema-validation failure; a guard deny populates `data` and leaves `issues`
+unset, and a validation deny does the reverse.
 
 `data` is typed. Declare guards with the scope-argument form of
 `defineServerMiddleware` and the deny types of an action's whole `use` array are
@@ -441,13 +455,18 @@ export const addMovie = defineAction(
 The type-argument spelling (`defineServerMiddleware<'action'>(fn)`) cannot infer
 a deny type: naming the scope as a type argument tells TypeScript to stop
 inferring the rest. Those guards contribute `unknown`, and so does an action
-with no `use` array. This applies just as much to a guard registered at the
-route or app level (an entry composed into the chain above the action) as to
-one listed directly in the action's own `use` array: what determines whether
-`TDenyData` is inferred is which spelling of `defineServerMiddleware` wrote
-the guard, not where in the chain it runs. A route- or app-level guard
-written with the argument form unions in cleanly; one written with the type
-argument form contributes `unknown` at every call site that uses it.
+with no `use` array.
+
+`TDenyData` is inferred only from the guards listed in the action's own `use`
+array. A guard registered at the route or app level is composed into the
+chain at runtime, not read by `DenyOf`, so it is invisible to this inference
+no matter how it's written: neither spelling of `defineServerMiddleware` at
+the route or app level changes the action's inferred deny type. If a
+route- or app-level guard denies a request that reaches an action with its
+own typed guards, that deny still arrives at the client typed as the
+action's own deny union, which it is not actually guaranteed to match. Treat
+`deny.data` as trustworthy only for the codes the action's own `use` array
+produces; narrow or check the shape before trusting it for any other code.
 
 #### Handling all three arms
 

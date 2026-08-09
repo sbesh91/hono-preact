@@ -278,7 +278,9 @@ const rateLimit = defineServerMiddleware('action', async (ctx, next) => {
 });
 ```
 
-The type-argument spelling (`defineServerMiddleware<'action'>(...)`) cannot do this: naming one type argument tells TypeScript to stop inferring the rest, so the deny payload stays `unknown`. Both spellings are supported; reach for the argument form when a caller should be able to read the deny data with a type. This holds regardless of where the guard is registered, in an action's own `use` array or composed in from a route- or app-level chain: it's the spelling that determines whether `TDenyData` is inferred, not the guard's position.
+The type-argument spelling (`defineServerMiddleware<'action'>(...)`) cannot do this: naming one type argument tells TypeScript to stop inferring the rest, so the deny payload stays `unknown`. Both spellings are supported; reach for the argument form when a caller should be able to read the deny data with a type.
+
+This inference only ever looks at the guards listed in the action's own `use` array. A guard registered at the route or app level is composed into the dispatch chain at runtime, not read by the type-level `DenyOf` computation, so it is invisible to `TDenyData` regardless of which spelling wrote it. If such a guard denies a request bound for an action with its own typed guards, the deny still arrives at the client typed as that action's deny union, which it is not actually guaranteed to match; callers should only treat `deny.data` as trustworthy for codes their own guards produce, and should narrow or check the shape before trusting anything else.
 
 The scope argument in the value-passing form (`'action'` in `defineServerMiddleware('action', fn)`) is type-level only at runtime: the dispatcher already knows the scope and supplies the narrowed `ctx`, so the string exists purely to give TypeScript something to infer against, not to make a runtime decision.
 

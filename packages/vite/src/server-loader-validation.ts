@@ -64,6 +64,14 @@ export function serverLoaderValidationPlugin(): Plugin {
                 // some parser configurations; erased at runtime, nothing to
                 // whitelist.
                 break;
+              case 'TSDeclareFunction':
+                // An ambient `declare function` or an overload signature.
+                // Neither exists at runtime: the ambient form is erased
+                // entirely, and an overload signature has no body of its own,
+                // it is a type annotation on the implementation declared
+                // right after it. That implementation is a real
+                // FunctionDeclaration and gets whitelisted on its own.
+                break;
               default:
                 errors.push(
                   `${id}: unsupported export declaration (${decl.type}) in a .server file. ` +

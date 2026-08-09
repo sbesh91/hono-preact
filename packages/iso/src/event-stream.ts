@@ -9,13 +9,13 @@ import { getPubSubBackend } from './internal/pubsub.js';
 // DEV-only warning, which guards a client-side path.
 const QUEUE_LIMIT = 128;
 let warnedOverflow = false;
-function warnQueueOverflowOnce(): void {
+function warnQueueOverflowOnce(topic: string): void {
   if (warnedOverflow) return;
   warnedOverflow = true;
   console.warn(
-    `hono-preact: eventStream queue exceeded ${QUEUE_LIMIT} buffered payloads; ` +
-      'dropping the newest payload until the consumer catches up. ' +
-      'A streaming loader should drain the stream continuously.'
+    `hono-preact: eventStream queue for topic '${topic}' exceeded ${QUEUE_LIMIT} ` +
+      'buffered payloads; dropping the newest payload until the consumer ' +
+      'catches up. A streaming loader should drain the stream continuously.'
   );
 }
 
@@ -80,7 +80,7 @@ export function eventStream<P>(
       if (queue.length < QUEUE_LIMIT) {
         queue.push(message as Serialize<P>);
       } else {
-        warnQueueOverflowOnce();
+        warnQueueOverflowOnce(topic);
       }
       wake?.();
       wake = null;

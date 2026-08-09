@@ -54,10 +54,17 @@ function isCallable(value: unknown): value is (...args: unknown[]) => unknown {
   return typeof value === 'function';
 }
 
+// Event-handler naming convention (onClick, onKeyDown, onFocus, ...). Only
+// keys matching this get composed on a function collision; every other
+// colliding function prop (e.g. a `format` render-prop callback) is not a
+// handler pair the framework is chaining, so composing it would call a
+// function the framework never intended to invoke at all.
+const HANDLER_KEY = /^on[A-Z]/;
+
 // Framework props win over user props, except `class`/`className` (joined),
-// `ref` (merged so both the user ref and our ref fire), and function props
-// that collide on both sides (composed user-first instead of the framework
-// handler silently replacing the user's).
+// `ref` (merged so both the user ref and our ref fire), and handler-named
+// function props that collide on both sides (composed user-first instead of
+// the framework handler silently replacing the user's).
 function mergeProps(user: Props, framework: Props): Props {
   const out: Props = { ...user };
   for (const key of Object.keys(framework)) {
@@ -74,7 +81,7 @@ function mergeProps(user: Props, framework: Props): Props {
     } else {
       const userVal = user[key];
       const fwVal = framework[key];
-      if (isCallable(userVal) && isCallable(fwVal)) {
+      if (HANDLER_KEY.test(key) && isCallable(userVal) && isCallable(fwVal)) {
         out[key] = composeHandlers(userVal, fwVal);
       } else {
         out[key] = fwVal;
@@ -99,13 +106,25 @@ function isInteractiveTrigger(props: Props): boolean {
 }
 
 const FOCUSABLE_TAG = /^(button|a|input|select|textarea|summary)$/i;
+const DISABLEABLE_TAG = /^(button|input|select|textarea)$/i;
+
+function isDisableableElement(
+  el: HTMLElement
+): el is HTMLElement & { disabled: boolean } {
+  return DISABLEABLE_TAG.test(el.tagName);
+}
 
 function isFocusable(el: HTMLElement): boolean {
-  return (
-    FOCUSABLE_TAG.test(el.tagName) ||
-    el.tabIndex >= 0 ||
-    el.hasAttribute('tabindex')
-  );
+  // An explicit tabindex attribute always wins: it puts (or, at -1, keeps)
+  // the element in a programmatically focusable state regardless of tag.
+  if (el.hasAttribute('tabindex')) return el.tabIndex >= 0;
+  if (!FOCUSABLE_TAG.test(el.tagName)) return false;
+  // An <a> is only focusable when it is a real hyperlink: without an href
+  // it renders but never enters the tab order.
+  if (/^a$/i.test(el.tagName) && !el.hasAttribute('href')) return false;
+  // A disabled form control is removed from the tab order entirely.
+  if (isDisableableElement(el) && el.disabled) return false;
+  return true;
 }
 
 const warnedTriggerElements = new WeakSet<HTMLElement>();
