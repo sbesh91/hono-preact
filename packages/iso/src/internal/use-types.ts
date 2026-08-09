@@ -68,16 +68,18 @@ export type ActionUse<TChunk, TResult, Streaming extends boolean> = Use<
  * `defineAction` can capture the literal tuple (and therefore each element's
  * own `TDeny`) before it widens to the erasing array element type.
  *
- * The `any` is in a CONSTRAINT position, never a value cast. It has to admit
- * both a tuple of narrowly-typed guards (`ServerMiddleware<'action', {loginUrl:
- * string}>`, ...) and a pre-typed, TDeny-erased `ServerMiddleware<'action'>`
- * array from an existing call site. `unknown` there would reject the narrow
- * elements; `any` is the escape hatch that means "any TDeny is fine at the
- * boundary, let inference decide what U actually is".
+ * `unknown` suffices in the TDeny slot here because TDeny sits only
+ * covariantly in `ServerMiddleware` (the `fn` return's `DenyOutcome`), so a
+ * narrowly-typed guard is assignable to the `unknown`-typed element and the
+ * `const U` capture still sees each element's own TDeny. Contrast the two
+ * `any`s that remain in this file: `ActionUseElements` needs them for the
+ * observer's TChunk/TResult (contravariant), and `DenyOfElement` needs one in
+ * the pattern's scope position (contravariant ctx); `unknown` breaks both,
+ * with type-test failures to prove it.
  */
 export type ActionUseElement<TChunk = unknown, TResult = unknown> =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ServerMiddleware<'action', any> | StreamObserver<TChunk, TResult>;
+  | ServerMiddleware<'action', unknown>
+  | StreamObserver<TChunk, TResult>;
 
 /**
  * The CONSTRAINT for `defineAction`'s `const U` parameter. Deliberately free of
