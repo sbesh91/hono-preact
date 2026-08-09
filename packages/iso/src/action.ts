@@ -290,9 +290,10 @@ export type UseActionOptions<
  * - Failed: `{ ok: false, kind: 'error', error }`. Everything else: a thrown
  *   handler, a transport failure, a timeout, a malformed envelope.
  *
- * Both failure arms still write the hook's `error` state and call `onError`
- * with an `Error`, so existing UI that renders `error` is unchanged; the
- * structure is additive to the RETURN value only.
+ * Both failure arms write the hook's `error` state; `onError` fires for both
+ * except the client-side schema pre-validation deny, which short-circuits before
+ * any request. Existing UI that renders `error` is unchanged; the structure is
+ * additive to the RETURN value only.
  */
 export type MutateResult<TResult, TDenyData = unknown> =
   | { ok: true; data: Serialize<TResult> | undefined }
