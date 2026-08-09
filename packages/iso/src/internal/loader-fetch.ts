@@ -4,6 +4,8 @@ import { LOADERS_RPC_PATH } from './contract.js';
 import { toError } from './to-error.js';
 import { readValidationIssues } from '../validate.js';
 import { LoaderValidationError } from '../loader-validation-error.js';
+import { LoaderDenyError } from '../loader-deny-error.js';
+import { isDenyCode } from '../outcomes.js';
 
 export type LoaderFetchCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -106,7 +108,9 @@ function isEventStream(res: Response): boolean {
  * a generic status message with remediation. A `deny` whose `data` carries the
  * reserved validation-issues key becomes a `LoaderValidationError` so the issues
  * survive to the error boundary (`getValidationIssues` parity with actions);
- * any other deny stays a plain `Error`.
+ * any other deny becomes a `LoaderDenyError` carrying status / code / data, so
+ * an `errorFallback` can switch on the typed code the way an action consumer
+ * can, instead of parsing the message.
  */
 async function loaderHttpError(res: Response): Promise<Error> {
   const body = (await res.json().catch(() => ({}))) as {
@@ -115,6 +119,7 @@ async function loaderHttpError(res: Response): Promise<Error> {
     message?: string;
     timeoutMs?: number;
     data?: unknown;
+    code?: unknown;
   };
   if (body.__outcome === 'timeout' && typeof body.timeoutMs === 'number') {
     return new TimeoutError(body.timeoutMs);
@@ -131,7 +136,11 @@ async function loaderHttpError(res: Response): Promise<Error> {
     // so an error boundary can render field errors via getValidationIssues().
     const issues = readValidationIssues(body.data);
     if (issues) return new LoaderValidationError(res.status, message, issues);
-    return new Error(message);
+    // Membership in the DenyCode vocabulary IS the narrowing, so an envelope
+    // carrying an unrecognized `code` degrades to `undefined` rather than
+    // smuggling an arbitrary string through as a typed code.
+    const code = isDenyCode(body.code) ? body.code : undefined;
+    return new LoaderDenyError(res.status, message, { code, data: body.data });
   }
   return new Error(
     body.error ??

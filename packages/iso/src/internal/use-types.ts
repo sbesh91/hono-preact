@@ -62,3 +62,71 @@ export type ActionUse<TChunk, TResult, Streaming extends boolean> = Use<
   TChunk,
   TResult
 >;
+
+/**
+ * One entry of an action's `use`, spelled so a `const` type parameter on
+ * `defineAction` can capture the literal tuple (and therefore each element's
+ * own `TDeny`) before it widens to the erasing array element type.
+ *
+ * The `any` is in a CONSTRAINT position, never a value cast. It has to admit
+ * both a tuple of narrowly-typed guards (`ServerMiddleware<'action', {loginUrl:
+ * string}>`, ...) and a pre-typed, TDeny-erased `ServerMiddleware<'action'>`
+ * array from an existing call site. `unknown` there would reject the narrow
+ * elements; `any` is the escape hatch that means "any TDeny is fine at the
+ * boundary, let inference decide what U actually is".
+ */
+export type ActionUseElement<TChunk = unknown, TResult = unknown> =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ServerMiddleware<'action', any> | StreamObserver<TChunk, TResult>;
+
+/**
+ * The CONSTRAINT for `defineAction`'s `const U` parameter. Deliberately free of
+ * `TChunk` / `TResult`: a constraint that mentioned them would be checked while
+ * they are still unfixed, and TypeScript would settle them at their defaults
+ * before `fn` got a chance to infer, silently collapsing a streaming action's
+ * chunk type to `never`. `use`'s declared type intersects this tuple capture
+ * with the ordinary `ActionUse<TChunk, TResult, boolean>`, so the observer
+ * arms are still checked against the action's own chunk and result types.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ActionUseElements = ReadonlyArray<ActionUseElement<any, any>>;
+
+// Per-element extraction in its OWN single-parameter alias, which is the whole
+// trick. Instantiating `DenyOfElement<U[K]>` passes a fresh type argument, and
+// `X extends ...` inside this body IS a naked type-parameter reference, so it
+// DISTRIBUTES over `U[K]`'s members. Inlining this conditional in the mapped
+// type below does not distribute (`U[K]` is an indexed access, not a naked
+// reference): it would test the whole element union against the middleware
+// pattern in one shot, fail on the observer arm, and collapse the entire
+// result to `never`.
+//
+// The `any` in the pattern's scope position is required too. `ServerMiddleware<
+// Scope, infer D>` cannot match a single-scope middleware: `fn` holds a
+// function type, so matching requires the element's `fn` (one specific ctx) to
+// accept the pattern's `fn` parameter (the union of all three ctx shapes) at a
+// contravariant position, which no single-scope middleware can. `ServerCtx<any>`
+// collapses to `any`, so the ctx comparison stops gating the match and `D`
+// unifies from the TDeny position as intended.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DenyOfElement<X> =
+  X extends ServerMiddleware<any, infer D> ? DemoteAny<D> : never;
+
+// `any` in a TDeny position is never something a user wrote: it comes from the
+// erased element constraint (`ServerMiddleware<'action', any>`), which is what
+// `U` falls back to when no `use` array is present to infer from. Demote it to
+// `unknown` so the escape hatch stays inside the constraint and an `any` can
+// never reach a public type, where it would disable checking on `deny.data`.
+// `0 extends 1 & D` is only ever true for `any`.
+type DemoteAny<D> = 0 extends 1 & D ? unknown : D;
+
+/**
+ * The union of the deny-data types across a `use` array. Stream observers (and
+ * anything else that is not a server middleware) fall out to `never` and
+ * vanish from the union. A pre-typed, non-literal array degrades to `unknown`
+ * rather than erroring: for a genuine array type `keyof U` is an index
+ * signature, so every `U[K]` is the whole element union, whose middleware arm
+ * carries the defaulted `unknown` TDeny.
+ */
+export type DenyOf<U extends ReadonlyArray<unknown>> = {
+  [K in keyof U]: DenyOfElement<U[K]>;
+}[number];

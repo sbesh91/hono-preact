@@ -67,6 +67,12 @@ export function translateOutcomeForLoader(
       {
         __outcome: 'deny',
         message: outcome.message,
+        // `code` rides the envelope for the same reason the action envelope
+        // carries it: it is the typed reason an `errorFallback` switches on,
+        // and reconstructing it from `status` alone is lossy (403 could be
+        // FORBIDDEN or a bespoke deny). Omitted when the deny declared none,
+        // so the wire shape does not grow a `code: undefined` key.
+        ...(outcome.code !== undefined ? { code: outcome.code } : {}),
         ...(outcome.data !== undefined ? { data: outcome.data } : {}),
       },
       outcome.status

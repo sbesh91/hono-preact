@@ -35,6 +35,17 @@ export const DENY_CODE_STATUS: Record<DenyCode, ErrorStatusCode> = {
   INTERNAL: 500,
 };
 
+// Derived from the canonical code->status map so the predicate's accepted set
+// cannot drift from the `DenyCode` union (single source of truth). Both wire
+// decoders -- the action envelope and the loader RPC -- narrow through this
+// rather than casting a decoded string.
+const DENY_CODES = new Set<string>(Object.keys(DENY_CODE_STATUS));
+
+/** Type predicate: is this decoded value one of the known {@link DenyCode}s? */
+export function isDenyCode(value: unknown): value is DenyCode {
+  return typeof value === 'string' && DENY_CODES.has(value);
+}
+
 export type RedirectOutcome = {
   __outcome: 'redirect';
   to: string;
@@ -42,12 +53,21 @@ export type RedirectOutcome = {
   headers: Record<string, string> | undefined;
 };
 
-export type DenyOutcome = {
+/**
+ * `TData` is the shape a guard attached to `data`. `deny()` infers it from the
+ * call, so `defineServerMiddleware` can carry it on `ServerMiddleware<S, TDeny>`
+ * and `defineAction` can union it across a `use` array into the typed deny arm
+ * `mutate` resolves with. It defaults to `unknown`, which is what every
+ * type-erased channel (the `Outcome` union, the wire envelope, the loader RPC)
+ * sees; a data-free `deny()` infers `never`, so a middleware that does not
+ * attach data contributes nothing to that union instead of widening it.
+ */
+export type DenyOutcome<TData = unknown> = {
   __outcome: 'deny';
   status: ErrorStatusCode;
   message: string;
   headers: Record<string, string> | undefined;
-  data?: unknown;
+  data?: TData;
   code?: DenyCode;
 };
 
@@ -92,35 +112,39 @@ export function redirect(input: RedirectInput): RedirectOutcome {
   };
 }
 
-type DenyInput = {
+type DenyInput<TData = never> = {
   status?: ErrorStatusCode;
   code?: DenyCode;
   message?: string;
   headers?: Record<string, string>;
-  data?: unknown;
+  data?: TData;
 };
 
-type DenyOptions = {
+type DenyOptions<TData = never> = {
   headers?: Record<string, string>;
-  data?: unknown;
+  data?: TData;
 };
 
-export function deny(
+// Each overload is generic in the deny payload so the call site's `data`
+// literal IS the inferred type. `TData` defaults to `never` rather than
+// `unknown` so a data-free call contributes nothing to a union of deny types
+// (see `DenyOf`); `unknown` there would absorb every sibling guard's shape.
+export function deny<TData = never>(
   status: ErrorStatusCode,
   message?: string,
-  opts?: DenyOptions
-): DenyOutcome;
-export function deny(
+  opts?: DenyOptions<TData>
+): DenyOutcome<TData>;
+export function deny<TData = never>(
   code: DenyCode,
   message?: string,
-  opts?: DenyOptions
-): DenyOutcome;
-export function deny(spec: DenyInput): DenyOutcome;
+  opts?: DenyOptions<TData>
+): DenyOutcome<TData>;
+export function deny<TData = never>(spec: DenyInput<TData>): DenyOutcome<TData>;
 export function deny(
-  a: ErrorStatusCode | DenyCode | DenyInput,
+  a: ErrorStatusCode | DenyCode | DenyInput<unknown>,
   b?: string,
-  c?: DenyOptions
-): DenyOutcome {
+  c?: DenyOptions<unknown>
+): DenyOutcome<unknown> {
   // `JSON.stringify` drops `undefined` properties, so a deny outcome with no
   // message would arrive at the client without a `message` field and the
   // client decoders would fall back to a generic "Loader/Action failed with

@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/preact';
 import { defineAction, TimeoutError, useAction } from '../action.js';
+import { errorArm } from './mutate-arm-helpers.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -27,13 +28,11 @@ describe('useAction timeout handling', () => {
     await act(async () => {
       mutated = await result.current.mutate({});
     });
-    expect(mutated!.ok).toBe(false);
-    if (!mutated!.ok) {
-      expect(mutated!.error).toBeInstanceOf(TimeoutError);
-      if (mutated!.error instanceof TimeoutError) {
-        expect(mutated!.error.kind).toBe('timeout');
-        expect(mutated!.error.timeoutMs).toBe(5000);
-      }
+    const err = errorArm(mutated!);
+    expect(err).toBeInstanceOf(TimeoutError);
+    if (err instanceof TimeoutError) {
+      expect(err.kind).toBe('timeout');
+      expect(err.timeoutMs).toBe(5000);
     }
   });
 
@@ -55,13 +54,11 @@ describe('useAction timeout handling', () => {
     await act(async () => {
       mutated = await result.current.mutate({});
     });
-    expect(mutated!.ok).toBe(false);
-    if (!mutated!.ok) {
-      expect(mutated!.error).toBeInstanceOf(TimeoutError);
-      if (mutated!.error instanceof TimeoutError) {
-        expect(mutated!.error.kind).toBe('timeout');
-        expect(mutated!.error.timeoutMs).toBe(75);
-      }
+    const err = errorArm(mutated!);
+    expect(err).toBeInstanceOf(TimeoutError);
+    if (err instanceof TimeoutError) {
+      expect(err.kind).toBe('timeout');
+      expect(err.timeoutMs).toBe(75);
     }
   });
 });

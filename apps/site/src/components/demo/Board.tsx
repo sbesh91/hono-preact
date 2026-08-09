@@ -15,6 +15,7 @@ import {
   serverLoaders,
 } from '../../pages/demo/project-board.server.js';
 import { useBoardDrag, type ColumnRect } from '../../hooks/use-board-drag.js';
+import { mutateFailureMessage } from './mutate-failure-message.js';
 import Column from './Column.js';
 
 type Props = { tasks: Task[]; projectSlug: string; users: User[] };
@@ -70,14 +71,14 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
             label: 'Undo',
             onClick: () => {
               void restore.mutate({ taskId }).then((rr) => {
-                if (!rr.ok) toast.error(rr.error.message);
+                if (!rr.ok) toast.error(mutateFailureMessage(rr));
               });
             },
           },
         });
       } else {
         handle.revert();
-        toast.error(r.error.message);
+        toast.error(mutateFailureMessage(r));
       }
     });
   };

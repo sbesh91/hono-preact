@@ -111,9 +111,7 @@ describe('createCache request-scoped storage on the server', () => {
       cache.set({ val: 2 });
       expect(cache.get()).toEqual({ val: 2 });
       expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(warnSpy.mock.calls[0][0]).toContain(
-        'AsyncLocalStorage absent'
-      );
+      expect(warnSpy.mock.calls[0][0]).toContain('AsyncLocalStorage absent');
     } finally {
       env.current = previousEnv;
       warnSpy.mockRestore();

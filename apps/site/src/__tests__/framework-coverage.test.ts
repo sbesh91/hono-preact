@@ -54,6 +54,8 @@ const ALLOWLIST: Record<string, string> = {
     'internal status-code lookup behind deny(); the demo calls deny() directly and never inspects the code table',
   LoaderValidationError:
     'thrown internally by the framework on failed loader validation; the demo relies on the framework surfacing it as a 400 response and never catches or constructs it directly',
+  LoaderDenyError:
+    'thrown internally by the framework when a loader or its guard denies; the demo relies on the framework surfacing the status and never catches or constructs it directly',
   Page: 'manual escape-hatch component; every demo page uses definePage() instead',
   defineRoom:
     'route-independent room variant; the demo covers serverRoute(r).room (cursors-demo.server.ts)',

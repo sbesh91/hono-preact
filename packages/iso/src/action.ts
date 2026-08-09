@@ -3,13 +3,21 @@ import type { Context } from 'hono';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { AnyLoaderRef } from './define-loader.js';
 import { useInvalidate } from './use-invalidate.js';
-import type { ActionUse } from './internal/use-types.js';
+import type {
+  ActionUse,
+  ActionUseElements,
+  DenyOf,
+} from './internal/use-types.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
 import {
   setLastActionResult,
   type StoredActionResult,
 } from './internal/action-result-store.js';
-import { decodeActionResponse } from './internal/action-envelope.js';
+import {
+  decodeActionResponse,
+  toDenyRecord,
+} from './internal/action-envelope.js';
+import type { DenyRecord } from './internal/deny-record.js';
 import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import { validateTimeoutMs, timeoutMessage } from './internal/timeout.js';
 import type { Serialize } from './internal/serialize.js';
@@ -26,13 +34,18 @@ import { toError } from './internal/to-error.js';
 // the base chunk.
 import type { ValidationResult } from './validate.js';
 
-export type ActionRef<TPayload, TResult, TChunk = never> = {
+export type ActionRef<
+  TPayload,
+  TResult,
+  TChunk = never,
+  TDenyData = unknown,
+> = {
   readonly __module: string;
   readonly __action: string;
   readonly __phantom?: readonly [TPayload, TResult, TChunk];
   useAction<TSnapshot = unknown>(
     options?: UseActionOptions<TPayload, TResult, TChunk, TSnapshot>
-  ): UseActionResult<TPayload, TResult>;
+  ): UseActionResult<TPayload, TResult, TDenyData>;
 };
 
 export type ActionCtx = {
@@ -49,14 +62,18 @@ export type ActionFn<TPayload, TResult, TChunk = never> =
       payload: TPayload
     ) => AsyncGenerator<TChunk, TResult, unknown>);
 
-export type DefineActionOptions<TChunk = never, TResult = unknown> = {
+export type DefineActionOptions<
+  TChunk = never,
+  TResult = unknown,
+  U extends ActionUseElements = ActionUseElements,
+> = {
   /**
    * Per-action middleware and (for streaming actions) stream observers.
    * Attached to the function as a non-enumerable property; the
    * page-actions-handler reads it through the typed `ActionEntry` map built at
    * module-load time (`packages/server/src/page-actions-handler.ts`).
    */
-  use?: ActionUse<TChunk, TResult, boolean>;
+  use?: U & ActionUse<TChunk, TResult, boolean>;
   /**
    * Per-action timeout in milliseconds. When omitted, the handler applies
    * its configured default (30s). Pass `false` to disable the timeout for
@@ -100,18 +117,29 @@ export class TimeoutError extends Error {
   }
 }
 
+// `const U` on each overload is what makes the deny inference reach the caller:
+// it captures the `use` array as a literal TUPLE, so each guard keeps its own
+// `TDeny` instead of widening to the array's element type before `DenyOf` can
+// read it. `U`'s default is the erased array shape, so an action with no `use`
+// (or one holding a pre-typed array) degrades to `unknown` rather than `never`.
 export function defineAction<
   TInput extends StandardSchemaV1,
   TResult,
   TChunk = never,
+  const U extends ActionUseElements = ActionUseElements,
 >(
   fn: ActionFn<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>,
-  opts: DefineActionOptions<TChunk, TResult> & { input: TInput }
-): ActionRef<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk>;
-export function defineAction<TPayload, TResult, TChunk = never>(
+  opts: DefineActionOptions<TChunk, TResult, U> & { input: TInput }
+): ActionRef<StandardSchemaV1.InferOutput<TInput>, TResult, TChunk, DenyOf<U>>;
+export function defineAction<
+  TPayload,
+  TResult,
+  TChunk = never,
+  const U extends ActionUseElements = ActionUseElements,
+>(
   fn: ActionFn<TPayload, TResult, TChunk>,
-  opts?: DefineActionOptions<TChunk, TResult>
-): ActionRef<TPayload, TResult, TChunk>;
+  opts?: DefineActionOptions<TChunk, TResult, U>
+): ActionRef<TPayload, TResult, TChunk, DenyOf<U>>;
 export function defineAction(
   // `unknown` widens the impl to accept all overloads; the permissive types are
   // bounded here and do not escape to callers (each overload narrows them).
@@ -254,18 +282,28 @@ export type UseActionOptions<
  * - Success: `{ ok: true, data }`. `data` is `undefined` for streaming
  *   actions that close without emitting a `result` SSE event (the type
  *   reflects this honestly: callers must narrow before using `data`).
- * - Failure: `{ ok: false, error }`. The same `Error` instance is also
- *   written to the hook's `error` state and passed to `onError`.
+ * - Denied: `{ ok: false, kind: 'deny', deny }`. A guard (or a schema) refused
+ *   the request. `deny` is the structured envelope -- status, message, the
+ *   optional typed `code`, and `data` typed as the action's inferred deny
+ *   type -- so a caller can branch on the REASON without re-parsing a message
+ *   string. This is the parity the loader path gets from `LoaderDenyError`.
+ * - Failed: `{ ok: false, kind: 'error', error }`. Everything else: a thrown
+ *   handler, a transport failure, a timeout, a malformed envelope.
+ *
+ * Both failure arms still write the hook's `error` state and call `onError`
+ * with an `Error`, so existing UI that renders `error` is unchanged; the
+ * structure is additive to the RETURN value only.
  */
-export type MutateResult<TResult> =
+export type MutateResult<TResult, TDenyData = unknown> =
   | { ok: true; data: Serialize<TResult> | undefined }
-  | { ok: false; error: Error };
+  | { ok: false; kind: 'deny'; deny: DenyRecord<TDenyData> }
+  | { ok: false; kind: 'error'; error: Error };
 
-export type UseActionResult<TPayload, TResult> = {
+export type UseActionResult<TPayload, TResult, TDenyData = unknown> = {
   mutate: (
     payload: TPayload,
     opts?: { signal?: AbortSignal }
-  ) => Promise<MutateResult<TResult>>;
+  ) => Promise<MutateResult<TResult, TDenyData>>;
   pending: boolean;
   error: Error | null;
   data: Serialize<TResult> | null;
@@ -362,10 +400,11 @@ export function useAction<
   TResult,
   TChunk = never,
   TSnapshot = unknown,
+  TDenyData = unknown,
 >(
-  stub: ActionRef<TPayload, TResult, TChunk>,
+  stub: ActionRef<TPayload, TResult, TChunk, TDenyData>,
   options?: UseActionOptions<TPayload, TResult, TChunk, TSnapshot>
-): UseActionResult<TPayload, TResult> {
+): UseActionResult<TPayload, TResult, TDenyData> {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   // The hook surfaces the wire value (`Serialize<TResult>`), not the
@@ -395,7 +434,7 @@ export function useAction<
     async (
       payload: TPayload,
       opts?: { signal?: AbortSignal }
-    ): Promise<MutateResult<TResult>> => {
+    ): Promise<MutateResult<TResult, TDenyData>> => {
       // Client pre-validation gate: reject a known-invalid payload before any
       // side effect (no onMutate, no optimistic, no request), surfacing it as
       // the same deny(422)+issues the server produces. Fail open on a throwing
@@ -425,7 +464,11 @@ export function useAction<
         // request path's post-await abort guard). A cold gate has no request in
         // flight, so there is nothing else to unwind.
         if (opts?.signal?.aborted) {
-          return { ok: false, error: toError(opts.signal.reason) };
+          return {
+            ok: false,
+            kind: 'error',
+            error: toError(opts.signal.reason),
+          };
         }
         if (validated && !validated.ok) {
           const error = new Error(VALIDATION_FAILED_MESSAGE);
@@ -437,7 +480,18 @@ export function useAction<
             submittedPayload: payload,
           });
           setError(error);
-          return { ok: false, error };
+          // The deny arm, for parity with the server's authoritative 422: the
+          // same logical failure must not report a different `kind` depending
+          // on whether the client happened to catch it first. The issues are
+          // deliberately NOT put on `deny.data` here -- they are the
+          // framework's validation envelope, not the action's declared deny
+          // type -- and stay readable via `useActionResult()` /
+          // `getValidationIssues()`, exactly as before.
+          return {
+            ok: false,
+            kind: 'deny',
+            deny: { status: 422, message: VALIDATION_FAILED_MESSAGE },
+          };
         }
       }
 
@@ -506,6 +560,16 @@ export function useAction<
           : '/';
 
       let finalResult: Serialize<TResult> | undefined;
+      // Set by the deny sink below, read by `failure` after the invocation
+      // unwinds. A deny still THROWS (that is what keeps `error` state and
+      // `onError` firing, and what unwinds past `applyInvalidate`); this local
+      // is how the structured envelope survives that throw, since an `Error`
+      // cannot carry the typed record without becoming a second public type.
+      let denied: DenyRecord<TDenyData> | null = null;
+      const failure = (e: Error): MutateResult<TResult, TDenyData> =>
+        denied
+          ? { ok: false, kind: 'deny', deny: denied }
+          : { ok: false, kind: 'error', error: e };
       // Tracks whether a branch has already written to the action-result store.
       // The outer catch writes for unclassified errors (network failures, parse
       // errors) only when no branch has already recorded the outcome.
@@ -623,6 +687,7 @@ export function useAction<
                 submittedPayload: payload,
               });
               outcomeRecorded = true;
+              denied = toDenyRecord<TDenyData>({ status, message, data, code });
               throw new Error(message);
             },
             error: (message) => {
@@ -652,7 +717,9 @@ export function useAction<
           });
           if (navigated) {
             // Same-origin redirect issued; this promise never settles.
-            return await new Promise<MutateResult<TResult>>(() => {});
+            return await new Promise<MutateResult<TResult, TDenyData>>(
+              () => {}
+            );
           }
         }
 
@@ -666,7 +733,7 @@ export function useAction<
           // after unmount.
           invokeError(e);
           setPending(false);
-          return { ok: false, error: e };
+          return failure(e);
         }
         // Write to the store only for unclassified errors (network failures,
         // parse errors). Per-branch errors set outcomeRecorded before throwing.
@@ -680,7 +747,7 @@ export function useAction<
         setError(e);
         invokeError(e);
         setPending(false);
-        return { ok: false, error: e };
+        return failure(e);
       } finally {
         inflightRef.current.delete(controller);
         opts?.signal?.removeEventListener('abort', onCallerAbort);

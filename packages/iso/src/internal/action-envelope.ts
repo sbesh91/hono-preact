@@ -1,6 +1,7 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { DenyCode, Outcome } from '../outcomes.js';
-import { DENY_CODE_STATUS } from '../outcomes.js';
+import { isDenyCode } from '../outcomes.js';
+import type { DenyRecord } from './deny-record.js';
 
 export type ActionEnvelope =
   | { __outcome: 'success'; data: unknown }
@@ -14,13 +15,6 @@ export type ActionEnvelope =
     }
   | { __outcome: 'error'; message: string }
   | { __outcome: 'timeout'; timeoutMs: number };
-
-// Derived from the canonical code->status map so the predicate's accepted set
-// cannot drift from the `DenyCode` union (single source of truth in outcomes.ts).
-const DENY_CODES = new Set<string>(Object.keys(DENY_CODE_STATUS));
-function isDenyCode(value: unknown): value is DenyCode {
-  return typeof value === 'string' && DENY_CODES.has(value);
-}
 
 export type ActionResolution =
   | { kind: 'success'; data: unknown }
@@ -66,6 +60,29 @@ export type DecodedEnvelope =
       message: string | undefined;
     }
   | { kind: 'malformed'; httpStatus: number };
+
+/**
+ * Project a decoded deny into the {@link DenyRecord} a caller declared a type
+ * for. This lives here, beside `decodeActionResponse`, because it is the same
+ * boundary: the wire cannot prove `data` matches the deny type inferred from
+ * an action's guards, so the claim is made once, in the module that already
+ * owns "the wire shape is asserted here so consumers never cast", rather than
+ * in `useAction`. `OutcomeSink` deliberately stays `unknown`-typed; only the
+ * caller that HAS a declared type calls this.
+ */
+export function toDenyRecord<TData>(decoded: {
+  status: number;
+  message: string;
+  data?: unknown;
+  code?: DenyCode;
+}): DenyRecord<TData> {
+  return {
+    status: decoded.status,
+    message: decoded.message,
+    ...(decoded.code !== undefined ? { code: decoded.code } : {}),
+    ...(decoded.data !== undefined ? { data: decoded.data as TData } : {}),
+  };
+}
 
 export async function decodeActionResponse(
   res: Response

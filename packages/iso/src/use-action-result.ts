@@ -11,16 +11,12 @@ import { isBrowser } from './is-browser.js';
 import type { ActionRef } from './action.js';
 import type { Serialize } from './internal/serialize.js';
 import { useStubKey } from './internal/use-stub-key.js';
-import type { DenyCode } from './outcomes.js';
+import type { DenyRecord } from './internal/deny-record.js';
 
 export type ActionResult<TPayload, TResult> =
   | { kind: 'success'; data: Serialize<TResult>; submittedPayload: TPayload }
-  | {
+  | (DenyRecord & {
       kind: 'deny';
-      status: number;
-      message: string;
-      data?: unknown;
-      code?: DenyCode;
       /**
        * The payload as parsed from the request. For form submissions, this is
        * a `Record<string, FormDataEntryValue | FormDataEntryValue[]>` where
@@ -30,7 +26,7 @@ export type ActionResult<TPayload, TResult> =
        * arrive as form-data entries.
        */
       submittedPayload: TPayload;
-    }
+    })
   | {
       kind: 'error';
       message: string;

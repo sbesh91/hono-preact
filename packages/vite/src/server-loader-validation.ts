@@ -55,8 +55,7 @@ export function serverLoaderValidationPlugin(): Plugin {
                 break;
               case 'VariableDeclaration':
                 for (const d of decl.declarations) {
-                  if (d.id.type === 'Identifier')
-                    namedExports.push(d.id.name);
+                  if (d.id.type === 'Identifier') namedExports.push(d.id.name);
                 }
                 break;
               case 'TSInterfaceDeclaration':

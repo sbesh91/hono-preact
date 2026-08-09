@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 import type { RouteHook } from 'preact-iso';
-import type { Outcome } from './outcomes.js';
+import type { DenyOutcome, Outcome } from './outcomes.js';
 
 export type Scope = 'page' | 'loader' | 'action';
 
@@ -80,17 +80,40 @@ export type ClientPageCtx = {
 export type Next = () => Promise<void>;
 
 /**
+ * The body of a server middleware. Named so `defineServerMiddleware` can infer
+ * `TDeny` from the `deny()` a body returns: `TDeny` has to sit in an inferable
+ * position, which an inline function type on a property does not give the
+ * factory.
+ *
+ * The return union is spelled `Exclude<Outcome, DenyOutcome> | DenyOutcome<TDeny>`
+ * rather than `Outcome`: the non-deny arms are unchanged, and only the deny arm
+ * carries the payload type. With `TDeny = unknown` (the erased default) it is
+ * exactly `void | Outcome`, so nothing that compiled before stops compiling.
+ */
+export type ServerMiddlewareFn<S extends Scope, TDeny> = (
+  ctx: ServerCtx<S>,
+  next: Next
+) => Promise<void | Exclude<Outcome, DenyOutcome> | DenyOutcome<TDeny>>;
+
+/**
  * Server middleware written for scope `S`. The default `Scope` is the strictest
  * form, not the loosest: its `fn` accepts the ctx union, so it is the only
  * shape that can run wherever the framework dispatches it. Because `fn` is a
  * property holding a function type, `S` is contravariant, and
  * `ServerMiddleware<Scope>` flows into a `ServerMiddleware<'loader'>` slot but
  * not the other way round.
+ *
+ * `TDeny` is the type of the `data` this middleware attaches when it denies.
+ * It rides along so `defineAction` can union the deny types of a whole `use`
+ * array into the typed deny arm of `mutate`'s result. It appears only in the
+ * `fn`'s RETURN, so it is covariant: a `ServerMiddleware<S, {a: 1}>` flows into
+ * a `ServerMiddleware<S, unknown>` slot, which is what keeps every erased
+ * consumer (the dispatchers, `Middleware`, `RouteUseElement`) unchanged.
  */
-export type ServerMiddleware<S extends Scope = Scope> = {
+export type ServerMiddleware<S extends Scope = Scope, TDeny = unknown> = {
   __kind: 'middleware';
   runs: 'server';
-  fn: (ctx: ServerCtx<S>, next: Next) => Promise<void | Outcome>;
+  fn: ServerMiddlewareFn<S, TDeny>;
 };
 
 export type ClientMiddleware = {
@@ -114,9 +137,41 @@ export type Middleware =
   | { [S in Scope]: ServerMiddleware<S> }[Scope]
   | ClientMiddleware;
 
-export function defineServerMiddleware<S extends Scope = Scope>(
-  fn: ServerMiddleware<S>['fn']
-): ServerMiddleware<S> {
+/**
+ * Declare server middleware. Two spellings, and the difference is entirely
+ * about what TypeScript can infer:
+ *
+ * - `defineServerMiddleware('action', fn)` passes the scope as a VALUE, so both
+ *   `S` and `TDeny` are inferred: `ctx` narrows to the action ctx AND the
+ *   `deny({ data })` in the body is captured, so `defineAction` can surface it
+ *   on `mutate`'s deny arm. The scope argument is type-level only at runtime
+ *   (the dispatcher supplies the ctx); it exists because TypeScript has no
+ *   partial type-argument inference, so naming `S` as a type argument forces
+ *   every other parameter to its default.
+ * - `defineServerMiddleware<'action'>(fn)` is the original spelling and behaves
+ *   exactly as it always has: `TDeny` falls to its `unknown` default. That
+ *   default is deliberately not `never`; `unknown` degrades a deny union to
+ *   "untyped", while `never` would silently DROP this middleware's deny data
+ *   from the union and read as sound when it is not.
+ */
+export function defineServerMiddleware<S extends Scope, TDeny = never>(
+  scope: S,
+  fn: ServerMiddlewareFn<S, TDeny>
+): ServerMiddleware<S, TDeny>;
+export function defineServerMiddleware<
+  S extends Scope = Scope,
+  TDeny = unknown,
+>(fn: ServerMiddlewareFn<S, TDeny>): ServerMiddleware<S, TDeny>;
+export function defineServerMiddleware(
+  a: Scope | ServerMiddlewareFn<Scope, unknown>,
+  b?: ServerMiddlewareFn<Scope, unknown>
+): ServerMiddleware<Scope, unknown> {
+  const fn = typeof a === 'function' ? a : b;
+  if (!fn) {
+    throw new TypeError(
+      'defineServerMiddleware(scope, fn) requires the middleware function as its second argument'
+    );
+  }
   return { __kind: 'middleware', runs: 'server', fn };
 }
 

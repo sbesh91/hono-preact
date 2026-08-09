@@ -372,12 +372,12 @@ const Movies = () => {
 
 ### Return value
 
-| Value     | Type                                                                                                       | Description                                                                                                                                                                                                                                                                                               |
-| --------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mutate`  | `(payload) => Promise<{ ok: true; data: Serialize<TResult> \| undefined } \| { ok: false; error: Error }>` | Fires the action. Resolves with a discriminated union so awaiting callers can chain on the result without leaking unhandled rejections. The same `error` is also written to the `error` state field for non-awaiting render-time use. Stable reference, safe to pass to `useEffect` or memoized children. |
-| `pending` | `boolean`                                                                                                  | `true` while the request is in flight.                                                                                                                                                                                                                                                                    |
-| `error`   | `Error \| null`                                                                                            | The last error, or `null` if none.                                                                                                                                                                                                                                                                        |
-| `data`    | `Serialize<TResult> \| null`                                                                               | The last successful result, or `null`. Not set for streaming responses.                                                                                                                                                                                                                                   |
+| Value     | Type                                                     | Description                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mutate`  | `(payload) => Promise<MutateResult<TResult, TDenyData>>` | Fires the action. Resolves with a three-arm discriminated union so awaiting callers can chain on the result without leaking unhandled rejections: `{ ok: true; data }`, `{ ok: false; kind: 'deny'; deny }`, or `{ ok: false; kind: 'error'; error }`. Both failure arms also write the hook's `error` state and call `onError`, for non-awaiting render-time use. Stable reference, safe to pass to `useEffect` or memoized children. |
+| `pending` | `boolean`                                                | `true` while the request is in flight.                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `error`   | `Error \| null`                                          | The last error, or `null` if none.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `data`    | `Serialize<TResult> \| null`                             | The last successful result, or `null`. Not set for streaming responses.                                                                                                                                                                                                                                                                                                                                                                |
 
 #### Chaining on success
 
@@ -388,15 +388,64 @@ async function submit(payload) {
   const result = await mutate(payload);
   if (result.ok) {
     navigate(`/movies/${result.data.id}`);
+  } else if (result.kind === 'deny') {
+    // A guard refused the request. `deny` is the structured envelope, so you
+    // can branch on the reason instead of matching on a message string.
+    if (result.deny.code === 'UNAUTHORIZED') navigate('/login');
+    else showToast(result.deny.message);
   } else {
     showToast(result.error.message);
   }
 }
 ```
 
+```ts
+type MutateResult<TResult, TDenyData> =
+  | { ok: true; data: Serialize<TResult> | undefined }
+  | { ok: false; kind: 'deny'; deny: DenyRecord<TDenyData> }
+  | { ok: false; kind: 'error'; error: Error };
+```
+
+#### The deny arm
+
+`deny` is a `DenyRecord`: `status`, `message`, an optional `code` from the
+[`DenyCode`](/docs/actions#deny-codes) vocabulary, and the optional `data`
+the guard attached.
+
+`data` is typed. Declare guards with the scope-argument form of
+`defineServerMiddleware` and the deny types of an action's whole `use` array are
+unioned onto its `mutate` result:
+
+```ts
+const requireAuth = defineServerMiddleware('action', async (ctx, next) => {
+  if (!ctx.c.get('user')) {
+    return deny('UNAUTHORIZED', 'Sign in first', {
+      data: { loginUrl: '/login' },
+    });
+  }
+  await next();
+});
+
+export const addMovie = defineAction(
+  async (ctx, payload) => {
+    /* ... */
+  },
+  {
+    use: [requireAuth],
+  }
+);
+
+// result.deny.data is `{ loginUrl: string } | undefined`
+```
+
+The type-argument spelling (`defineServerMiddleware<'action'>(fn)`) cannot infer
+a deny type: naming the scope as a type argument tells TypeScript to stop
+inferring the rest. Those guards contribute `unknown`, and so does an action
+with no `use` array.
+
 Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still get the existing `error` state and `onError` callback for failure handling; no unhandled rejection is produced.
 
-`onMutate` and `onError` bracket a dispatched request. A server `deny`, error, or timeout rejects the in-flight mutation, so `onError` fires (with the `onMutate` snapshot for rollback). A client-side `schema` rejection is different: it short-circuits **before** any request, so neither `onMutate` nor `onError` fires. The failure is still surfaced every other way, as the returned `{ ok: false, error }`, the hook's `error` state, and a `deny(422)` on `useActionResult` (decode the issues with `getValidationIssues`), so it renders identically to a server-caught validation failure. See [Validation](/docs/validation#pre-validating-an-imperative-action).
+`onMutate` and `onError` bracket a dispatched request. A server `deny`, error, or timeout rejects the in-flight mutation, so `onError` fires (with the `onMutate` snapshot for rollback). A client-side `schema` rejection is different: it short-circuits **before** any request, so neither `onMutate` nor `onError` fires. The failure is still surfaced every other way, as the returned deny arm (`{ ok: false, kind: 'deny', deny: { status: 422, message } }`), the hook's `error` state, and a `deny(422)` on `useActionResult` (decode the issues with `getValidationIssues`), so it renders identically to a server-caught validation failure. See [Validation](/docs/validation#pre-validating-an-imperative-action).
 
 ## Cancellation
 
