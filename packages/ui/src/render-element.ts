@@ -5,7 +5,7 @@ import {
   type JSX,
   type VNode,
 } from 'preact';
-import { mergeRefs } from './merge-refs.js';
+import { mergeRefs, type AnyRef } from './merge-refs.js';
 
 type Props = Record<string, unknown>;
 
@@ -120,19 +120,21 @@ function warnIfNotFocusable(el: HTMLElement): void {
   );
 }
 
-function triggerRef(el: HTMLElement | null): void {
+const triggerRef: AnyRef<HTMLElement> = (el) => {
   if (el) warnIfNotFocusable(el);
-}
+};
 
 // Dev-only: append the focusability check to whatever ref is already going
 // out for this element, once per resolved node (WeakSet dedupes remounts of
-// the same element within a session).
-function withTriggerWarn(ref: unknown, props: Props): unknown {
+// the same element within a session). Typing `ref` as mergeRefs' own
+// AnyRef<HTMLElement> (rather than `unknown`) lets both `mergeRefs` args
+// below pass structurally, with no cast.
+function withTriggerWarn(
+  ref: AnyRef<HTMLElement>,
+  props: Props
+): AnyRef<HTMLElement> {
   if (!import.meta.env.DEV || !isInteractiveTrigger(props)) return ref;
-  return mergeRefs(
-    ref as Parameters<typeof mergeRefs>[0],
-    triggerRef as Parameters<typeof mergeRefs>[0]
-  );
+  return mergeRefs(ref, triggerRef);
 }
 
 export function renderElement<State = Record<never, never>>(
@@ -141,11 +143,14 @@ export function renderElement<State = Record<never, never>>(
   const { render, defaultTag, props, state, children } = opts;
 
   if (typeof render === 'function') {
+    // Exempt from the focusable-trigger warn: the caller returns its own
+    // VNode and owns whatever ref that VNode carries, so there is no
+    // resolved-element ref here for renderElement to check.
     return render(mergeProps({}, props), state as State);
   }
   if (render && typeof render === 'object' && 'type' in render) {
     const merged = mergeProps((render.props ?? {}) as Props, props);
-    merged.ref = withTriggerWarn(merged.ref, props);
+    merged.ref = withTriggerWarn(merged.ref as AnyRef<HTMLElement>, props);
     const mergedChildren: ComponentChildren =
       children !== undefined
         ? children
@@ -153,9 +158,19 @@ export function renderElement<State = Record<never, never>>(
           null);
     return cloneElement(render, merged, mergedChildren);
   }
-  const tag = typeof render === 'string' ? render : defaultTag;
-  const tagProps: Props = isInteractiveTrigger(props)
-    ? { ...props, ref: withTriggerWarn(props.ref, props) }
-    : props;
+  // A plain default-tag render (no `render` override at all) is out of
+  // scope for the warn: framework props here are often just a presentational
+  // part's ...rest spread of consumer props (e.g. SelectValue, ComboboxValue),
+  // and a consumer onClick on those would otherwise false-positive. Only a
+  // string-tag override counts as the caller actually choosing this element.
+  const hasRenderOverride = typeof render === 'string';
+  const tag = hasRenderOverride ? render : defaultTag;
+  const tagProps: Props =
+    hasRenderOverride && isInteractiveTrigger(props)
+      ? {
+          ...props,
+          ref: withTriggerWarn(props.ref as AnyRef<HTMLElement>, props),
+        }
+      : props;
   return h(tag, tagProps as JSX.HTMLAttributes, children) as VNode;
 }

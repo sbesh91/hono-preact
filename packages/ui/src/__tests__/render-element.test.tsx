@@ -37,6 +37,18 @@ function TriggerWidget(props: {
   });
 }
 
+// Mirrors a presentational part like SelectValue/ComboboxValue: a
+// non-focusable defaultTag, and consumer props (which may include onClick)
+// spread straight into framework props via ...rest. No render override.
+function PresentationalWidget(props: { onClick?: () => void }) {
+  return renderElement<Record<never, never>>({
+    defaultTag: 'span',
+    props: { class: 'fw', onClick: props.onClick },
+    state: {},
+    children: 'value',
+  });
+}
+
 describe('renderElement', () => {
   it('renders the default tag with framework props and children', () => {
     const { container } = render(<Widget />);
@@ -136,6 +148,19 @@ describe('renderElement', () => {
       render(<TriggerWidget render={<button />} />);
       render(<TriggerWidget render={<span tabIndex={0} />} />);
       expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('does not warn for a consumer onClick on a plain default-tag part (no render override)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { container } = render(<PresentationalWidget onClick={() => {}} />);
+      expect(container.querySelector('span')).toBeTruthy();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('still warns for a render-override span with a framework onClick', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TriggerWidget render={<span />} />);
+      expect(warn).toHaveBeenCalledTimes(1);
     });
   });
 });
