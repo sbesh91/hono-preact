@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createServer as createNetServer } from 'node:net';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -101,18 +102,39 @@ async function waitForServer(port: number, timeoutMs: number): Promise<void> {
   throw new Error(`server on :${port} never became reachable`);
 }
 
-// Ports are fixed per target rather than OS-assigned: both servers are spawned
-// as child processes that choose their own listener, so there is no handle to
-// read an ephemeral port back off of.
-let nextPort = 8971;
+/**
+ * Ask the OS for a free port, then hand the number to the child.
+ *
+ * Both servers are spawned as child processes that bind their own listener, so
+ * there is no socket handle to read an ephemeral port back off of; the port has
+ * to be chosen up front. Hard-coding one risks a collision with whatever else
+ * is listening on a developer's machine or a CI runner, which would surface as
+ * the deeply confusing "server never became reachable" (we would be polling
+ * someone else's server, or losing the bind race). Binding to :0 and releasing
+ * immediately is the standard way to get a number the OS just confirmed is
+ * free. The tiny race between release and re-bind is acceptable here: this
+ * suite runs with `fileParallelism: false` and one target at a time.
+ */
+function freePort(): Promise<number> {
+  return new Promise((res, rej) => {
+    const srv = createNetServer();
+    srv.once('error', rej);
+    srv.listen(0, () => {
+      const addr = srv.address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
+      srv.close(() => res(port));
+    });
+  });
+}
 
 describe.each(TARGETS)(
   'built output smoke: $name',
   ({ root, distProbe, serve, routes }) => {
-    const port = nextPort++;
+    let port: number;
     let child: ChildProcess;
 
     beforeAll(async () => {
+      port = await freePort();
       await run('pnpm', ['run', 'build'], root);
       expect(
         existsSync(resolve(root, distProbe)),

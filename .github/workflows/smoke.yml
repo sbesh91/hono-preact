@@ -68,6 +68,13 @@ jobs:
       - name: Generate bundled agents corpus
         run: pnpm gen:agents-corpus
 
+      # The suite lives outside the workspace packages, so `pnpm typecheck`
+      # (`pnpm -r`) cannot see it. Type it here, before running it, so a broken
+      # harness fails fast and legibly instead of as a confusing runtime error
+      # inside the gate itself.
+      - name: Typecheck the smoke suite
+        run: pnpm typecheck:smoke
+
       # Boots dev servers for both adapters AND builds + serves both apps'
       # real output. See smoke/ for why both halves are required.
       - name: Page render smoke
