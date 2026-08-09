@@ -255,12 +255,13 @@ function errorFallback({ error }) {
 }
 ```
 
-| Property  | Type                    | Description                                      |
-| --------- | ----------------------- | ------------------------------------------------ |
-| `status`  | `number`                | The HTTP status the deny carried. Authoritative. |
-| `code`    | `DenyCode \| undefined` | The typed reason, when the deny declared one.    |
-| `data`    | `unknown`               | Whatever the guard attached.                     |
-| `message` | `string`                | The deny message (`Error.message`).              |
+| Property  | Type                    | Description                                              |
+| --------- | ----------------------- | ---------------------------------------------------------- |
+| `status`  | `number`                | The HTTP status the deny carried. Authoritative.          |
+| `code`    | `DenyCode \| undefined` | The typed reason, when the deny declared one.              |
+| `data`    | `unknown`               | Whatever the guard attached.                               |
+| `message` | `string`                | The deny message (`Error.message`).                        |
+| `name`    | `string`                | Always `'LoaderDenyError'`, for `instanceof`-free checks.  |
 
 A deny whose `data` carries validation issues raises the more specific
 [`LoaderValidationError`](/docs/validation) instead, so schema failures keep

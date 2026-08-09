@@ -441,7 +441,44 @@ export const addMovie = defineAction(
 The type-argument spelling (`defineServerMiddleware<'action'>(fn)`) cannot infer
 a deny type: naming the scope as a type argument tells TypeScript to stop
 inferring the rest. Those guards contribute `unknown`, and so does an action
-with no `use` array.
+with no `use` array. This applies just as much to a guard registered at the
+route or app level (an entry composed into the chain above the action) as to
+one listed directly in the action's own `use` array: what determines whether
+`TDenyData` is inferred is which spelling of `defineServerMiddleware` wrote
+the guard, not where in the chain it runs. A route- or app-level guard
+written with the argument form unions in cleanly; one written with the type
+argument form contributes `unknown` at every call site that uses it.
+
+#### Handling all three arms
+
+`mutate`'s result is a three-arm discriminated union. Switch on it exhaustively rather than checking `ok` alone, so a denied request and a thrown error get distinct handling:
+
+```tsx
+const { mutate } = useAction(addMovie);
+
+async function submit(payload) {
+  const result = await mutate(payload);
+  switch (true) {
+    case result.ok:
+      // result.data: Serialize<TResult> | undefined (undefined for a
+      // streaming action that closes without a `result` event -- narrow
+      // before reading it)
+      if (result.data) navigate(`/movies/${result.data.id}`);
+      break;
+    case result.kind === 'deny':
+      // A guard or the framework's own validation refused the request.
+      if (result.deny.code === 'UNAUTHORIZED') navigate('/login');
+      else showToast(result.deny.message);
+      break;
+    case result.kind === 'error':
+      // Everything else: a thrown handler, a transport failure, a timeout.
+      showToast(result.error.message);
+      break;
+  }
+}
+```
+
+The success arm's `data` is `Serialize<TResult> | undefined`, not just `Serialize<TResult>`: a streaming action can close without ever emitting a `result` event, and the type says so honestly rather than asserting a value that might not be there. Callers narrow before using `data` on the success arm the same way they narrow `kind` on the failure arms.
 
 Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still get the existing `error` state and `onError` callback for failure handling; no unhandled rejection is produced.
 
