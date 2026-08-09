@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { Plugin } from 'vite';
-import { VIRTUAL_CLIENT_ID } from '@hono-preact/iso/internal/runtime';
+import { VIRTUAL_CLIENT_ID } from '@hono-preact/iso/internal/contract';
 
 export const VIRTUAL_CLIENT_ENTRY_ID = VIRTUAL_CLIENT_ID;
 const RESOLVED_ID = '\0' + VIRTUAL_CLIENT_ENTRY_ID;

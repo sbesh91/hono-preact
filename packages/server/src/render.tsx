@@ -2,6 +2,15 @@ import type { Context } from 'hono';
 import type { VNode } from 'preact';
 import { createDispatcher, HoofdProvider } from 'hoofd/preact';
 import { prerender, locationStub } from 'preact-iso/prerender';
+// Side-effect import, and it must stay one. `@preact/signals`' Preact adapter
+// installs its `options.__r` hook when this module is EVALUATED, and that hook
+// is what sets the adapter's `currentComponent` for `useSignal`/`useComputed`.
+// `prerender` snapshots `options.__r` once at entry and uses that snapshot for
+// the whole render, so an adapter installed mid-render (a lazily-imported route
+// chunk pulling in signals for the first time) never runs: `currentComponent`
+// stays `undefined` and the first signals hook in the tree throws. Importing it
+// here pins the install to module-eval time, ahead of any prerender.
+import '@preact/signals';
 import {
   isOutcome,
   type AppConfig,

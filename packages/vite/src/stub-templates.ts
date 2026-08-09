@@ -5,7 +5,7 @@ import {
   FORM_ACTION_FIELD,
   FORM_ROOM_FIELD,
   FORM_SOCKET_FIELD,
-} from '@hono-preact/iso/internal/runtime';
+} from '@hono-preact/iso/internal/contract';
 import type { ServerLoaderMeta } from './source-extraction.js';
 
 // Source for the `serverLoaders` client stub: a Proxy whose every property read

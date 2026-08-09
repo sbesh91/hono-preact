@@ -35,6 +35,14 @@ export default defineConfig({
         __dirname,
         'packages/iso/src/internal-runtime.ts'
       ),
+      // Must precede the '@hono-preact/iso/internal' entry below: Vite matches
+      // these prefixes in order, so the shorter one would swallow this subpath.
+      // This is the build-time-only constants module the Vite plugin imports
+      // (see packages/vite/src/__tests__/no-runtime-import.test.ts).
+      '@hono-preact/iso/internal/contract': path.resolve(
+        __dirname,
+        'packages/iso/src/internal/contract.ts'
+      ),
       '@hono-preact/iso/internal': path.resolve(
         __dirname,
         'packages/iso/src/internal.ts'

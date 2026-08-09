@@ -1,0 +1,14 @@
+{
+  // The smoke suite lives outside the workspace packages, so `pnpm typecheck`
+  // (`pnpm -r exec tsc`) cannot see it. Without this config the gate that exists
+  // to catch broken builds would itself ship untypechecked, and a type error in
+  // it would surface only as a confusing runtime failure of the gate.
+  // Run via `pnpm typecheck:smoke`, which the smoke workflow runs before the
+  // suite so a broken harness fails fast and legibly.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "../vitest.smoke.config.ts"]
+}
