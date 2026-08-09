@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { Plugin } from 'vite';
 import type { Targets } from 'lightningcss';
-import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/runtime';
+import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/contract';
 import {
   chunkCloser,
   extractRouteChains,

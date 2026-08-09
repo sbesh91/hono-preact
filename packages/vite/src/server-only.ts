@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import { parse } from '@babel/parser';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
-import { MODULE_KEY_EXPORT } from '@hono-preact/iso/internal/runtime';
+import { MODULE_KEY_EXPORT } from '@hono-preact/iso/internal/contract';
 import { deriveModuleKey } from './module-key.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import {

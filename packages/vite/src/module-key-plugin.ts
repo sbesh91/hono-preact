@@ -7,7 +7,7 @@ import {
   LOADER_NAME_OPTION,
   FORM_MODULE_FIELD,
   FORM_ACTION_FIELD,
-} from '@hono-preact/iso/internal/runtime';
+} from '@hono-preact/iso/internal/contract';
 import { deriveModuleKey } from './module-key.js';
 import { isLoaderCall, parseServerLoaders } from './server-loaders-parser.js';
 import { isActionCall, parseServerActions } from './server-actions-parser.js';

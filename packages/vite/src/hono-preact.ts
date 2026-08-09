@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import preact from '@preact/preset-vite';
 import { type Plugin } from 'vite';
-import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal/runtime';
+import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal/contract';
 import { clientShimPlugin } from './client-shim.js';
 import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
 import { clientEntryContractPlugin } from './client-entry-contract.js';
@@ -190,9 +190,25 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     // is called once per environment with its name, so `name !== 'client'`
     // covers the Node `ssr` env and the Cloudflare worker env alike, with no
     // per-adapter code and without knowing the adapter's env name.
+    // `preact/devtools` needs `include` rather than the scan above, because the
+    // scan cannot reach it: `@preact/preset-vite` INJECTS `import
+    // "preact/devtools"` in a transform, so it exists in no source file for
+    // esbuild's scanner to crawl. It is therefore discovered when the module is
+    // first loaded, which is mid-startup, triggering exactly the re-optimize
+    // this seeding exists to prevent -- and this one lands after the SSR graph
+    // is partly loaded, so the reload leaves two `?v=` instances of every dep
+    // live at once. Two `@preact/signals` instances each chain their own
+    // `options.__r` hook onto the shared Preact `options`, and both then call
+    // `.S()` on the single per-component effect stored at `__$u`: the second
+    // sees it already RUNNING and throws `Cycle detected` on EVERY route.
     configEnvironment(name: string) {
       if (name === 'client') return;
-      return { optimizeDeps: { entries: [resolve(resolvedRoot, routes)] } };
+      return {
+        optimizeDeps: {
+          entries: [resolve(resolvedRoot, routes)],
+          include: ['preact/devtools'],
+        },
+      };
     },
   };
 

@@ -47,7 +47,8 @@
     "prepublishOnly": "tsc"
   },
   "dependencies": {
-    "@hono-preact/iso": "workspace:*"
+    "@hono-preact/iso": "workspace:*",
+    "@preact/signals": "^2.11.0"
   },
   "peerDependencies": {
     "hono": ">=4.0.0",

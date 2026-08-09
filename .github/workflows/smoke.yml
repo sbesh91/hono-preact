@@ -1,0 +1,74 @@
+name: Smoke
+
+# Does a page actually RENDER? Boots real dev servers (both adapters) and the
+# real built artifacts, then asks for real pages and checks the status.
+#
+# This exists because v0.13.0 shipped with four independent defects that the
+# entire 3500-test suite was structurally incapable of seeing: an SSR 500 on the
+# live docs site, `Cycle detected` on every dev route under both adapters, and
+# an example app that no longer built. Every one is a module-graph,
+# bundling-order, or build-pipeline fault, and none of them can reproduce under
+# Vitest's own module resolution. The only way to catch this class is to boot
+# the real server and fetch a page.
+#
+# OPT-IN, not automatic. It is slow (two dev servers with cold dep optimizers,
+# two full app builds, and workerd), so it does not belong on every push to
+# every PR. Run it deliberately, before merging, per the checklist in REVIEW.md.
+#
+# It lives in its own workflow rather than as a job in ci.yml on purpose:
+# reacting to a label requires adding `labeled` to the `pull_request` trigger,
+# and doing that in ci.yml would re-run the entire test matrix (plus the size,
+# lighthouse and preview jobs) every time anyone touched any label on any PR.
+on:
+  pull_request:
+    # `labeled` starts a run the moment the label goes on. `synchronize` keeps
+    # an already-labelled PR honest: once you have opted in, every subsequent
+    # push re-runs the smoke rather than leaving a stale green from three
+    # commits ago. Both are filtered by the label check below, so an unrelated
+    # label or an unlabelled PR costs nothing.
+    types: [labeled, synchronize]
+  # Manual escape hatch: run against any branch from the Actions tab without
+  # needing a PR or a label.
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  smoke:
+    name: Page render smoke
+    # `workflow_dispatch` carries no pull_request payload, so the label lookup
+    # would be null; check the event first.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'run-smoke')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version derives from the `packageManager` field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build framework packages
+        run: pnpm --filter '@hono-preact/*' --filter hono-preact --filter hono-preact-ui build
+
+      # apps/site's build reads the generated corpus; it is not committed.
+      - name: Generate bundled agents corpus
+        run: pnpm gen:agents-corpus
+
+      # Boots dev servers for both adapters AND builds + serves both apps'
+      # real output. See smoke/ for why both halves are required.
+      - name: Page render smoke
+        run: pnpm test:smoke

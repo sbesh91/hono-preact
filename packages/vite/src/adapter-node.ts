@@ -4,7 +4,7 @@
 // must never pull in `@hono/node-server`. Only importing
 // `hono-preact/adapter-node` loads this file.
 import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
-import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/runtime';
+import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/contract';
 import { nodeBuildPlugin, nodeDevServerPlugin } from './node-dev-server.js';
 
 export function nodeAdapter(): HonoPreactAdapter {

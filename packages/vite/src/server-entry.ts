@@ -8,7 +8,7 @@ import type { Plugin, ViteDevServer } from 'vite';
 import {
   LOADERS_RPC_PATH,
   SOCKETS_RPC_PATH,
-} from '@hono-preact/iso/internal/runtime';
+} from '@hono-preact/iso/internal/contract';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import type { HonoPreactAdapter } from './adapter.js';
 

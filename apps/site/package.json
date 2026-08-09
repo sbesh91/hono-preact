@@ -37,7 +37,7 @@
     "github-slugger": "^2.0.0",
     "magic-string": "^0.30.21",
     "postcss": "^8.5.10",
-    "preact-render-to-string": "^6.6.7",
+    "preact-render-to-string": "^6.7.0",
     "prettier": "^3.8.3",
     "rehype-autolink-headings": "^7.1.0",
     "rehype-slug": "^6.0.0",

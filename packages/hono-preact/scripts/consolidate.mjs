@@ -47,6 +47,9 @@ const SUBPACKAGES = [
 // Maps a published-source string to the consolidated dist path it should point at.
 const DIST_PATHS = {
   '@hono-preact/iso/internal/runtime': 'iso/internal-runtime.js',
+  // Build-time-only constants; the Vite plugin imports these and MUST NOT
+  // reach the runtime barrel above (see packages/vite's no-runtime-import test).
+  '@hono-preact/iso/internal/contract': 'iso/internal/contract.js',
   '@hono-preact/iso/internal': 'iso/internal.js',
   '@hono-preact/iso/page': 'iso/page-only.js',
   '@hono-preact/iso': 'iso/index.js',
@@ -101,7 +104,7 @@ async function rewriteImports(filePath) {
   const isTypeFile = filePath.endsWith('.d.ts');
 
   let rewritten = original.replace(
-    /(['"])(@hono-preact\/(?:iso\/internal\/runtime|iso\/internal|iso\/page|iso|server\/internal\/runtime|server\/internal\/cloudflare|server|vite\/adapter-cloudflare|vite\/adapter-node|vite))(['"])/g,
+    /(['"])(@hono-preact\/(?:iso\/internal\/runtime|iso\/internal\/contract|iso\/internal|iso\/page|iso|server\/internal\/runtime|server\/internal\/cloudflare|server|vite\/adapter-cloudflare|vite\/adapter-node|vite))(['"])/g,
     (match, q1, source, q2) => {
       const distRel = DIST_PATHS[source];
       if (!distRel) return match;

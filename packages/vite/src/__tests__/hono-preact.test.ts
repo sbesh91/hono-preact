@@ -198,10 +198,38 @@ describe('honoPreact config plugin', () => {
 
     // The worker/SSR environment (any non-client name) gets the scan entry.
     const ssr = await callConfigEnvironment(cfg, 'ssr', env);
-    expect(ssr).toEqual({ optimizeDeps: { entries: [expected] } });
+    expect(ssr).toEqual({
+      optimizeDeps: { entries: [expected], include: ['preact/devtools'] },
+    });
 
     const worker = await callConfigEnvironment(cfg, 'hono_preact', env);
-    expect(worker).toEqual({ optimizeDeps: { entries: [expected] } });
+    expect(worker).toEqual({
+      optimizeDeps: { entries: [expected], include: ['preact/devtools'] },
+    });
+  });
+
+  // Regression: dev SSR 500'd with `Cycle detected` on EVERY route.
+  // `@preact/preset-vite` INJECTS `import "preact/devtools"` in a transform, so
+  // it appears in no source file and the optimizer's esbuild scan (seeded above)
+  // cannot reach it. It was therefore discovered when first loaded, mid-startup,
+  // which re-optimized and bumped the browser hash after the SSR graph was
+  // partly loaded -- leaving two `?v=` instances of every dep live at once. The
+  // two `@preact/signals` instances each chained an `options.__r` hook onto the
+  // shared Preact `options`, and both called `.S()` on the single per-component
+  // effect at `__$u`; the second found it already RUNNING and threw. Only
+  // `include` fixes this, because only `include` pre-bundles something the scan
+  // provably cannot see.
+  it('pre-bundles the plugin-injected preact/devtools so it cannot force a mid-startup re-optimize', async () => {
+    const cfg = findPlugin(
+      honoPreact({ adapter: fakeAdapter() }),
+      'hono-preact:config'
+    );
+    const env: ConfigEnv = { command: 'serve', mode: 'development' };
+
+    for (const name of ['ssr', 'hono_preact']) {
+      const result = await callConfigEnvironment(cfg, name, env);
+      expect(result?.optimizeDeps?.include).toContain('preact/devtools');
+    }
   });
 
   it('does not seed the client environment (no SSR prerender there)', async () => {
@@ -226,7 +254,10 @@ describe('honoPreact config plugin', () => {
       mode: 'development',
     });
     expect(ssr).toEqual({
-      optimizeDeps: { entries: [resolve(process.cwd(), 'app/routing.ts')] },
+      optimizeDeps: {
+        entries: [resolve(process.cwd(), 'app/routing.ts')],
+        include: ['preact/devtools'],
+      },
     });
   });
 
@@ -240,7 +271,10 @@ describe('honoPreact config plugin', () => {
     await callConfig(cfg, { root: '/custom/app' }, env);
     const ssr = await callConfigEnvironment(cfg, 'ssr', env);
     expect(ssr).toEqual({
-      optimizeDeps: { entries: [resolve('/custom/app', 'src/routes.ts')] },
+      optimizeDeps: {
+        entries: [resolve('/custom/app', 'src/routes.ts')],
+        include: ['preact/devtools'],
+      },
     });
   });
 });

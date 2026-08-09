@@ -39,6 +39,10 @@
       "types": "./dist/internal-runtime.d.ts",
       "import": "./dist/internal-runtime.js"
     },
+    "./internal/contract": {
+      "types": "./dist/internal/contract.d.ts",
+      "import": "./dist/internal/contract.js"
+    },
     "./page": {
       "types": "./dist/page-only.d.ts",
       "import": "./dist/page-only.js"
@@ -58,13 +62,13 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "preact-render-to-string": "^6.6.7",
+    "preact-render-to-string": "^6.7.0",
     "typescript": "*",
     "vite": "*"
   },
   "sideEffects": false,
   "dependencies": {
-    "@preact/signals": "^2.9.4",
+    "@preact/signals": "^2.11.0",
     "@standard-schema/spec": "^1.1.0"
   }
 }

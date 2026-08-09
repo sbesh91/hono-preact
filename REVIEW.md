@@ -198,6 +198,26 @@ single most-missed step and is trivially fixable with `pnpm format`.
 Lighthouse, `client-size`, and the docs preview run in CI only; read their PR
 comments rather than running them locally.
 
+## Pre-merge gate: page render smoke
+
+**Required before merging any PR.** Add the `run-smoke` label to the PR and
+confirm the `Page render smoke` check passes, or run `pnpm test:smoke` locally.
+It is opt-in rather than automatic because it is slow (two dev servers with cold
+dep optimizers, two full app builds, and workerd), and re-runs on every
+subsequent push once the label is on.
+
+Do not skip it because "the change is small" or "all 3500 tests pass". The nine
+CI checks above passed, green, on a v0.13.0 that shipped an SSR 500 on the live
+docs site, `Cycle detected` on every dev route under both adapters, and an
+example app that no longer built. Every one of those is a module-graph,
+bundling-order, or build-pipeline fault, and **no unit test can catch that
+class** -- they cannot even reproduce under Vitest's module resolution. Booting
+the real server and fetching a page is the only thing that sees them.
+
+Treat a smoke failure as P0. Both halves matter and neither substitutes for the
+other: the production 500 existed only in the built bundle, and the
+`Cycle detected` faults only in the dev server.
+
 ## Severity rubric
 
 - **P0 (blocks merge):** dropped auth/permission middleware layer; lost behavior

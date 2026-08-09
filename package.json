@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "test:types": "vitest run --typecheck.only",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+  "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "typecheck": "pnpm -r exec tsc --noEmit",
     "typecheck:tests": "pnpm -r --if-present run typecheck:tests",
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,mjs,json}\" \"apps/**/src/**/*.{ts,tsx,mdx,css}\"",
