@@ -1,5 +1,5 @@
 import type { FunctionComponent } from 'preact';
-import { useMeta, useTitle } from 'hono-preact';
+import { definePage, useMeta, useTitle } from 'hono-preact';
 import { HeroShader } from '../components/HeroShader.js';
 import { ChapterEdge } from '../components/home/chapters/ChapterEdge.js';
 import { ChapterRouting } from '../components/home/chapters/ChapterRouting.js';
@@ -100,4 +100,4 @@ const Home: FunctionComponent = () => {
 };
 Home.displayName = 'Home';
 
-export default Home;
+export default definePage(Home);

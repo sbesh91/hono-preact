@@ -1,5 +1,5 @@
 import { Route, useLocation } from 'preact-iso';
-import { useTitle } from 'hono-preact';
+import { definePage, useTitle } from 'hono-preact';
 
 export function PageNotFound() {
   const location = useLocation();
@@ -41,6 +41,9 @@ export function PageNotFound() {
   );
 }
 
-export default function NotFound() {
+function NotFound() {
   return <Route default component={PageNotFound} />;
 }
+NotFound.displayName = 'NotFound';
+
+export default definePage(NotFound);

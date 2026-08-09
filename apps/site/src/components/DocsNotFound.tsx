@@ -1,6 +1,7 @@
+import { definePage } from 'hono-preact';
 import { MdxArticle } from './MdxArticle.js';
 
-export default function DocsNotFound() {
+function DocsNotFound() {
   return (
     <MdxArticle>
       <h1>Page not found</h1>
@@ -15,3 +16,6 @@ export default function DocsNotFound() {
     </MdxArticle>
   );
 }
+DocsNotFound.displayName = 'DocsNotFound';
+
+export default definePage(DocsNotFound);
