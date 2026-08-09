@@ -60,6 +60,10 @@ import {
 } from '../internal/action-result-store.js';
 import { getValidationIssues } from '../get-validation-issues.js';
 import { denyArm, errorArm } from './mutate-arm-helpers.js';
+import {
+  VALIDATION_ISSUES_KEY,
+  VALIDATION_FAILED_MESSAGE,
+} from '../internal/contract.js';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 
 const stub = {
@@ -1181,9 +1185,12 @@ describe('useAction client pre-validation (schema)', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     // The client gate reports the same arm the server's authoritative 422
     // would, so a caller's `kind === 'deny'` branch is not spelling-dependent.
-    expect(denyArm(outcome)).toEqual({
+    const record = denyArm(outcome);
+    expect(record.data).toBeUndefined();
+    expect(record).toEqual({
       status: 422,
       message: 'Validation failed',
+      issues: [{ path: ['title'], message: 'title is required' }],
     });
     expect(result.current.pending).toBe(false);
     expect(result.current.error?.message).toBe('Validation failed');
@@ -1524,5 +1531,107 @@ describe('mutate result arms', () => {
     });
 
     expect(outcome).toEqual({ ok: true, data: { ok: true } });
+  });
+});
+
+describe('the deny arm keeps the validation envelope out of the typed data channel', () => {
+  afterEach(() => clearLastActionResult('movies', 'create'));
+
+  // The exact wire shape `pageActionsHandler` emits when an action's `input`
+  // schema rejects the payload (pinned server-side by
+  // packages/server/src/__tests__/standard-schema-validation.test.ts: a 422
+  // deny whose `data` is the reserved issues bag). Nothing about that envelope
+  // is derived from the action's guards, so claiming it as the guard-inferred
+  // deny data would be a type lie a caller can dereference.
+  const serverValidationDeny = {
+    __outcome: 'deny',
+    status: 422,
+    message: VALIDATION_FAILED_MESSAGE,
+    data: {
+      [VALIDATION_ISSUES_KEY]: [{ path: ['title'], message: 'Required' }],
+    },
+  };
+
+  it('routes a server-side schema failure to `issues`, leaving `data` unset', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(serverValidationDeny), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: '' });
+    });
+
+    const record = denyArm(outcome);
+    expect(record.data).toBeUndefined();
+    expect(record.issues).toEqual([{ path: ['title'], message: 'Required' }]);
+    expect(record).toEqual({
+      status: 422,
+      message: VALIDATION_FAILED_MESSAGE,
+      issues: [{ path: ['title'], message: 'Required' }],
+    });
+  });
+
+  it('leaves a guard deny in `data` with no `issues`', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            __outcome: 'deny',
+            status: 401,
+            message: 'auth',
+            code: 'UNAUTHORIZED',
+            data: { loginUrl: '/login' },
+          }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await result.current.mutate({ title: 'Dune' });
+    });
+
+    const record = denyArm(outcome);
+    expect(record.issues).toBeUndefined();
+    expect(record.data).toEqual({ loginUrl: '/login' });
+  });
+
+  it('keeps getValidationIssues working off the action-result store (regression)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(serverValidationDeny), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    await act(async () => {
+      await result.current.mutate({ title: '' });
+    });
+
+    // The store is a separate, type-erased channel and is deliberately
+    // unchanged: <FieldError> / useFieldErrors still read the issues from
+    // `data` there.
+    const recorded = getLastActionResult({
+      __module: 'movies',
+      __action: 'create',
+    });
+    expect(getValidationIssues(recorded)).toEqual([
+      { path: ['title'], message: 'Required' },
+    ]);
   });
 });

@@ -13,6 +13,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { MutateResult } from '../action.js';
 import type { ActionResult } from '../use-action-result.js';
 import type { DenyRecord } from '../internal/deny-record.js';
+import type { ValidationIssue } from '../validate.js';
 
 declare function acceptOutcome(outcome: Outcome): void;
 declare function requireAction<X>(m: ServerMiddleware<'action', X>): void;
@@ -214,7 +215,31 @@ describe('defineAction deny inference', () => {
       expectTypeOf(outcome.deny.data).toEqualTypeOf<
         { loginUrl: string } | undefined
       >();
+      // The framework's validation envelope has its own channel, so it can
+      // never be read as the guard-derived deny data.
+      expectTypeOf(outcome.deny.issues).toEqualTypeOf<
+        ValidationIssue[] | undefined
+      >();
     }
+  });
+});
+
+describe('the deny record keeps validation issues off the typed data channel', () => {
+  it('types `data` and `issues` as separate, independently optional fields', () => {
+    // The defect this pins: a framework-issued schema failure denies with the
+    // reserved issues bag. Routing it through `data` would type it as the
+    // guard-derived TData, so `deny.data.loginUrl` would COMPILE and be
+    // undefined at runtime. Two fields, two types, no overlap.
+    expectTypeOf<DenyRecord<{ loginUrl: string }>['data']>().toEqualTypeOf<
+      { loginUrl: string } | undefined
+    >();
+    expectTypeOf<DenyRecord<{ loginUrl: string }>['issues']>().toEqualTypeOf<
+      ValidationIssue[] | undefined
+    >();
+  });
+
+  it('does not widen `data` when TData is unknown', () => {
+    expectTypeOf<DenyRecord['data']>().toEqualTypeOf<unknown>();
   });
 });
 

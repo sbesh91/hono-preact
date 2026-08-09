@@ -351,6 +351,18 @@ function getValidationIssues(result: ActionResult): ValidationIssue[] | null;
 
 Extracts validation issues from `useActionResult()`. Returns `null` when the result is not a schema-validation failure. A validation failure is a `deny` whose `data` carries the framework-reserved validation key; this distinguishes it from an app-level `deny`.
 
+The same issues are also on the result itself: an `ActionResult` deny variant carries `issues` (a `ValidationIssue[]`) for a schema failure and `data` for an app-level `deny`, never both, so a framework validation envelope can never be read as a guard's own deny payload. `getValidationIssues` remains the reader to reach for when the value's origin is not statically known.
+
+```ts
+const result: ActionResult = useActionResult(serverActions.createTask).value;
+
+if (result?.kind === 'deny') {
+  // A schema failure fills `issues`; an app-level deny fills `data`.
+  if (result.issues) showFieldErrors(result.issues);
+  else showBanner(result.message, result.data);
+}
+```
+
 ### `useFieldErrors()`
 
 ```ts

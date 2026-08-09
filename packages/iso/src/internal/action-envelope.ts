@@ -2,6 +2,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { DenyCode, Outcome } from '../outcomes.js';
 import { isDenyCode } from '../outcomes.js';
 import type { DenyRecord } from './deny-record.js';
+import { readValidationIssues } from './validation-issues.js';
 
 export type ActionEnvelope =
   | { __outcome: 'success'; data: unknown }
@@ -69,6 +70,14 @@ export type DecodedEnvelope =
  * owns "the wire shape is asserted here so consumers never cast", rather than
  * in `useAction`. `OutcomeSink` deliberately stays `unknown`-typed; only the
  * caller that HAS a declared type calls this.
+ *
+ * It is also where the claim is made HONEST. A framework-issued schema failure
+ * (`pageActionsHandler`'s `deny(422)`) ships the reserved validation-issues bag
+ * as its `data`, and that bag has nothing to do with the guards `TData` was
+ * inferred from. Claiming it anyway is how `deny.data.loginUrl` would compile
+ * and be `undefined` at runtime, so the issues are lifted onto their own
+ * `issues` field and `data` is left unset. `readValidationIssues` is the same
+ * detection the loader path uses, reused rather than re-spelled.
  */
 export function toDenyRecord<TData>(decoded: {
   status: number;
@@ -76,12 +85,15 @@ export function toDenyRecord<TData>(decoded: {
   data?: unknown;
   code?: DenyCode;
 }): DenyRecord<TData> {
-  return {
+  const base = {
     status: decoded.status,
     message: decoded.message,
     ...(decoded.code !== undefined ? { code: decoded.code } : {}),
-    ...(decoded.data !== undefined ? { data: decoded.data as TData } : {}),
   };
+  const issues = readValidationIssues(decoded.data);
+  if (issues) return { ...base, issues };
+  if (decoded.data === undefined) return base;
+  return { ...base, data: decoded.data as TData };
 }
 
 export async function decodeActionResponse(

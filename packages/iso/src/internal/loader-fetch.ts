@@ -2,7 +2,7 @@ import { readSSE } from './sse-decoder.js';
 import { TimeoutError } from '../action.js';
 import { LOADERS_RPC_PATH } from './contract.js';
 import { toError } from './to-error.js';
-import { readValidationIssues } from '../validate.js';
+import { readValidationIssues } from './validation-issues.js';
 import { LoaderValidationError } from '../loader-validation-error.js';
 import { LoaderDenyError } from '../loader-deny-error.js';
 import { isDenyCode } from '../outcomes.js';

@@ -3,6 +3,7 @@
     "ActionRef.useAction",
     "ActionResult.code",
     "ActionResult.data",
+    "ActionResult.issues",
     "ActionResult.kind",
     "ActionResult.message",
     "ActionResult.status",
@@ -188,9 +189,6 @@
   "undocumented": [
     "ActionRef.useAction",
     "ActionResult.code",
-    "ActionResult.data",
-    "ActionResult.kind",
-    "ActionResult.message",
     "ActionResult.status",
     "ActionResult.submittedPayload",
     "AppConfig.speculation",

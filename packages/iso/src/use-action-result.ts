@@ -12,6 +12,7 @@ import type { ActionRef } from './action.js';
 import type { Serialize } from './internal/serialize.js';
 import { useStubKey } from './internal/use-stub-key.js';
 import type { DenyRecord } from './internal/deny-record.js';
+import { readValidationIssues } from './internal/validation-issues.js';
 
 export type ActionResult<TPayload, TResult> =
   | { kind: 'success'; data: Serialize<TResult>; submittedPayload: TPayload }
@@ -54,12 +55,19 @@ function projectActionResult<TPayload, TResult>(
     };
   }
   if (source.kind === 'deny') {
+    // `issues` is populated from the SAME reserved key `getValidationIssues`
+    // reads, so the two agree by construction; the store itself is untouched,
+    // type-erased, and still carries the bag under `data` for that reader and
+    // for `<FieldError>`. Surfacing it as its own field here is what keeps the
+    // deny variant's shape identical to `mutate`'s deny arm.
+    const issues = readValidationIssues(source.data);
     return {
       kind: 'deny',
       status: source.status,
       message: source.message,
       data: source.data,
       ...(source.code !== undefined ? { code: source.code } : {}),
+      ...(issues ? { issues } : {}),
       submittedPayload: source.submittedPayload as TPayload,
     };
   }

@@ -481,16 +481,21 @@ export function useAction<
           });
           setError(error);
           // The deny arm, for parity with the server's authoritative 422: the
-          // same logical failure must not report a different `kind` depending
-          // on whether the client happened to catch it first. The issues are
-          // deliberately NOT put on `deny.data` here -- they are the
-          // framework's validation envelope, not the action's declared deny
-          // type -- and stay readable via `useActionResult()` /
-          // `getValidationIssues()`, exactly as before.
+          // same logical failure must not report a different `kind` (or a
+          // different field) depending on whether the client happened to catch
+          // it first. The issues ride `issues`, never `data`: `data` is typed
+          // as the action's inferred deny type, which the framework's
+          // validation envelope is not. The store record is unchanged, so
+          // `useActionResult()` / `getValidationIssues()` behave exactly as
+          // before.
           return {
             ok: false,
             kind: 'deny',
-            deny: { status: 422, message: VALIDATION_FAILED_MESSAGE },
+            deny: {
+              status: 422,
+              message: VALIDATION_FAILED_MESSAGE,
+              issues: validated.issues,
+            },
           };
         }
       }
