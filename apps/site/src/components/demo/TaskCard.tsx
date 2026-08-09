@@ -75,6 +75,7 @@ const TaskCard: FunctionComponent<Props> = ({
               <Tooltip.Trigger
                 render={
                   <span
+                    tabIndex={0}
                     class={`rounded-full px-1.5 py-px text-[10px] font-bold ${PRIORITY_BADGE[task.priority]}`}
                   />
                 }
@@ -91,7 +92,10 @@ const TaskCard: FunctionComponent<Props> = ({
               <Tooltip.Root openDelay={300}>
                 <Tooltip.Trigger
                   render={
-                    <span class="ml-auto grid h-[19px] w-[19px] place-items-center rounded-full bg-accent text-[9.5px] font-bold text-accent-foreground" />
+                    <span
+                      tabIndex={0}
+                      class="ml-auto grid h-[19px] w-[19px] place-items-center rounded-full bg-accent text-[9.5px] font-bold text-accent-foreground"
+                    />
                   }
                 >
                   {assignee.name.charAt(0).toUpperCase()}

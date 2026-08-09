@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render } from '@testing-library/preact';
 import { h } from 'preact';
 import { renderElement, type RenderProp } from '../render-element.js';
@@ -13,6 +13,26 @@ function Widget(props: {
     defaultTag: 'button',
     props: { class: 'fw', 'data-fw': 'yes', type: 'button' },
     state: { active: props.active ?? false },
+    children: 'label',
+  });
+}
+
+// A trigger-flavored part: framework props carry a click handler, matching
+// the signal renderElement uses to decide an element must be focusable
+// (see isInteractiveTrigger in render-element.ts).
+function TriggerWidget(props: {
+  render?: RenderProp<{ active: boolean }>;
+  onFrameworkClick?: () => void;
+}) {
+  return renderElement<{ active: boolean }>({
+    render: props.render,
+    defaultTag: 'button',
+    props: {
+      class: 'fw',
+      type: 'button',
+      onClick: props.onFrameworkClick ?? (() => {}),
+    },
+    state: { active: false },
     children: 'label',
   });
 }
@@ -65,5 +85,57 @@ describe('renderElement', () => {
       />
     );
     expect(receivedState).toEqual({ active: true });
+  });
+
+  it('composes function props user-first on a render-prop vnode', () => {
+    const calls: string[] = [];
+    const { container } = render(
+      <TriggerWidget
+        onFrameworkClick={() => calls.push('part')}
+        render={
+          <button
+            onClick={() => {
+              calls.push('user');
+            }}
+          />
+        }
+      />
+    );
+    const el = container.querySelector('button')!;
+    el.click();
+    expect(calls).toEqual(['user', 'part']);
+  });
+
+  it('still lets framework win for non-function prop collisions', () => {
+    // Widget's framework props set data-fw='yes'; the user side never
+    // provides that key here, so use `type` (framework sets 'button') to
+    // pin that a same-key, non-function collision resolves framework-first,
+    // unaffected by handler composition.
+    const { container } = render(<Widget render={<button type="submit" />} />);
+    const el = container.querySelector('button')!;
+    expect(el.type).toBe('button');
+  });
+
+  describe('non-focusable trigger dev-warning', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('dev-warns when a render trigger resolves to a non-focusable element', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const { container } = render(<TriggerWidget render={<span />} />);
+      expect(container.querySelector('span')).toBeTruthy();
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = warn.mock.calls[0]?.[0] as string;
+      expect(message).toContain('span');
+      expect(message).toMatch(/button|tabindex/i);
+    });
+
+    it('does not warn for a button, or for a span with explicit tabindex', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<TriggerWidget render={<button />} />);
+      render(<TriggerWidget render={<span tabIndex={0} />} />);
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 });

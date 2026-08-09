@@ -34,8 +34,30 @@ function joinClass(a: unknown, b: unknown): string | undefined {
   return parts.join(' ');
 }
 
-// Framework props win over user props, except `class`/`className` (joined) and
-// `ref` (merged so both the user ref and our ref fire).
+// Compose a user handler with a framework handler, user-first: this matches
+// how a part chains its own onX prop with its internal logic (the part calls
+// the caller's handler, then does its own work). Both sides run
+// unconditionally; neither can veto the other by, say, calling
+// preventDefault (parts that need that guard read event.defaultPrevented
+// themselves).
+function composeHandlers(
+  user: (...args: unknown[]) => unknown,
+  framework: (...args: unknown[]) => unknown
+): (...args: unknown[]) => void {
+  return (...args) => {
+    user(...args);
+    framework(...args);
+  };
+}
+
+function isCallable(value: unknown): value is (...args: unknown[]) => unknown {
+  return typeof value === 'function';
+}
+
+// Framework props win over user props, except `class`/`className` (joined),
+// `ref` (merged so both the user ref and our ref fire), and function props
+// that collide on both sides (composed user-first instead of the framework
+// handler silently replacing the user's).
 function mergeProps(user: Props, framework: Props): Props {
   const out: Props = { ...user };
   for (const key of Object.keys(framework)) {
@@ -50,10 +72,67 @@ function mergeProps(user: Props, framework: Props): Props {
         framework.ref as Parameters<typeof mergeRefs>[0]
       );
     } else {
-      out[key] = framework[key];
+      const userVal = user[key];
+      const fwVal = framework[key];
+      if (isCallable(userVal) && isCallable(fwVal)) {
+        out[key] = composeHandlers(userVal, fwVal);
+      } else {
+        out[key] = fwVal;
+      }
     }
   }
   return out;
+}
+
+// A part is an interactive trigger - its own behavior depends on the
+// resolved DOM element being focusable - when its framework props wire a
+// click, key, or focus handler. Presentational parts (Title, Description,
+// Separator, GroupLabel, Anchor, ...) never carry these, so this stays false
+// for them; it only trips for parts like Tooltip.Trigger (onFocus opens the
+// tooltip) or a button-flavored action (onClick) whose contract requires the
+// element to actually receive focus/clicks. That keeps the check narrow
+// enough to avoid false positives on non-interactive parts.
+const TRIGGER_HANDLER_KEYS = ['onClick', 'onKeyDown', 'onFocus'] as const;
+
+function isInteractiveTrigger(props: Props): boolean {
+  return TRIGGER_HANDLER_KEYS.some((key) => typeof props[key] === 'function');
+}
+
+const FOCUSABLE_TAG = /^(button|a|input|select|textarea|summary)$/i;
+
+function isFocusable(el: HTMLElement): boolean {
+  return (
+    FOCUSABLE_TAG.test(el.tagName) ||
+    el.tabIndex >= 0 ||
+    el.hasAttribute('tabindex')
+  );
+}
+
+const warnedTriggerElements = new WeakSet<HTMLElement>();
+
+function warnIfNotFocusable(el: HTMLElement): void {
+  if (warnedTriggerElements.has(el) || isFocusable(el)) return;
+  warnedTriggerElements.add(el);
+  console.warn(
+    `renderElement: <${el.tagName.toLowerCase()}> is used as an interactive trigger ` +
+      '(it receives a click, key, or focus handler) but is not focusable. ' +
+      'Render it as a <button> (or another natively focusable element), or add tabindex={0}.'
+  );
+}
+
+function triggerRef(el: HTMLElement | null): void {
+  if (el) warnIfNotFocusable(el);
+}
+
+// Dev-only: append the focusability check to whatever ref is already going
+// out for this element, once per resolved node (WeakSet dedupes remounts of
+// the same element within a session).
+function withTriggerWarn(ref: unknown, props: Props): unknown {
+  if (!import.meta.env.DEV || !isInteractiveTrigger(props)) return ref;
+  return mergeRefs(
+    ref as Parameters<typeof mergeRefs>[0],
+    triggerRef as Parameters<typeof mergeRefs>[0]
+  );
 }
 
 export function renderElement<State = Record<never, never>>(
@@ -66,6 +145,7 @@ export function renderElement<State = Record<never, never>>(
   }
   if (render && typeof render === 'object' && 'type' in render) {
     const merged = mergeProps((render.props ?? {}) as Props, props);
+    merged.ref = withTriggerWarn(merged.ref, props);
     const mergedChildren: ComponentChildren =
       children !== undefined
         ? children
@@ -74,5 +154,8 @@ export function renderElement<State = Record<never, never>>(
     return cloneElement(render, merged, mergedChildren);
   }
   const tag = typeof render === 'string' ? render : defaultTag;
-  return h(tag, props as JSX.HTMLAttributes, children) as VNode;
+  const tagProps: Props = isInteractiveTrigger(props)
+    ? { ...props, ref: withTriggerWarn(props.ref, props) }
+    : props;
+  return h(tag, tagProps as JSX.HTMLAttributes, children) as VNode;
 }
