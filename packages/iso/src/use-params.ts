@@ -26,6 +26,9 @@ export function __resetParamsWarningsForTesting(): void {
  * does not have the shape this projects, and dev builds warn. Reach for
  * `useRouteMatch(route)` when the route may legitimately not be active: it
  * returns the match or `null` rather than projecting a shape that is not there.
+ *
+ * Must be called under a `LocationProvider`, which the generated client
+ * entry supplies.
  */
 export function useParams<P extends RegisteredPaths>(route: P): RouteParams<P> {
   const match = useRouteMatch(route);
