@@ -156,7 +156,9 @@ describe('eventStream', () => {
       }
       const drained: number[] = [];
       for (let i = 0; i < 128; i++) {
-        drained.push((await gen.next()).value.n);
+        const result = await gen.next();
+        if (result.done) throw new Error('generator ended early');
+        drained.push(result.value.n);
       }
       expect(drained).toEqual(Array.from({ length: 128 }, (_, i) => i));
       expect(warnSpy).toHaveBeenCalledTimes(1);
