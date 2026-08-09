@@ -92,7 +92,7 @@ pnpm add -D vite
 
 ## Status
 
-`v0.12.0`. Pre-1.0; expect changes between minor versions.
+`v0.13.0`. Pre-1.0; expect changes between minor versions.
 
 ## Contributing
 
