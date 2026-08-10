@@ -269,8 +269,15 @@ describe('the consolidated deny record', () => {
     expectTypeOf<Deny['submittedPayload']>().toEqualTypeOf<{ title: string }>();
   });
 
-  it('keeps the mutate success arm free of a kind discriminant', () => {
-    type Ok = Extract<MutateResult<number>, { ok: true }>;
-    expectTypeOf<Ok>().toEqualTypeOf<{ data: number | undefined; ok: true }>();
+  it('discriminates the mutate success arm from the navigated arm by kind', () => {
+    type Success = Extract<MutateResult<number>, { kind: 'success' }>;
+    expectTypeOf<Success>().toEqualTypeOf<{
+      data: number | undefined;
+      ok: true;
+      kind: 'success';
+    }>();
+
+    type Navigated = Extract<MutateResult<number>, { kind: 'navigated' }>;
+    expectTypeOf<Navigated>().toEqualTypeOf<{ ok: true; kind: 'navigated' }>();
   });
 });

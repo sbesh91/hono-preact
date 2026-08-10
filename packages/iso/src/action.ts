@@ -275,13 +275,20 @@ export type UseActionOptions<
   | UseActionWithoutMutate<TPayload, TResult, TChunk>;
 
 /**
- * The value `mutate` resolves to. A discriminated union so callers can
- * chain on success without awaiting then probing the hook's `data`/`error`
- * state, and without leaking unhandled rejections in fire-and-forget callers.
+ * The value `mutate` resolves to. A four-arm discriminated union, keyed
+ * uniformly on `kind`, so callers can chain on success without awaiting then
+ * probing the hook's `data`/`error` state, and without leaking unhandled
+ * rejections in fire-and-forget callers.
  *
- * - Success: `{ ok: true, data }`. `data` is `undefined` for streaming
- *   actions that close without emitting a `result` SSE event (the type
- *   reflects this honestly: callers must narrow before using `data`).
+ * - Success: `{ ok: true, kind: 'success', data }`. `data` is `undefined` for
+ *   streaming actions that close without emitting a `result` SSE event (the
+ *   type reflects this honestly: callers must narrow before using `data`).
+ * - Navigated: `{ ok: true, kind: 'navigated' }`. The action issued a
+ *   same-origin redirect and navigation is in flight. There is no result
+ *   value, `onSuccess` does not fire, and the component this was called from
+ *   is probably unmounting: do not assume it is still mounted after awaiting
+ *   this arm. Declared loaders are still invalidated, since a redirect after
+ *   a mutation usually lands on a page rendering the data it just changed.
  * - Denied: `{ ok: false, kind: 'deny', deny }`. A guard (or a schema) refused
  *   the request. `deny` is the structured envelope -- status, message, the
  *   optional typed `code`, and `data` typed as the action's inferred deny
@@ -296,7 +303,8 @@ export type UseActionOptions<
  * additive to the RETURN value only.
  */
 export type MutateResult<TResult, TDenyData = unknown> =
-  | { ok: true; data: Serialize<TResult> | undefined }
+  | { ok: true; kind: 'success'; data: Serialize<TResult> | undefined }
+  | { ok: true; kind: 'navigated' }
   | { ok: false; kind: 'deny'; deny: DenyRecord<TDenyData> }
   | { ok: false; kind: 'error'; error: Error };
 
@@ -663,7 +671,8 @@ export function useAction<
           // body shaped as { __outcome, ... } regardless of HTTP status.
           // Failures throw to the surrounding catch (which sets `error`/`data`
           // and returns `{ ok: false }`); success falls through to
-          // `applyInvalidate` below; a same-origin redirect parks forever.
+          // `applyInvalidate` below; a same-origin redirect invalidates and
+          // returns the navigated arm.
           const decoded = await decodeActionResponse(response);
           const navigated = applyDecodedOutcome(decoded, {
             success: (data) => {
@@ -722,10 +731,13 @@ export function useAction<
             },
           });
           if (navigated) {
-            // Same-origin redirect issued; this promise never settles.
-            return await new Promise<MutateResult<TResult, TDenyData>>(
-              () => {}
-            );
+            // Same-origin redirect issued and navigation is in flight. Settle
+            // rather than parking forever: an unsettled promise dead-ends
+            // `await mutate()`, never runs `.finally()`, and leaks. Invalidate
+            // first, since the destination usually renders the data this
+            // mutation just changed and would otherwise serve a stale loader.
+            applyInvalidate(currentOptions?.invalidate);
+            return { ok: true, kind: 'navigated' };
           }
         }
 
@@ -760,7 +772,7 @@ export function useAction<
         endSubmit(currentStub.__module, currentStub.__action);
       }
       setPending(false);
-      return { ok: true, data: finalResult };
+      return { ok: true, kind: 'success', data: finalResult };
     },
     []
   );
