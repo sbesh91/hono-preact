@@ -53,7 +53,9 @@ const TARGETS: BuiltTarget[] = [
     routes: ['/', '/about'],
     foreignCwdServe: () => ({
       cmd: 'node',
-      args: [resolve(repoRoot, 'apps/example-node/dist/server/server-entry.js')],
+      args: [
+        resolve(repoRoot, 'apps/example-node/dist/server/server-entry.js'),
+      ],
     }),
   },
   {
