@@ -11,7 +11,7 @@ import {
 } from '@hono-preact/iso/internal/contract';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import type { HonoPreactAdapter } from './adapter.js';
-import type { RootRef } from './root.js';
+import { createRootRef, type RootRef } from './root.js';
 
 export interface GenerateCoreAppModuleOptions {
   layoutAbsPath: string;
@@ -294,8 +294,13 @@ export interface ServerEntryPluginOptions {
    * hook is the first to see `userConfig`; it resolves the root here and every
    * other consumer (the umbrella plugin's optimizer seed, the adapter context)
    * reads the same value back.
+   *
+   * Optional: defaults to a fresh `createRootRef()` when omitted, which is
+   * enough for a standalone call to this plugin. Pass one explicitly only
+   * when another plugin (e.g. the `honoPreact()` umbrella) needs to read the
+   * same resolved root.
    */
-  rootRef: RootRef;
+  rootRef?: RootRef;
   /**
    * Project-relative or absolute path to the app's global stylesheet
    * (`honoPreact({ css: { global } })`). In serve mode the generated core
@@ -307,6 +312,10 @@ export interface ServerEntryPluginOptions {
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
+  // Created once per call, not per `config` hook invocation: a fresh RootRef
+  // per hook call would defeat the first-writer-wins memoization the type
+  // documents.
+  const rootRef = opts.rootRef ?? createRootRef();
   let apiAbsPath: string | undefined;
   let appConfigAbsPath: string | undefined;
   // The candidate paths the config-hook existence probes checked, retained so
@@ -324,7 +333,7 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
     // wrapper exists before @cloudflare/vite-plugin's own `config` hook does
     // fs.existsSync on wrangler.jsonc `main`.
     config(userConfig, env) {
-      const root = opts.rootRef.set(userConfig);
+      const root = rootRef.set(userConfig);
       const coreAppPath = generatedCoreAppAbsPath(root);
       const entryWrapperPath = generatedEntryWrapperAbsPath(root);
       const layoutAbsPath = path.isAbsolute(opts.layout)
