@@ -733,10 +733,12 @@ export function useAction<
           if (navigated) {
             // Same-origin redirect issued and navigation is in flight. Settle
             // rather than parking forever: an unsettled promise dead-ends
-            // `await mutate()`, never runs `.finally()`, and leaks. Invalidate
-            // first, since the destination usually renders the data this
-            // mutation just changed and would otherwise serve a stale loader.
-            applyInvalidate(currentOptions?.invalidate);
+            // `await mutate()`, never runs `.finally()`, and leaks. Do NOT
+            // invalidate here: assignSafeRedirect drives this through
+            // `window.location.assign`, a full document load, so the
+            // destination gets a fresh SSR payload and fresh in-memory
+            // loader caches. Nothing invalidated client-side can affect it,
+            // and issuing one races the document teardown.
             // setPending is a no-op after unmount, same as the abort branch
             // below: navigation may be slow, blocked, or cancelled, and the
             // component this was called from can still be mounted to observe

@@ -3,7 +3,7 @@ import { parse } from '@babel/parser';
 import type { Program } from '@babel/types';
 import {
   parseServerLoaders,
-  readParamsOption,
+  readCacheKeyParamsOption,
 } from '../server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from '../parser-options.js';
 
@@ -157,7 +157,7 @@ describe('parseServerLoaders', () => {
   });
 });
 
-describe('readParamsOption', () => {
+describe('readCacheKeyParamsOption', () => {
   function optsFrom(code: string) {
     const program = parseProgram(`
       export const serverLoaders = { x: defineLoader(fn, ${code}) };
@@ -168,26 +168,26 @@ describe('readParamsOption', () => {
 
   it('returns string[] for array of string literals', () => {
     const opts = optsFrom(`{ cacheKeyParams: ['genre', 'id'] }`);
-    expect(readParamsOption(opts)).toEqual(['genre', 'id']);
+    expect(readCacheKeyParamsOption(opts)).toEqual(['genre', 'id']);
   });
 
   it("returns '*' for the wildcard string literal", () => {
     const opts = optsFrom(`{ cacheKeyParams: '*' }`);
-    expect(readParamsOption(opts)).toBe('*');
+    expect(readCacheKeyParamsOption(opts)).toBe('*');
   });
 
   it('returns undefined when params is absent', () => {
     const opts = optsFrom(`{ cache: true }`);
-    expect(readParamsOption(opts)).toBeUndefined();
+    expect(readCacheKeyParamsOption(opts)).toBeUndefined();
   });
 
   it('returns undefined for an unsupported params shape (non-wildcard string)', () => {
     const opts = optsFrom(`{ cacheKeyParams: 'something' }`);
-    expect(readParamsOption(opts)).toBeUndefined();
+    expect(readCacheKeyParamsOption(opts)).toBeUndefined();
   });
 
   it('returns undefined for an empty array', () => {
     const opts = optsFrom(`{ cacheKeyParams: [] }`);
-    expect(readParamsOption(opts)).toBeUndefined();
+    expect(readCacheKeyParamsOption(opts)).toBeUndefined();
   });
 });

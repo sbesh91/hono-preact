@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import { parse } from '@babel/parser';
 import {
   parseServerLoaders,
-  readParamsOption,
+  readCacheKeyParamsOption,
 } from './server-loaders-parser.js';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
@@ -67,7 +67,7 @@ export function extractServerLoadersMeta(
   const meta: Record<string, ServerLoaderMeta> = {};
   for (const entry of entries) {
     const cacheKeyParams = entry.optsArg
-      ? readParamsOption(entry.optsArg)
+      ? readCacheKeyParamsOption(entry.optsArg)
       : undefined;
     if (cacheKeyParams === undefined && !entry.routeBound) continue;
     const m: ServerLoaderMeta = {};

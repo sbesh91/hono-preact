@@ -115,7 +115,7 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
  * for the wildcard string literal, or undefined if not present or
  * unsupported shape.
  */
-export function readParamsOption(
+export function readCacheKeyParamsOption(
   opts: ObjectExpression
 ): string[] | '*' | undefined {
   for (const prop of opts.properties) {

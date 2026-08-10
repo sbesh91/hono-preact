@@ -198,11 +198,12 @@ describe('<Form>', () => {
     }
   });
 
-  it('invalidates declared loaders on a same-origin redirect, matching useAction', async () => {
-    // useAction's navigated arm calls applyInvalidate(currentOptions?.invalidate);
-    // <Form>'s navigated sink must do the same, or `<Form invalidate={[loader]}>`
-    // against a redirecting action leaves loaders stale while the identical
-    // useAction({ invalidate: [loader] }) call refreshes them.
+  it('does NOT invalidate declared loaders on a same-origin redirect, matching useAction', async () => {
+    // A same-origin redirect drives window.location.assign: a full document
+    // load. The destination gets a fresh SSR payload and fresh in-memory
+    // loader caches, so nothing invalidated client-side can affect it.
+    // <Form>'s navigated sink must skip invalidation the same way useAction's
+    // navigated arm does.
     const loader = defineLoader(async () => ({ n: 1 }));
     loader.cache.set({ n: 1 });
     const invalidateSpy = vi.spyOn(loader, 'invalidate');
@@ -227,7 +228,7 @@ describe('<Form>', () => {
     fireEvent.submit(container.querySelector('form')!);
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
   it('writes success outcome to the client store', async () => {

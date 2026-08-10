@@ -815,7 +815,12 @@ describe('useAction — outcome envelope decoding', () => {
     expect(onSuccess).not.toHaveBeenCalled();
   });
 
-  it('a redirecting mutation still invalidates its declared loaders', async () => {
+  it('a redirecting mutation does NOT invalidate its declared loaders', async () => {
+    // The navigated arm is only reachable via a same-origin redirect, which
+    // drives window.location.assign: a full document load. The destination
+    // gets a fresh SSR payload and fresh in-memory loader caches, so nothing
+    // invalidated client-side can affect it, and doing so would race the
+    // document teardown with a redundant fetch.
     const loader = defineLoader(async () => ({ n: 1 }));
     loader.cache.set({ n: 1 });
     expect(loader.cache.has()).toBe(true);
@@ -850,8 +855,8 @@ describe('useAction — outcome envelope decoding', () => {
       await result.current.mutate({});
     });
 
-    expect(loader.cache.has()).toBe(false);
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(loader.cache.has()).toBe(true);
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
   it('the success arm carries kind: success', async () => {

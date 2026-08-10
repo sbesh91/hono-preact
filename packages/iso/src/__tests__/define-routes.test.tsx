@@ -804,4 +804,33 @@ describe('bare leaf view dev-warning', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Index'));
     warn.mockRestore();
   });
+
+  it('warns about a missing default export instead of throwing when a leaf view module has none', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const rejections: unknown[] = [];
+    const onRejection = (e: PromiseRejectionEvent) => rejections.push(e.reason);
+    window.addEventListener('unhandledrejection', onRejection);
+
+    // A view module that forgot `export default`: `view()` resolves without
+    // a `default` key, the shape SSR/DEV also sees in production.
+    const view = () =>
+      Promise.resolve({} as unknown as { default: ComponentType<ViewProps> });
+    const manifest = defineRoutes([{ path: '/no-default', view }]);
+
+    history.replaceState(null, '', '/no-default');
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })) as VNode);
+
+    await waitFor(() => {
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('without a default export')
+      );
+    });
+
+    // The historical bug threw a TypeError from inside the WeakSet call
+    // instead of warning; make sure that path is gone.
+    expect(rejections.some((r) => String(r).includes('WeakSet'))).toBe(false);
+
+    window.removeEventListener('unhandledrejection', onRejection);
+    warn.mockRestore();
+  });
 });

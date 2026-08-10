@@ -45,8 +45,15 @@ export function useParams<P extends RegisteredPaths>(route: P): RouteParams<P> {
     // Non-exact: an ancestor route reading a descendant's active params (a
     // layout or nested leaf) is correct usage, not a mismatch. Only a path
     // that does not descend from `route` at all is worth warning about.
-    const match = matchRouteParams(path, route, false);
-    if (match === null && !warnedRoutes.has(route)) {
+    //
+    // `path` is falsy when there is no ancestor `LocationProvider` (preact-iso
+    // defaults its context to `{}`), e.g. a page component unit-tested in
+    // isolation. Skip the check rather than let `matchRouteParams` reach
+    // `exec`'s `url.split('/')` on `undefined`: this warning is a dev aid,
+    // not a hard requirement, so there is nothing useful to check without a
+    // real path.
+    const match = path ? matchRouteParams(path, route, false) : null;
+    if (path && match === null && !warnedRoutes.has(route)) {
       console.warn(
         `hono-preact: useParams('${route}') was called where that route is ` +
           `not the active route, so the returned params do not have the ` +

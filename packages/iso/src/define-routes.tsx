@@ -27,6 +27,14 @@ const warnedBareViews = new WeakSet<object>();
 // site (view() is a lazy import thunk, so the actual component is only known
 // once its module has loaded).
 function warnBareLeafView(view: ComponentType<ViewProps>): void {
+  if (typeof view !== 'function') {
+    console.warn(
+      'hono-preact: a leaf view module resolved without a default export ' +
+        '(or its default export is not a component). Add `export default` ' +
+        'to the view module, wrapping the component with definePage.'
+    );
+    return;
+  }
   if (isDefinePageComponent(view)) return;
   if (warnedBareViews.has(view)) return;
   warnedBareViews.add(view);

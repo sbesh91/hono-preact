@@ -28,10 +28,10 @@ function Harness({ onParams }: { onParams: (p: unknown) => void }) {
   return null;
 }
 
-// `useParams` now also calls `useRouteMatch`, which reads the active location
-// via `useLocation` (not stubbed by the `preact-iso` mock above), so tests
-// that exercise the dev-warn path render under a real `LocationProvider` at a
-// given URL, same idiom as route-active.test.tsx.
+// `useParams` also matches the active location against the named route (via
+// `useLocation` plus `matchRouteParams`, not stubbed by the `preact-iso` mock
+// above), so tests that exercise the dev-warn path render under a real
+// `LocationProvider` at a given URL, same idiom as route-active.test.tsx.
 function renderAtPath(path: string, Body: () => null) {
   history.replaceState(null, '', path);
   return render(
@@ -43,7 +43,7 @@ function renderAtPath(path: string, Body: () => null) {
 
 describe('useParams', () => {
   it('returns the live route pathParams for the named route', () => {
-    // useParams now also calls useRouteMatch, which needs a real
+    // useParams also matches the active location, which needs a real
     // LocationProvider in scope (the preact-iso mock above only stubs
     // useRoute); match at the same path the mock's pathParams describe.
     mockRoute.pathParams = { projectId: 'p1' };
@@ -101,5 +101,17 @@ describe('useParams', () => {
     });
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+
+  test('does not throw when rendered outside a LocationProvider', () => {
+    // preact-iso defaults LocationProvider.ctx to `{}`, so `path` is
+    // undefined here; useParams must skip the dev-warn match rather than let
+    // matchRouteParams reach exec()'s url.split('/') on undefined.
+    mockRoute.pathParams = { projectId: 'p1' };
+    let seen: unknown;
+    expect(() => {
+      render(<Harness onParams={(p) => (seen = p)} />);
+    }).not.toThrow();
+    expect(seen).toEqual({ projectId: 'p1' });
   });
 });
