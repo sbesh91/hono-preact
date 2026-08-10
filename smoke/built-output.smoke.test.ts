@@ -196,7 +196,29 @@ describe.each(TARGETS)(
         try {
           await waitForServer(foreignPort, 60_000);
           const res = await fetch(`http://localhost:${foreignPort}${asset}`);
-          expect(res.status, `${asset} from a foreign cwd -> ${res.status}`).toBe(200);
+          const body = await res.text();
+
+          // A bare status check is not enough: when serveStatic misses on the
+          // foreign cwd, the request falls through to the SSR catch-all,
+          // which answers 200 with the HTML page shell instead of the asset.
+          // Prove this is the real JS asset, not the shell, by checking the
+          // content-type and comparing bytes against the known-good server
+          // already running from the project root on `port`.
+          expect(
+            res.status,
+            `${asset} from a foreign cwd -> ${res.status}\n${body.slice(0, 200)}`
+          ).toBe(200);
+          expect(
+            res.headers.get('content-type'),
+            `${asset} from a foreign cwd had content-type ${res.headers.get('content-type')}, body started with:\n${body.slice(0, 200)}`
+          ).toContain('javascript');
+
+          const controlRes = await fetch(`http://localhost:${port}${asset}`);
+          const controlBody = await controlRes.text();
+          expect(
+            body,
+            `${asset} from a foreign cwd did not match the same asset served from the project-root cwd`
+          ).toBe(controlBody);
         } finally {
           foreign.kill('SIGTERM');
         }
