@@ -287,8 +287,9 @@ export type UseActionOptions<
  *   same-origin redirect and navigation is in flight. There is no result
  *   value, `onSuccess` does not fire, and the component this was called from
  *   is probably unmounting: do not assume it is still mounted after awaiting
- *   this arm. Declared loaders are still invalidated, since a redirect after
- *   a mutation usually lands on a page rendering the data it just changed.
+ *   this arm. Declared loaders are NOT invalidated, because the redirect is
+ *   a full document load: the destination receives a fresh SSR payload and
+ *   fresh in-memory loader caches, and client-side invalidation cannot affect it.
  * - Denied: `{ ok: false, kind: 'deny', deny }`. A guard (or a schema) refused
  *   the request. `deny` is the structured envelope -- status, message, the
  *   optional typed `code`, and `data` typed as the action's inferred deny
@@ -689,8 +690,8 @@ export function useAction<
           // body shaped as { __outcome, ... } regardless of HTTP status.
           // Failures throw to the surrounding catch (which sets `error`/`data`
           // and returns `{ ok: false }`); success falls through to
-          // `applyInvalidate` below; a same-origin redirect invalidates and
-          // returns the navigated arm.
+          // `applyInvalidate` below; a same-origin redirect returns the
+          // navigated arm without invalidating.
           const decoded = await decodeActionResponse(response);
           const navigated = applyDecodedOutcome(decoded, {
             success: (data) => {
