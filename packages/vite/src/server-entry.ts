@@ -11,6 +11,7 @@ import {
 } from '@hono-preact/iso/internal/contract';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import type { HonoPreactAdapter } from './adapter.js';
+import { createRootRef, type RootRef } from './root.js';
 
 export interface GenerateCoreAppModuleOptions {
   layoutAbsPath: string;
@@ -288,8 +289,18 @@ export interface ServerEntryPluginOptions {
    */
   serverDir: string;
   adapter: HonoPreactAdapter;
-  coreAppPath: string; // absolute path to write the core app module
-  entryWrapperPath: string; // absolute path to write the adapter wrapper
+  /**
+   * The shared root holder. This plugin is `enforce: 'pre'`, so its `config`
+   * hook is the first to see `userConfig`; it resolves the root here and every
+   * other consumer (the umbrella plugin's optimizer seed, the adapter context)
+   * reads the same value back.
+   *
+   * Optional: defaults to a fresh `createRootRef()` when omitted, which is
+   * enough for a standalone call to this plugin. Pass one explicitly only
+   * when another plugin (e.g. the `honoPreact()` umbrella) needs to read the
+   * same resolved root.
+   */
+  rootRef?: RootRef;
   /**
    * Project-relative or absolute path to the app's global stylesheet
    * (`honoPreact({ css: { global } })`). In serve mode the generated core
@@ -301,6 +312,10 @@ export interface ServerEntryPluginOptions {
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
+  // Created once per call, not per `config` hook invocation: a fresh RootRef
+  // per hook call would defeat the first-writer-wins memoization the type
+  // documents.
+  const rootRef = opts.rootRef ?? createRootRef();
   let apiAbsPath: string | undefined;
   let appConfigAbsPath: string | undefined;
   // The candidate paths the config-hook existence probes checked, retained so
@@ -318,9 +333,9 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
     // wrapper exists before @cloudflare/vite-plugin's own `config` hook does
     // fs.existsSync on wrangler.jsonc `main`.
     config(userConfig, env) {
-      const root = userConfig.root
-        ? path.resolve(userConfig.root)
-        : process.cwd();
+      const root = rootRef.set(userConfig);
+      const coreAppPath = generatedCoreAppAbsPath(root);
+      const entryWrapperPath = generatedEntryWrapperAbsPath(root);
       const layoutAbsPath = path.isAbsolute(opts.layout)
         ? opts.layout
         : path.resolve(root, opts.layout);
@@ -377,16 +392,16 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         serverRegistryGlob,
         devGlobalCssUrl,
       });
-      fs.mkdirSync(path.dirname(opts.coreAppPath), { recursive: true });
-      fs.writeFileSync(opts.coreAppPath, source, 'utf8');
+      fs.mkdirSync(path.dirname(coreAppPath), { recursive: true });
+      fs.writeFileSync(coreAppPath, source, 'utf8');
 
       const wrapper = opts.adapter.wrapEntry({
         root,
-        coreAppModuleId: opts.coreAppPath,
-        entryWrapperId: opts.entryWrapperPath,
+        coreAppModuleId: coreAppPath,
+        entryWrapperId: entryWrapperPath,
         apiModuleId: apiAbsPath,
       });
-      fs.writeFileSync(opts.entryWrapperPath, wrapper, 'utf8');
+      fs.writeFileSync(entryWrapperPath, wrapper, 'utf8');
     },
     // The existence probes above run only in the `config` hook, so creating
     // or deleting api.ts / app-config.ts (or adding the first module under a

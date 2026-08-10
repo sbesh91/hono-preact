@@ -16,6 +16,7 @@ import {
   generatedEntryWrapperAbsPath,
   serverEntryPlugin,
 } from './server-entry.js';
+import { createRootRef } from './root.js';
 import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
 import { BASELINE_TARGETS } from './css-targets.js';
 
@@ -27,9 +28,18 @@ export interface HonoPreactCssOptions {
    * also link it manually. Enables the build-time auto-split by default.
    */
   global?: string;
-  /** Default true (when `global` is set). Set false to deliver it unsplit. */
+  /**
+   * Split the global stylesheet per route chunk at build time.
+   * Only meaningful when `global` is set.
+   * @default true
+   */
   autoSplit?: boolean;
-  /** Minimum per-chunk scoped sheet size in bytes; smaller stays global. Default 1024. */
+
+  /**
+   * Minimum per-chunk scoped sheet size in bytes; anything smaller stays in
+   * the global sheet.
+   * @default 1024
+   */
   minSize?: number;
 }
 
@@ -106,21 +116,22 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
 
   const cssGlobal = css?.global;
 
-  const coreAppPath = generatedCoreAppAbsPath();
-  const entryWrapperPath = generatedEntryWrapperAbsPath();
-  const ctx: HonoPreactAdapterContext = {
-    root: process.cwd(),
-    coreAppModuleId: coreAppPath,
-    entryWrapperId: entryWrapperPath,
-  };
+  const rootRef = createRootRef();
 
-  // The root every post-config path decision resolves against. `ctx.root`
-  // (process.cwd() at honoPreact() call time) is only the pre-config
-  // fallback handed to the adapter contract: under a custom Vite `root` the
-  // two differ, and resolving against cwd silently points at the wrong tree.
-  // The `config` hook below updates this to the configured root before Vite
-  // calls any `configEnvironment` hook.
-  let resolvedRoot = ctx.root;
+  // Getters, not values: `honoPreact()` runs before any Vite hook, so the root
+  // is not yet knowable. Adapters read these fields from their own plugin
+  // hooks, by which time `hono-preact:server-entry`'s `config` has resolved it.
+  const ctx: HonoPreactAdapterContext = {
+    get root() {
+      return rootRef.get();
+    },
+    get coreAppModuleId() {
+      return generatedCoreAppAbsPath(rootRef.get());
+    },
+    get entryWrapperId() {
+      return generatedEntryWrapperAbsPath(rootRef.get());
+    },
+  };
 
   // Shared config plus the `client` build environment's input. The worker
   // environment is configured by the adapter's plugins; the `client`
@@ -132,7 +143,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
   const configPlugin: Plugin = {
     name: 'hono-preact:config',
     config(userConfig) {
-      resolvedRoot = userConfig.root ? resolve(userConfig.root) : process.cwd();
+      rootRef.set(userConfig);
       return {
         resolve: {
           dedupe: [
@@ -205,7 +216,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       if (name === 'client') return;
       return {
         optimizeDeps: {
-          entries: [resolve(resolvedRoot, routes)],
+          entries: [resolve(rootRef.get(), routes)],
           include: ['preact/devtools'],
         },
       };
@@ -231,8 +242,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       appConfig,
       serverDir,
       adapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef,
       cssGlobal,
     }),
     serverLoaderValidationPlugin(),

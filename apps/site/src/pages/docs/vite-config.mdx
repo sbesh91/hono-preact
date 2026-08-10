@@ -31,6 +31,20 @@ export default defineConfig({
 | `clientEntry` | `string`                                                     | `'virtual:hono-preact/client'` | Client entry module id.                                                                                                                    |
 | `css`         | `{ global?: string; autoSplit?: boolean; minSize?: number }` | `undefined`                    | Framework-owned global stylesheet delivery and build-time auto-split tuning. See [Styling](/docs/styling) for the full pipeline.           |
 
+## nodeAdapter(options?)
+
+| Option          | Type                            | Default | Description                                                                                          |
+| --------------- | ------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `devSsrInclude` | `readonly (string \| RegExp)[]` | `[]`    | Paths that must reach SSR in dev despite matching Vite's internal `/@` or `/node_modules/` prefixes. |
+
+The Node dev server hands `/@…` and `/node_modules/…` requests to Vite, which owns its HMR client and module graph. An app route that starts the same way, such as a `/@:username` profile page, never reaches SSR in dev even though it works in production. List it under `devSsrInclude` to force SSR:
+
+```ts
+nodeAdapter({ devSsrInclude: [/^\/@(?!vite\/|id\/|fs\/)[^/]+$/] });
+```
+
+`devSsrInclude` is checked before the built-in `/@` and `/node_modules/` prefix check. A string matches by prefix and a RegExp by `test()`, both against the request path with any query string removed. The built-in prefixes still apply to everything else, and Vite's own endpoints (its HMR client, `/@id/`, `/@fs/`, `/@react-refresh`) always reach Vite regardless of any pattern given here: `devSsrInclude` cannot break HMR or module loading.
+
 ## What the plugin handles
 
 `honoPreact()` configures everything the framework requires:

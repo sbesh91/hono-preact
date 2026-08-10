@@ -3,6 +3,15 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import {
+  rolldownVersion,
+  rollupVersion,
+  version as viteVersion,
+  type ConfigEnv,
+  type ConfigPluginContext,
+  type Plugin,
+  type UserConfig,
+} from 'vite';
+import {
   GENERATED_CORE_APP_RELATIVE,
   GENERATED_ENTRY_WRAPPER_RELATIVE,
   findApiShadowingRoutes,
@@ -11,6 +20,43 @@ import {
   generatedEntryWrapperAbsPath,
   serverEntryPlugin,
 } from '../server-entry.js';
+import { createRootRef } from '../root.js';
+
+/**
+ * A minimal but real `ConfigPluginContext`. Vite declares `this:
+ * ConfigPluginContext` on the `config` hook, so a bare `plugin.config(...)`
+ * call passes the plugin object as `this` -- wrong at runtime and a type
+ * error besides. This hook never touches the context, so the log methods
+ * are no-ops; `error` throws so a hook that unexpectedly reaches for it
+ * fails loudly instead of returning a bogus value.
+ */
+function configPluginContext(): ConfigPluginContext {
+  return {
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: (e) => {
+      throw typeof e === 'string' ? new Error(e) : e;
+    },
+    meta: { rollupVersion, rolldownVersion, viteVersion },
+  };
+}
+
+/** Invoke a plugin's `config` hook with a proper context. Unlike the umbrella
+ * `hono-preact:config` plugin, `hono-preact:server-entry`'s `config` hook
+ * writes files as a side effect and returns no config object, so this helper
+ * does not require a truthy return. */
+async function callConfig(
+  plugin: Plugin,
+  userConfig: UserConfig,
+  env: ConfigEnv
+): Promise<Omit<UserConfig, 'plugins'> | null | void> {
+  const hook = plugin.config;
+  if (typeof hook !== 'function') {
+    throw new Error(`${plugin.name} has no config hook`);
+  }
+  return await hook.call(configPluginContext(), userConfig, env);
+}
 
 // Minimal adapter stub for plugin tests that only check file-writing behavior.
 const stubAdapter = {
@@ -391,8 +437,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
     });
     (
       plugin as {
@@ -433,13 +478,6 @@ describe('serverEntryPlugin', () => {
       'hono-preact',
       'core-app.tsx'
     );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
 
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
@@ -448,8 +486,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
     });
     (
       plugin as {
@@ -480,13 +517,6 @@ describe('serverEntryPlugin', () => {
       'hono-preact',
       'core-app.tsx'
     );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
 
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
@@ -495,8 +525,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
       cssGlobal: 'src/styles/root.css',
     });
     (
@@ -528,13 +557,6 @@ describe('serverEntryPlugin', () => {
       'hono-preact',
       'core-app.tsx'
     );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
 
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
@@ -543,8 +565,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
       cssGlobal: 'src/styles/root.css',
     });
     (
@@ -566,20 +587,6 @@ describe('serverEntryPlugin', () => {
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nexport default new Hono().get('*', (c) => c.text('catch'));\n`
     );
-    const coreAppPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'core-app.tsx'
-    );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
@@ -587,8 +594,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
     });
     (
       plugin as {
@@ -628,20 +634,6 @@ describe('serverEntryPlugin', () => {
         '',
       ].join('\n')
     );
-    const coreAppPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'core-app.tsx'
-    );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
@@ -649,8 +641,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
     });
     (
       plugin as {
@@ -684,20 +675,6 @@ describe('serverEntryPlugin', () => {
         '',
       ].join('\n')
     );
-    const coreAppPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'core-app.tsx'
-    );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
@@ -705,8 +682,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
     });
     (
       plugin as {
@@ -732,20 +708,6 @@ describe('serverEntryPlugin', () => {
   it('buildStart does not error when app-config.ts is absent (fall back to inline empty config)', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-server-entry-'));
     // No src/app-config.ts written on disk.
-    const coreAppPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'core-app.tsx'
-    );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
@@ -753,8 +715,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
     });
     (
       plugin as {
@@ -784,20 +745,6 @@ describe('serverEntryPlugin', () => {
       path.join(tmp, 'src', 'api.ts'),
       `import { Hono } from 'hono';\nconst app = new Hono();\napp.notFound((c) => c.text('nope', 404));\nexport default app;\n`
     );
-    const coreAppPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'core-app.tsx'
-    );
-    const entryWrapperPath = path.join(
-      tmp,
-      'node_modules',
-      '.vite',
-      'hono-preact',
-      'server-entry.tsx'
-    );
     const plugin = serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
@@ -805,8 +752,7 @@ describe('serverEntryPlugin', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath,
-      entryWrapperPath,
+      rootRef: createRootRef(),
     });
     (
       plugin as {
@@ -879,7 +825,7 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
   // file created or deleted mid dev-session changes nothing until a restart.
   // The configureServer watcher closes that gap: it restarts the dev server
   // when a probe's answer flips, and the restart re-runs `config`.
-  function makePlugin(tmp: string) {
+  function makePlugin() {
     return serverEntryPlugin({
       layout: 'src/Layout.tsx',
       routes: 'src/routes.ts',
@@ -887,20 +833,7 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
       appConfig: 'src/app-config.ts',
       serverDir: 'src/server',
       adapter: stubAdapter,
-      coreAppPath: path.join(
-        tmp,
-        'node_modules',
-        '.vite',
-        'hono-preact',
-        'core-app.tsx'
-      ),
-      entryWrapperPath: path.join(
-        tmp,
-        'node_modules',
-        '.vite',
-        'hono-preact',
-        'server-entry.tsx'
-      ),
+      rootRef: createRootRef(),
     });
   }
 
@@ -945,7 +878,7 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
 
   it('restarts when api.ts is created mid-session (absent at config time)', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
-    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    const { restart, emit } = drive(makePlugin(), tmp);
     emit('add', path.join(tmp, 'src', 'api.ts'));
     expect(restart).toHaveBeenCalledTimes(1);
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -958,7 +891,7 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
       path.join(tmp, 'src', 'app-config.ts'),
       'export default { use: [] };\n'
     );
-    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    const { restart, emit } = drive(makePlugin(), tmp);
     emit('unlink', path.join(tmp, 'src', 'app-config.ts'));
     expect(restart).toHaveBeenCalledTimes(1);
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -966,7 +899,7 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
 
   it('does not restart on unlink of a candidate that was already absent', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
-    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    const { restart, emit } = drive(makePlugin(), tmp);
     emit('unlink', path.join(tmp, 'src', 'api.ts'));
     expect(restart).not.toHaveBeenCalled();
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -974,7 +907,7 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
 
   it('does not restart for unrelated file adds', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
-    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    const { restart, emit } = drive(makePlugin(), tmp);
     emit('add', path.join(tmp, 'src', 'pages', 'about.tsx'));
     expect(restart).not.toHaveBeenCalled();
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -982,7 +915,7 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
 
   it('restarts on the first server module added under an absent src/server', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
-    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    const { restart, emit } = drive(makePlugin(), tmp);
     emit('add', path.join(tmp, 'src', 'server', 'audit.server.ts'));
     expect(restart).toHaveBeenCalledTimes(1);
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -993,9 +926,56 @@ describe('serverEntryPlugin dev watcher (config-probe existence flips)', () => {
     // existing folder need no restart.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-watch-'));
     fs.mkdirSync(path.join(tmp, 'src', 'server'), { recursive: true });
-    const { restart, emit } = drive(makePlugin(tmp), tmp);
+    const { restart, emit } = drive(makePlugin(), tmp);
     emit('add', path.join(tmp, 'src', 'server', 'audit.server.ts'));
     expect(restart).not.toHaveBeenCalled();
     fs.rmSync(tmp, { recursive: true, force: true });
+  });
+});
+
+describe('serverEntryPlugin generated paths under a custom Vite root', () => {
+  it('writes the core app and entry wrapper under userConfig.root, not cwd', async () => {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hp-root-'));
+    const rootRef = createRootRef();
+    const seen: string[] = [];
+
+    const plugin = serverEntryPlugin({
+      layout: 'src/Layout.tsx',
+      routes: 'src/routes.ts',
+      api: 'src/api.ts',
+      appConfig: 'src/app-config.ts',
+      serverDir: 'src/server',
+      rootRef,
+      adapter: {
+        name: 'fake',
+        vitePlugins: () => [],
+        // Record what the adapter is handed, since that is the value a real
+        // adapter bakes into its emitted entry.
+        wrapEntry: (c) => {
+          seen.push(c.coreAppModuleId, c.entryWrapperId);
+          return 'export default {};\n';
+        },
+      },
+    });
+
+    await callConfig(
+      plugin,
+      { root: tmpRoot },
+      { command: 'build', mode: 'production' }
+    );
+
+    const coreApp = path.join(
+      tmpRoot,
+      'node_modules/.vite/hono-preact/core-app.tsx'
+    );
+    const wrapper = path.join(
+      tmpRoot,
+      'node_modules/.vite/hono-preact/server-entry.tsx'
+    );
+    expect(fs.existsSync(coreApp)).toBe(true);
+    expect(fs.existsSync(wrapper)).toBe(true);
+    expect(seen).toEqual([coreApp, wrapper]);
+
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
 });
