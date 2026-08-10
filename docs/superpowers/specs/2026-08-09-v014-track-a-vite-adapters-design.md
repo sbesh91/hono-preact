@@ -40,25 +40,43 @@ writes these files in its own `config` hook, deliberately (see the comment above
 `@cloudflare/vite-plugin`'s `config` hook runs `fs.existsSync` on the
 `wrangler.jsonc` `main` path. The paths therefore cannot move to `configResolved`.
 
-Approach: make the two paths lazy. `honoPreact()` passes a `getRoot: () => string`
-thunk (closing over `resolvedRoot`) into `serverEntryPlugin` instead of two
-precomputed absolute strings, and `ctx.root` is likewise read through the resolved
-value rather than `process.cwd()`.
+**Plugin ordering rules out the obvious fix.** The tempting shape is for
+`honoPreact()` to hand `serverEntryPlugin` a `getRoot()` thunk closing over
+`resolvedRoot`, which `configPlugin.config` sets. That does not work: Vite sorts
+`enforce: 'pre'` plugins ahead of unenforced ones, and `serverEntryPlugin` is
+`enforce: 'pre'` while `configPlugin` is not. Verified empirically against this
+repo's Vite via `resolveConfig` with instrumented `config` hooks; the observed
+order is `hono-preact:server-entry`, then `hono-preact:config`, then the rest.
+The thunk would read a stale `process.cwd()` every time. Do not reintroduce it.
 
-Plugin ordering carries this: `configPlugin` is first in the returned array and
-sets `resolvedRoot` in its `config` hook, and `serverEntryPlugin` is `enforce:
-'pre'`. Verify during implementation that `configPlugin.config` actually runs
-first; Vite sorts `enforce: 'pre'` plugins ahead of unenforced ones, so the
-`enforce: 'pre'` on `serverEntryPlugin` may invert the order. If it does, drop the
-thunk-from-`configPlugin` approach and have `serverEntryPlugin` derive the two
-paths from the root it already computes itself in `config(userConfig)`
-(`server-entry.ts:321-323`), which is self-contained and immune to plugin order.
-Either shape satisfies the requirement; do not ship one that depends on an
-unverified ordering assumption.
+Approach: `serverEntryPlugin` owns both paths. It already computes the resolved
+root itself inside its own `config(userConfig)` hook (`server-entry.ts:321-323`),
+so it derives `coreAppPath` and `entryWrapperPath` there via
+`generatedCoreAppAbsPath(root)` / `generatedEntryWrapperAbsPath(root)` (both
+already take a `cwd` parameter). The `coreAppPath` / `entryWrapperPath` options
+drop off `ServerEntryPluginOptions`. This is self-contained and immune to plugin
+order.
 
-`ctx` is constructed before any hook runs, so `ctx.root` becomes a getter over
-`resolvedRoot` rather than a plain string, keeping `HonoPreactAdapterContext`'s
-shape (`root: string`) unchanged for adapters.
+`ctx` is constructed before any hook runs and its `coreAppModuleId` /
+`entryWrapperId` are read by adapters at `wrapEntry` / `vitePlugins` time, so the
+three `ctx` fields (`root`, `coreAppModuleId`, `entryWrapperId`) become getters
+over the same lazily-resolved root. `HonoPreactAdapterContext`'s public shape
+(three `string` fields) is unchanged, so no adapter changes.
+
+The root lives in one per-`honoPreact()`-call holder, not three call sites:
+
+```ts
+// resolveRoot(userConfig) -> path.resolve(userConfig.root) ?? process.cwd()
+let root: string | undefined;
+const setRoot = (userConfig: UserConfig) => (root ??= resolveRoot(userConfig));
+const getRoot = () => root ?? process.cwd();
+```
+
+Both `configPlugin.config` and `serverEntryPlugin.config` call `setRoot`, so
+whichever Vite runs first wins and the other is a no-op; every getter reads
+`getRoot()`. The `?? process.cwd()` fallback covers the pre-hook window only (an
+adapter reading `ctx` before any `config` hook), preserving today's behaviour
+there rather than throwing.
 
 Test: a plugin-level test that invokes the `config` hook with
 `{ root: <tmpdir> }` and asserts the generated core-app and entry-wrapper files
@@ -140,9 +158,9 @@ about the caller passing the right argument.
 
 ## Promoted out of the batch
 
-Both are filed as their own v0.14 issues; neither is implemented here.
+Both are filed as their own v0.14 issues (#375, #376); neither is implemented here.
 
-- **CF adapter ships the full realtime DO machinery unconditionally**
+- **CF adapter ships the full realtime DO machinery unconditionally** (#375)
   (`adapter-cloudflare.ts`, the `wrapEntry` template). Gating it on room/socket
   detection, or providing an opt-out, changes what a deployed worker *contains*:
   the exported DO class, the wrangler migration, and the binding. Getting it
@@ -150,7 +168,7 @@ Both are filed as their own v0.14 issues; neither is implemented here.
   design covering detection (build-time registry scan vs explicit opt-out), what
   happens to an app that adds its first room after deploying an ungated worker,
   and the wrangler-config consequences.
-- **`emitClientAsset(fileName, () => source)`.** A new public Vite API. It needs
+- **`emitClientAsset(fileName, () => source)`** (#376). A new public Vite API. It needs
   a dev/build dual-path design (the dev server must serve what the build emits,
   which is exactly the split `apps/site/vite.config.ts` hand-rolls for
   `llms.txt`), a decision on source-vs-lazy-thunk evaluation timing, and a
