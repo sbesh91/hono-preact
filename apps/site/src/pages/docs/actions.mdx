@@ -372,12 +372,12 @@ const Movies = () => {
 
 ### Return value
 
-| Value     | Type                                                     | Description                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| --------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mutate`  | `(payload) => Promise<MutateResult<TResult, TDenyData>>` | Fires the action. Resolves with a three-arm discriminated union so awaiting callers can chain on the result without leaking unhandled rejections: `{ ok: true; data }`, `{ ok: false; kind: 'deny'; deny }`, or `{ ok: false; kind: 'error'; error }`. Both failure arms also write the hook's `error` state and call `onError`, for non-awaiting render-time use. Stable reference, safe to pass to `useEffect` or memoized children. |
-| `pending` | `boolean`                                                | `true` while the request is in flight.                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `error`   | `Error \| null`                                          | The last error, or `null` if none.                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `data`    | `Serialize<TResult> \| null`                             | The last successful result, or `null`. Not set for streaming responses.                                                                                                                                                                                                                                                                                                                                                                |
+| Value     | Type                                                     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mutate`  | `(payload) => Promise<MutateResult<TResult, TDenyData>>` | Fires the action. Resolves with a four-arm discriminated union, uniformly discriminated by `kind`, so awaiting callers can chain on the result without leaking unhandled rejections: `{ ok: true; kind: 'success'; data }`, `{ ok: true; kind: 'navigated' }`, `{ ok: false; kind: 'deny'; deny }`, or `{ ok: false; kind: 'error'; error }`. The `navigated` arm settles when the action redirects to a same-origin destination: `onSuccess` does not fire for it, declared loaders are still invalidated, and `pending` is cleared, but there is no `data` to read. Both failure arms also write the hook's `error` state and call `onError`, for non-awaiting render-time use. Stable reference, safe to pass to `useEffect` or memoized children. |
+| `pending` | `boolean`                                                | `true` while the request is in flight.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `error`   | `Error \| null`                                          | The last error, or `null` if none.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `data`    | `Serialize<TResult> \| null`                             | The last successful result, or `null`. Not set for streaming responses.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 #### Chaining on success
 
@@ -386,8 +386,11 @@ const { mutate } = useAction(addMovie);
 
 async function submit(payload) {
   const result = await mutate(payload);
-  if (result.ok) {
+  if (result.ok && result.kind === 'success') {
     navigate(`/movies/${result.data.id}`);
+  } else if (result.kind === 'navigated') {
+    // The action redirected to a same-origin destination. There is no
+    // `data` to read; the navigation itself is the outcome.
   } else if (result.kind === 'deny') {
     // A guard refused the request. `deny` is the structured envelope, so you
     // can branch on the reason instead of matching on a message string.
@@ -401,7 +404,8 @@ async function submit(payload) {
 
 ```ts
 type MutateResult<TResult, TDenyData> =
-  | { ok: true; data: Serialize<TResult> | undefined }
+  | { ok: true; kind: 'success'; data: Serialize<TResult> | undefined }
+  | { ok: true; kind: 'navigated' }
   | { ok: false; kind: 'deny'; deny: DenyRecord<TDenyData> }
   | { ok: false; kind: 'error'; error: Error };
 ```
@@ -468,28 +472,32 @@ action's own deny union, which it is not actually guaranteed to match. Treat
 `deny.data` as trustworthy only for the codes the action's own `use` array
 produces; narrow or check the shape before trusting it for any other code.
 
-#### Handling all three arms
+#### Handling all four arms
 
-`mutate`'s result is a three-arm discriminated union. Switch on it exhaustively rather than checking `ok` alone, so a denied request and a thrown error get distinct handling:
+`mutate`'s result is a four-arm discriminated union, uniformly discriminated by `kind`. Switch on `kind` exhaustively rather than checking `ok` alone, so a redirect, a denied request, and a thrown error each get distinct handling:
 
 ```tsx
 const { mutate } = useAction(addMovie);
 
 async function submit(payload) {
   const result = await mutate(payload);
-  switch (true) {
-    case result.ok:
+  switch (result.kind) {
+    case 'success':
       // result.data: Serialize<TResult> | undefined (undefined for a
       // streaming action that closes without a `result` event -- narrow
       // before reading it)
       if (result.data) navigate(`/movies/${result.data.id}`);
       break;
-    case result.kind === 'deny':
+    case 'navigated':
+      // The action redirected to a same-origin destination. Declared
+      // loaders were already invalidated; there is no `data` to read.
+      break;
+    case 'deny':
       // A guard or the framework's own validation refused the request.
       if (result.deny.code === 'UNAUTHORIZED') navigate('/login');
       else showToast(result.deny.message);
       break;
-    case result.kind === 'error':
+    case 'error':
       // Everything else: a thrown handler, a transport failure, a timeout.
       showToast(result.error.message);
       break;
@@ -497,7 +505,9 @@ async function submit(payload) {
 }
 ```
 
-The success arm's `data` is `Serialize<TResult> | undefined`, not just `Serialize<TResult>`: a streaming action can close without ever emitting a `result` event, and the type says so honestly rather than asserting a value that might not be there. Callers narrow before using `data` on the success arm the same way they narrow `kind` on the failure arms.
+The success arm's `data` is `Serialize<TResult> | undefined`, not just `Serialize<TResult>`: a streaming action can close without ever emitting a `result` event, and the type says so honestly rather than asserting a value that might not be there. Callers narrow before using `data` on the success arm the same way they narrow `kind` on the other arms.
+
+The `navigated` arm resolves the promise instead of leaving it pending forever: when the action redirects to a same-origin destination, the caller's `await mutate(payload)` settles with `{ ok: true, kind: 'navigated' }`. `onSuccess` does not fire for this arm (there is no result to pass it), but any loaders the action declares as invalidated still run, and `pending` clears. Because navigation may have already unmounted the component that called `mutate`, code after the `await` must not assume the component is still mounted.
 
 Non-awaiting callers (the common case: `onClick={() => mutate(payload)}`) still get the existing `error` state and `onError` callback for failure handling; no unhandled rejection is produced.
 
