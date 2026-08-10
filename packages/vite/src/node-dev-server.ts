@@ -36,7 +36,64 @@ export function nodeBuildPlugin(ctx: HonoPreactAdapterContext): Plugin {
   };
 }
 
-export function nodeDevServerPlugin(ctx: HonoPreactAdapterContext): Plugin {
+export interface NodeDevServerOptions {
+  /**
+   * Paths that must reach SSR in dev even though they collide with the
+   * built-in Vite-internal pass-through prefixes (`/@`, `/node_modules/`).
+   * A string matches by prefix; a RegExp matches by `.test()`. Matched
+   * against the query-stripped request path.
+   *
+   * This is additive only. The built-in prefixes stay in force for everything
+   * else, so no app config can break HMR or module loading by getting the
+   * Vite-internal list wrong.
+   *
+   * @example ['/@'] // an app with /@:username profile routes
+   */
+  devSsrInclude?: readonly (string | RegExp)[];
+}
+
+/**
+ * True when `path` matches any force-to-SSR pattern.
+ *
+ * RegExp patterns are matched flag-normalized (see `normalizePatterns`) even
+ * if the caller passes a raw `g`/`y` pattern: a global/sticky RegExp is
+ * stateful under `.test()` via `lastIndex`, and this function must give the
+ * same answer for the same input regardless of how many times it has been
+ * called before.
+ */
+export function shouldForceSsr(
+  path: string,
+  patterns: readonly (string | RegExp)[]
+): boolean {
+  return patterns.some((p) => {
+    if (typeof p === 'string') return path.startsWith(p);
+    const stateless =
+      p.flags.includes('g') || p.flags.includes('y')
+        ? new RegExp(p.source, p.flags.replace(/[gy]/g, ''))
+        : p;
+    return stateless.test(path);
+  });
+}
+
+/**
+ * Strip the `g` and `y` flags: both make `.test()` stateful via `lastIndex`,
+ * which would make a user's pattern match every other request.
+ */
+function normalizePatterns(
+  patterns: readonly (string | RegExp)[]
+): readonly (string | RegExp)[] {
+  return patterns.map((p) =>
+    typeof p === 'string'
+      ? p
+      : new RegExp(p.source, p.flags.replace(/[gy]/g, ''))
+  );
+}
+
+export function nodeDevServerPlugin(
+  ctx: HonoPreactAdapterContext,
+  options: NodeDevServerOptions = {}
+): Plugin {
+  const forcePatterns = normalizePatterns(options.devSsrInclude ?? []);
   return {
     name: 'hono-preact:node-dev-server',
     apply: 'serve',
@@ -81,7 +138,13 @@ export function nodeDevServerPlugin(ctx: HonoPreactAdapterContext): Plugin {
           // owns application routes, so pass these through. Same model as
           // @hono/vite-dev-server's `exclude` option.
           const path = (req.url ?? '').split('?')[0];
-          if (path.startsWith('/@') || path.startsWith('/node_modules/')) {
+          // `devSsrInclude` is checked FIRST: an app route like /@:username
+          // otherwise disappears into the Vite-internal pass-through below and
+          // never reaches SSR in dev, while working fine in production.
+          if (
+            !shouldForceSsr(path, forcePatterns) &&
+            (path.startsWith('/@') || path.startsWith('/node_modules/'))
+          ) {
             return next();
           }
 

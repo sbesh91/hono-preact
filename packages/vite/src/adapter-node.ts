@@ -5,13 +5,34 @@
 // `hono-preact/adapter-node` loads this file.
 import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
 import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/contract';
-import { nodeBuildPlugin, nodeDevServerPlugin } from './node-dev-server.js';
+import {
+  nodeBuildPlugin,
+  nodeDevServerPlugin,
+  type NodeDevServerOptions,
+} from './node-dev-server.js';
 
-export function nodeAdapter(): HonoPreactAdapter {
+export interface NodeAdapterOptions {
+  /**
+   * Paths that must reach SSR in dev even though they collide with the Vite
+   * dev server's internal `/@` and `/node_modules/` prefixes. A string matches
+   * by prefix, a RegExp by `.test()`. Additive: the built-in prefixes still
+   * apply to everything else.
+   *
+   * @example nodeAdapter({ devSsrInclude: ['/@'] })
+   */
+  devSsrInclude?: NodeDevServerOptions['devSsrInclude'];
+}
+
+export function nodeAdapter(
+  options: NodeAdapterOptions = {}
+): HonoPreactAdapter {
   return {
     name: 'node',
     vitePlugins(ctx: HonoPreactAdapterContext) {
-      return [nodeBuildPlugin(ctx), nodeDevServerPlugin(ctx)];
+      return [
+        nodeBuildPlugin(ctx),
+        nodeDevServerPlugin(ctx, { devSsrInclude: options.devSsrInclude }),
+      ];
     },
     wrapEntry(ctx) {
       // The outer app serves built client assets under /static/* and mounts
