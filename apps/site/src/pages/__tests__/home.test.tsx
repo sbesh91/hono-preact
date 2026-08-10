@@ -8,14 +8,7 @@ afterEach(() => cleanup());
 
 // Home is wrapped in definePage, so it takes RouteHook props (unused by the
 // page body itself, but required by the wrapped component's type).
-const fakeLocation: RouteHook = {
-  url: '/',
-  path: '/',
-  query: '',
-  pathParams: {},
-  searchParams: {},
-  route: () => {},
-} as RouteHook;
+const fakeLocation: RouteHook = { path: '/', pathParams: {}, searchParams: {} };
 
 describe('home (scroll experience)', () => {
   it('links to /docs/quick-start as the primary CTA', () => {

@@ -53,13 +53,10 @@ afterEach(() => {
 });
 
 const fakeLocation: RouteHook = {
-  url: '/test',
   path: '/test',
-  query: '',
   pathParams: {},
   searchParams: {},
-  route: () => {},
-} as RouteHook;
+};
 
 describe('definePage', () => {
   it('renders a loader.View component placed inside the page body', async () => {
