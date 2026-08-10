@@ -18,6 +18,20 @@ export default defineConfig({
 
 `adapter` is required; `honoPreact()` throws a clear error if it is omitted. The plugin auto-includes `@preact/preset-vite` internally, so you don't import it yourself. The framework ships two adapters today: `cloudflareAdapter()` for Cloudflare Workers, imported from `hono-preact/adapter-cloudflare`, and `nodeAdapter()` for Node.js (via `@hono/node-server`), imported from `hono-preact/adapter-node`. Each adapter supplies its own Vite plugins and entry wrapper, so the framework core stays target-agnostic.
 
+### nodeAdapter(options?)
+
+| Option          | Type                   | Default | Description                                                                                          |
+| --------------- | ---------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `devSsrInclude` | `(string \| RegExp)[]` | `[]`    | Paths that must reach SSR in dev despite matching Vite's internal `/@` or `/node_modules/` prefixes. |
+
+The Node dev server hands `/@…` and `/node_modules/…` requests to Vite, which owns its HMR client and module graph. An app route that starts the same way, such as a `/@:username` profile page, never reaches SSR in dev even though it works in production. List it under `devSsrInclude` to force SSR:
+
+```ts
+nodeAdapter({ devSsrInclude: ['/@'] });
+```
+
+`devSsrInclude` is checked before the built-in `/@` and `/node_modules/` prefix check. A string matches by prefix and a RegExp by `test()`, both against the request path with any query string removed. The built-in prefixes still apply to everything else.
+
 ## honoPreact(options)
 
 | Option        | Type                                                         | Default                        | Description                                                                                                                                |
