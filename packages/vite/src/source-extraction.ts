@@ -29,22 +29,23 @@ export function readSourceWithExtensionFallback(
 
 /**
  * Per-loader metadata threaded from a `.server.*` file into its client stub.
- * `params` is the cache-key dependency list (omitted when default). `routeBound`
- * marks a loader created via `serverRoute().loader` (omitted when false, i.e. a
- * route-independent bare `defineLoader`) so the client `LoaderHost` guard can
- * refuse it when consumed with no resolvable location.
+ * `cacheKeyParams` is the cache-key dependency list (omitted when default).
+ * `routeBound` marks a loader created via `serverRoute().loader` (omitted
+ * when false, i.e. a route-independent bare `defineLoader`) so the client
+ * `LoaderHost` guard can refuse it when consumed with no resolvable
+ * location.
  */
 export type ServerLoaderMeta = {
-  params?: string[] | '*';
+  cacheKeyParams?: string[] | '*';
   routeBound?: true;
 };
 
 // Reads a .server.* file synchronously and extracts per-loader metadata from
 // each entry in the `serverLoaders` ObjectExpression. Returns a map of
 // { loaderName -> ServerLoaderMeta }, with an entry ONLY for loaders that carry
-// something non-default (declared params and/or route-bound), or an empty object
-// if the file cannot be parsed or has no serverLoaders. A route-independent
-// param-less loader has no entry (both fields default).
+// something non-default (declared cacheKeyParams and/or route-bound), or an
+// empty object if the file cannot be parsed or has no serverLoaders. A
+// route-independent param-less loader has no entry (both fields default).
 export function extractServerLoadersMeta(
   absServerPath: string
 ): Record<string, ServerLoaderMeta> {
@@ -65,10 +66,12 @@ export function extractServerLoadersMeta(
   const entries = parseServerLoaders(ast.program);
   const meta: Record<string, ServerLoaderMeta> = {};
   for (const entry of entries) {
-    const params = entry.optsArg ? readParamsOption(entry.optsArg) : undefined;
-    if (params === undefined && !entry.routeBound) continue;
+    const cacheKeyParams = entry.optsArg
+      ? readParamsOption(entry.optsArg)
+      : undefined;
+    if (cacheKeyParams === undefined && !entry.routeBound) continue;
     const m: ServerLoaderMeta = {};
-    if (params !== undefined) m.params = params;
+    if (cacheKeyParams !== undefined) m.cacheKeyParams = cacheKeyParams;
     if (entry.routeBound) m.routeBound = true;
     meta[entry.name] = m;
   }

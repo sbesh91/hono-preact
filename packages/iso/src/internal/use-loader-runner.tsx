@@ -444,7 +444,7 @@ export function useLoaderRunner<T>(
   // The location key includes path AND searchParams so /movies?genre=action →
   // /movies?genre=drama refetches even though preact-iso doesn't remount on
   // querystring changes.
-  const locKey = serializeLocationForCache(location, loaderRef.params);
+  const locKey = serializeLocationForCache(location, loaderRef.cacheKeyParams);
   // Seed once, to the first render's values, so neither reads as "changed" on
   // the first render (this reproduces the previous `useRef(locKey)` init).
   if (session.loaderId === null) {

@@ -8,7 +8,7 @@ import { fetchLoaderData } from './loader-fetch.js';
 type StubOptions = {
   __moduleKey: string;
   __loaderName: string;
-  params?: string[] | '*';
+  cacheKeyParams?: string[] | '*';
   /** Whether the source loader was bound to a route (`serverRoute().loader`).
    * Threaded by the Vite plugin so the client-side `LoaderHost` guard can refuse
    * a route-bound loader consumed with no resolvable location, matching the
@@ -22,13 +22,13 @@ export function __$createLoaderStub_hpiso<T = unknown>(
   // `DefineLoaderOptions` (the full internal opts) is a superset of
   // `StandaloneOpts`, so it is assignable to the second parameter. We use a
   // typed intermediate variable to bypass the inline-literal excess property
-  // check: `params` is a route-only field not on the `StandaloneOpts` surface
+  // check: `cacheKeyParams` is a route-only field not on the `StandaloneOpts` surface
   // (reserved for Vite plugin transforms and route binding), but this stub IS
   // the Vite plugin shim, so setting it here is intentional and correct.
   const refOpts: DefineLoaderOptions<T> = {
     __moduleKey: opts.__moduleKey,
     __loaderName: opts.__loaderName,
-    params: opts.params,
+    cacheKeyParams: opts.cacheKeyParams,
     __routeBound: opts.__routeBound,
   };
   // `_defineLoaderStub` types the ctx as route-bound, so `ctx.location` is read

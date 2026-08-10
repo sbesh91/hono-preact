@@ -2,22 +2,24 @@ import { describe, it, expect } from 'vitest';
 import { defineLoader } from '../define-loader.js';
 import { serverRoute } from '../server-route.js';
 
-describe('defineLoader: params opt', () => {
-  it('defaults params to []', () => {
+describe('defineLoader: cacheKeyParams opt', () => {
+  it('defaults cacheKeyParams to []', () => {
     const ref = defineLoader(async () => ({}));
-    expect(ref.params).toEqual([]);
+    expect(ref.cacheKeyParams).toEqual([]);
   });
 
-  it('persists params: string[]', () => {
+  it('persists cacheKeyParams: string[]', () => {
     const ref = serverRoute('/x').loader(async () => ({}), {
-      params: ['genre', 'page'],
+      cacheKeyParams: ['genre', 'page'],
     });
-    expect(ref.params).toEqual(['genre', 'page']);
+    expect(ref.cacheKeyParams).toEqual(['genre', 'page']);
   });
 
-  it('persists params: "*"', () => {
-    const ref = serverRoute('/x').loader(async () => ({}), { params: '*' });
-    expect(ref.params).toBe('*');
+  it('persists cacheKeyParams: "*"', () => {
+    const ref = serverRoute('/x').loader(async () => ({}), {
+      cacheKeyParams: '*',
+    });
+    expect(ref.cacheKeyParams).toBe('*');
   });
 });
 

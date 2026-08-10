@@ -19,8 +19,8 @@ describe('__routeId assignment', () => {
   it('serverRoute(r).loader still forwards opts', () => {
     const route = serverRoute('/things/:id');
     const fn = async () => ({ ok: true });
-    const ref = route.loader(fn, { params: ['q'] });
-    expect(ref.params).toEqual(['q']);
+    const ref = route.loader(fn, { cacheKeyParams: ['q'] });
+    expect(ref.cacheKeyParams).toEqual(['q']);
     expect(ref.__routeId).toBe('/things/:id');
   });
 

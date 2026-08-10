@@ -378,7 +378,7 @@ describe('v3 <Loader> stability', () => {
         Promise.resolve({ q: location.searchParams.q ?? '' })
     );
     const ref = _defineRouteLoader<{ q: string }>('/search', fn, {
-      params: ['q'],
+      cacheKeyParams: ['q'],
     });
 
     function Child() {

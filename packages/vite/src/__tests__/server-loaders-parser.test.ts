@@ -20,7 +20,7 @@ describe('parseServerLoaders', () => {
     const program = parseProgram(`
       export const serverLoaders = {
         summary: defineLoader(async () => ({})),
-        cast: defineLoader(async () => [], { params: '*' }),
+        cast: defineLoader(async () => [], { cacheKeyParams: '*' }),
       };
     `);
     const entries = parseServerLoaders(program);
@@ -133,7 +133,7 @@ describe('parseServerLoaders', () => {
       const route = serverRoute('/things/:id');
       export const serverLoaders = {
         a: route.loader(async () => ({})),
-        b: route.loader(async () => ({}), { params: ['q'] }),
+        b: route.loader(async () => ({}), { cacheKeyParams: ['q'] }),
       };
     `);
     const entries = parseServerLoaders(program);
@@ -167,12 +167,12 @@ describe('readParamsOption', () => {
   }
 
   it('returns string[] for array of string literals', () => {
-    const opts = optsFrom(`{ params: ['genre', 'id'] }`);
+    const opts = optsFrom(`{ cacheKeyParams: ['genre', 'id'] }`);
     expect(readParamsOption(opts)).toEqual(['genre', 'id']);
   });
 
   it("returns '*' for the wildcard string literal", () => {
-    const opts = optsFrom(`{ params: '*' }`);
+    const opts = optsFrom(`{ cacheKeyParams: '*' }`);
     expect(readParamsOption(opts)).toBe('*');
   });
 
@@ -182,12 +182,12 @@ describe('readParamsOption', () => {
   });
 
   it('returns undefined for an unsupported params shape (non-wildcard string)', () => {
-    const opts = optsFrom(`{ params: 'something' }`);
+    const opts = optsFrom(`{ cacheKeyParams: 'something' }`);
     expect(readParamsOption(opts)).toBeUndefined();
   });
 
   it('returns undefined for an empty array', () => {
-    const opts = optsFrom(`{ params: [] }`);
+    const opts = optsFrom(`{ cacheKeyParams: [] }`);
     expect(readParamsOption(opts)).toBeUndefined();
   });
 });

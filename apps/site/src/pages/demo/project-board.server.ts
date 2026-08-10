@@ -88,7 +88,7 @@ export const serverLoaders = {
       searchSchema: BoardSearchSchema,
       // The cache key must include the filter, or every ?priority= value
       // shares one cache slot and navigation between filters serves stale data.
-      params: ['priority'],
+      cacheKeyParams: ['priority'],
     }
   ),
 
@@ -133,7 +133,7 @@ export const serverLoaders = {
       use: [insightsTiming],
       paramsSchema: ProjectRouteParamsSchema,
       searchSchema: InsightsSearchSchema,
-      params: ['insights'],
+      cacheKeyParams: ['insights'],
     }
   ),
 };

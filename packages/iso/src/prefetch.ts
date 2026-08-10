@@ -70,7 +70,7 @@ export async function prefetch<T>(
   // prefetch scheduled twice) would issue a redundant request every time.
   // The docs already promise no-op-on-cache-hit behavior; this makes the
   // code match.
-  const locKey = serializeLocationForCache(location, ref.params);
+  const locKey = serializeLocationForCache(location, ref.cacheKeyParams);
   if (cache?.has(locKey)) {
     const cached = cache.get(locKey);
     if (cached !== null) return cached;
