@@ -1,3 +1,4 @@
+import { definePage } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 
 const About: FunctionComponent = () => (
@@ -9,4 +10,4 @@ const About: FunctionComponent = () => (
 );
 About.displayName = 'About';
 
-export default About;
+export default definePage(About);

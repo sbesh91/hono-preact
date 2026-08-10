@@ -20,7 +20,7 @@ describe('__$createLoaderStub_hpiso', () => {
     expect(typeof stub.invalidate).toBe('function');
     expect(typeof stub.View).toBe('function');
     expect(stub.Boundary).toBeDefined();
-    expect(stub.params).toEqual([]);
+    expect(stub.cacheKeyParams).toEqual([]);
   });
 
   it('two stubs with the same key share __id (and thus cache)', () => {
@@ -35,29 +35,29 @@ describe('__$createLoaderStub_hpiso', () => {
     expect(a.__id).toBe(b.__id);
   });
 
-  it('passes params array through to the LoaderRef', () => {
+  it('passes cacheKeyParams array through to the LoaderRef', () => {
     const stub = __$createLoaderStub_hpiso({
       __moduleKey: 'pages/movie',
       __loaderName: 'summary',
-      params: ['genre'],
+      cacheKeyParams: ['genre'],
     });
-    expect(stub.params).toEqual(['genre']);
+    expect(stub.cacheKeyParams).toEqual(['genre']);
   });
 
-  it('passes params wildcard through to the LoaderRef', () => {
+  it('passes cacheKeyParams wildcard through to the LoaderRef', () => {
     const stub = __$createLoaderStub_hpiso({
       __moduleKey: 'pages/movie',
       __loaderName: 'cast',
-      params: '*',
+      cacheKeyParams: '*',
     });
-    expect(stub.params).toBe('*');
+    expect(stub.cacheKeyParams).toBe('*');
   });
 
-  it('defaults params to [] when not provided', () => {
+  it('defaults cacheKeyParams to [] when not provided', () => {
     const stub = __$createLoaderStub_hpiso({
       __moduleKey: 'pages/movie',
       __loaderName: 'info',
     });
-    expect(stub.params).toEqual([]);
+    expect(stub.cacheKeyParams).toEqual([]);
   });
 });

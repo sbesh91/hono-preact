@@ -212,7 +212,7 @@ export interface LoaderRef<T, Live extends boolean = false> {
   readonly __routeBound: boolean;
   readonly fn: Loader<T>;
   readonly cache: LoaderCache<T>;
-  readonly params: string[] | '*';
+  readonly cacheKeyParams: string[] | '*';
   /** Search-params schema, as authored on `serverRoute(r).loader(fn, { searchSchema })`. */
   readonly searchSchema?: StandardSchemaV1;
   /** Path-params schema, as authored on `serverRoute(r).loader(fn, { paramsSchema })`. */
@@ -371,7 +371,7 @@ export type SearchFromOptions<O> = O extends {
  * in by the `moduleKeyPlugin` Vite transform; user code does not set it.
  * `cache` is an opt-in for sharing a cache instance across multiple loaders;
  * when omitted, `makeLoaderRef` creates a fresh one.
- * Route-specific fields (`paramsSchema`, `searchSchema`, `params`) are
+ * Route-specific fields (`paramsSchema`, `searchSchema`, `cacheKeyParams`) are
  * present here but absent from `StandaloneOpts` (which is derived via `Omit`).
  */
 export type DefineLoaderOptions<T> = {
@@ -406,11 +406,12 @@ export type DefineLoaderOptions<T> = {
   /** Set by the Vite plugin's client loader stub to mark a route-bound loader
    * when no `__routeId` string is available client-side; not for user code. */
   __routeBound?: boolean;
-  params?: string[] | '*';
+  cacheKeyParams?: string[] | '*';
   /**
    * Standard Schema validating + coercing `ctx.location.searchParams`. NOTE:
-   * distinct from `params` above (that is the cache-key dependency list). On
-   * failure the loader RPC responds 400 and the error boundary catches it.
+   * distinct from `cacheKeyParams` above (that is the cache-key dependency
+   * list). On failure the loader RPC responds 400 and the error boundary
+   * catches it.
    */
   searchSchema?: StandardSchemaV1;
   /**
@@ -427,7 +428,7 @@ export type DefineLoaderOptions<T> = {
  */
 type StandaloneOpts<T> = Omit<
   DefineLoaderOptions<T>,
-  'paramsSchema' | 'searchSchema' | 'params'
+  'paramsSchema' | 'searchSchema' | 'cacheKeyParams'
 >;
 
 // Stash a shared cache map on globalThis so duplicate copies of
@@ -781,7 +782,7 @@ function makeLoaderRef(
     __routeId: opts?.__routeId,
     fn,
     cache: cache!,
-    params: opts?.params ?? [],
+    cacheKeyParams: opts?.cacheKeyParams ?? [],
     searchSchema: opts?.searchSchema,
     paramsSchema: opts?.paramsSchema,
     live,

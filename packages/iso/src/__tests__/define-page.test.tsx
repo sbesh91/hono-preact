@@ -3,7 +3,11 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/preact';
 import { LocationProvider, type RouteHook } from 'preact-iso';
 import type { Context } from 'hono';
-import { definePage, type PageBindings } from '../define-page.js';
+import {
+  definePage,
+  isDefinePageComponent,
+  type PageBindings,
+} from '../define-page.js';
 import { defineLoader } from '../define-loader.js';
 import type { LoaderRef } from '../define-loader.js';
 import { RouteLocationsContext } from '../internal/route-locations.js';
@@ -49,13 +53,10 @@ afterEach(() => {
 });
 
 const fakeLocation: RouteHook = {
-  url: '/test',
   path: '/test',
-  query: '',
   pathParams: {},
   searchParams: {},
-  route: () => {},
-} as RouteHook;
+};
 
 describe('definePage', () => {
   it('renders a loader.View component placed inside the page body', async () => {
@@ -137,5 +138,15 @@ describe('definePage', () => {
     Movies.displayName = 'Movies';
     const PageRoute = definePage(Movies);
     expect(PageRoute.displayName).toBe('definePage(Movies)');
+  });
+
+  it('stamps its marker onto the returned component', () => {
+    const Wrapped = definePage(() => null);
+    expect(isDefinePageComponent(Wrapped)).toBe(true);
+  });
+
+  it('does not mark a bare component', () => {
+    const Bare = () => null;
+    expect(isDefinePageComponent(Bare)).toBe(false);
   });
 });

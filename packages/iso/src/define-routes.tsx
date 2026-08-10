@@ -14,6 +14,37 @@ import { makeRouterLoadTracker } from './internal/route-change.js';
 import { PageMiddlewareHost } from './internal/page-middleware-host.js';
 import type { PageUse } from './internal/use-types.js';
 import { reservedParamNamesIn } from './internal/param-slots.js';
+import { isDefinePageComponent } from './define-page.js';
+
+// Keyed by the component itself: the same bare view resolved from more than
+// one route registration (a shared leaf, or a re-registration in a test)
+// warns once.
+const warnedBareViews = new WeakSet<object>();
+
+// A leaf view resolved without the `definePage` marker silently loses its
+// route error boundary: a throw during its render escapes to the nearest
+// ancestor boundary instead. Dev-only; called from the resolved-component
+// site (view() is a lazy import thunk, so the actual component is only known
+// once its module has loaded).
+function warnBareLeafView(view: ComponentType<ViewProps>): void {
+  if (typeof view !== 'function') {
+    console.warn(
+      'hono-preact: a leaf view module resolved without a default export ' +
+        '(or its default export is not a component). Add `export default` ' +
+        'to the view module, wrapping the component with definePage.'
+    );
+    return;
+  }
+  if (isDefinePageComponent(view)) return;
+  if (warnedBareViews.has(view)) return;
+  warnedBareViews.add(view);
+  const name = view.displayName ?? view.name ?? 'Anonymous';
+  console.warn(
+    `hono-preact: leaf view '${name}' is registered without definePage, so ` +
+      `it has no route error boundary and a throw during its render escapes ` +
+      `to the nearest ancestor boundary. Wrap it: definePage(${name}).`
+  );
+}
 
 function wrapWithRouteLocations(
   serverMod: unknown,
@@ -414,7 +445,19 @@ function getOrCreateLazyView(
   let component = cache.get(view);
   if (!component) {
     if (!server) {
-      component = asViewComponent(lazy(view));
+      component = asViewComponent(
+        lazy(async () => {
+          const mod = await view();
+          if (
+            typeof import.meta.env === 'undefined' ||
+            import.meta.env.SSR ||
+            import.meta.env.DEV
+          ) {
+            warnBareLeafView(mod.default);
+          }
+          return mod;
+        })
+      );
     } else {
       component = asViewComponent(
         lazy(async () => {
@@ -422,6 +465,13 @@ function getOrCreateLazyView(
             view(),
             server(),
           ]);
+          if (
+            typeof import.meta.env === 'undefined' ||
+            import.meta.env.SSR ||
+            import.meta.env.DEV
+          ) {
+            warnBareLeafView(View);
+          }
           // `location` from the inner Router has a relative path (e.g. `/123`
           // when the route is nested inside a layout at `/movies/*`). Use
           // `useLocation()` to get the full window path and searchParams so the

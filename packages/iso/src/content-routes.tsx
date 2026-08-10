@@ -1,6 +1,7 @@
 import { h } from 'preact';
 import type { ComponentChildren, ComponentType } from 'preact';
 import type { RouteDef, ViewProps } from './define-routes.js';
+import { DEFINE_PAGE_MARKER } from './define-page.js';
 
 export interface ContentRoutesOptions {
   /**
@@ -81,8 +82,14 @@ export function contentRoutes(
         // Structural read off a user-defined module export (acceptable cast
         // boundary): the glob value's `default` is the page component.
         const Content = (mod as { default: ComponentType<ViewProps> }).default;
-        const WrappedView: ComponentType<ViewProps> = (props) =>
-          h(Wrapper, null, h(Content, props));
+        // Stamped with DEFINE_PAGE_MARKER, matching definePage: this wrapper
+        // already renders inside a single element (the hydration-safe root
+        // documented on `wrapper` above), so the same route error boundary
+        // definePage provides applies here without a separate opt-in.
+        const WrappedView = Object.assign(
+          (props: ViewProps) => h(Wrapper, null, h(Content, props)),
+          { [DEFINE_PAGE_MARKER]: true as const }
+        );
         return { default: WrappedView };
       });
     return { path: toSlug(key), view };

@@ -59,7 +59,12 @@ import {
   clearLastActionResult,
 } from '../internal/action-result-store.js';
 import { getValidationIssues } from '../get-validation-issues.js';
-import { denyArm, errorArm } from './mutate-arm-helpers.js';
+import {
+  denyArm,
+  errorArm,
+  isNavigatedArm,
+  isAbortedArm,
+} from './mutate-arm-helpers.js';
 import {
   VALIDATION_ISSUES_KEY,
   VALIDATION_FAILED_MESSAGE,
@@ -482,7 +487,11 @@ describe('useAction', () => {
     await act(async () => {
       captured = await mutateRef.current({ x: 1 });
     });
-    expect(captured).toEqual({ ok: true, data: { id: 'i-42' } });
+    expect(captured).toEqual({
+      ok: true,
+      kind: 'success',
+      data: { id: 'i-42' },
+    });
   });
 
   it('mutate resolves to { ok: false, error } on failure (no throw)', async () => {
@@ -643,7 +652,7 @@ describe('useAction — outcome envelope decoding', () => {
     expect(denyArm(mutateResult!).message).toMatch(/Request denied \(403\)/);
   });
 
-  it('calls window.location.assign and returns a never-settling promise when the response is a redirect outcome (C8)', async () => {
+  it('calls window.location.assign and settles with the navigated arm when the response is a redirect outcome (C8)', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -664,14 +673,11 @@ describe('useAction — outcome envelope decoding', () => {
     });
 
     const { result } = renderHook(() => useAction(stub));
-    const p = result.current.mutate({ title: 'Dune' });
-    // The promise never settles because the page is navigating; race
-    // against a short timeout to assert that.
-    const winner = await Promise.race([
-      p,
-      new Promise<'pending'>((r) => setTimeout(() => r('pending'), 30)),
-    ]);
-    expect(winner).toBe('pending');
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(mutateResult!).toEqual({ ok: true, kind: 'navigated' });
     expect(assignSpy).toHaveBeenCalledWith('/login');
   });
 
@@ -698,16 +704,15 @@ describe('useAction — outcome envelope decoding', () => {
     });
 
     const { result } = renderHook(() => useAction(stub));
-    const p = result.current.mutate({
-      title: 'Dune',
-      // Including a File forces the FormData branch.
-      poster: new File(['data'], 'poster.jpg') as never,
-    } as never);
-    const winner = await Promise.race([
-      p,
-      new Promise<'pending'>((r) => setTimeout(() => r('pending'), 30)),
-    ]);
-    expect(winner).toBe('pending');
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({
+        title: 'Dune',
+        // Including a File forces the FormData branch.
+        poster: new File(['data'], 'poster.jpg') as never,
+      } as never);
+    });
+    expect(mutateResult!).toEqual({ ok: true, kind: 'navigated' });
     expect(assignSpy).toHaveBeenCalledWith('/login');
   });
 
@@ -734,6 +739,154 @@ describe('useAction — outcome envelope decoding', () => {
       } as never);
     });
     expect(denyArm(mutateResult!).message).toBe('Upload forbidden');
+  });
+
+  it('mutate settles with the navigated arm on a same-origin redirect', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(isNavigatedArm(mutateResult!)).toBe(true);
+  });
+
+  it('pending is false after a redirecting mutate resolves', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(isNavigatedArm(mutateResult!)).toBe(true);
+    expect(result.current.pending).toBe(false);
+  });
+
+  it('onSuccess does not fire for the navigated arm', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const onSuccess = vi.fn();
+
+    const { result } = renderHook(() => useAction(stub, { onSuccess }));
+    await act(async () => {
+      await result.current.mutate({ title: 'Dune' });
+    });
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it('a redirecting mutation does NOT invalidate its declared loaders', async () => {
+    // The navigated arm is only reachable via a same-origin redirect, which
+    // drives window.location.assign: a full document load. The destination
+    // gets a fresh SSR payload and fresh in-memory loader caches, so nothing
+    // invalidated client-side can affect it, and doing so would race the
+    // document teardown with a redundant fetch.
+    const loader = defineLoader(async () => ({ n: 1 }));
+    loader.cache.set({ n: 1 });
+    expect(loader.cache.has()).toBe(true);
+    const invalidateSpy = vi.spyOn(loader, 'invalidate');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const refStub = {
+      __module: 'm',
+      __action: 'go',
+    } as unknown as ActionRef<Record<string, never>, { ok: true }>;
+
+    const { result } = renderHook(() =>
+      useAction(refStub, { invalidate: [loader] })
+    );
+    await act(async () => {
+      await result.current.mutate({});
+    });
+
+    expect(loader.cache.has()).toBe(true);
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it('the success arm carries kind: success', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ __outcome: 'success', data: { id: '1' } }),
+            { status: 200 }
+          )
+        )
+    );
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(mutateResult!).toEqual({
+      ok: true,
+      kind: 'success',
+      data: { id: '1' },
+    });
   });
 
   it('cross-origin redirect error names the same-origin fix', async () => {
@@ -1356,7 +1509,12 @@ describe('useAction client pre-validation (schema)', () => {
     });
 
     expect(outcome.ok).toBe(false);
-    expect(errorArm(outcome).message).not.toBe('Validation failed');
+    if (!isAbortedArm(outcome)) {
+      throw new Error(
+        `expected an aborted arm, got ${JSON.stringify(outcome)}`
+      );
+    }
+    expect(outcome.error.message).not.toBe('Validation failed');
     expect(result.current.error?.message).not.toBe('Validation failed');
 
     const recorded = getLastActionResult({
@@ -1399,7 +1557,12 @@ describe('useAction client pre-validation (schema)', () => {
 
     // Cancelled: no spurious validation error, no deny recorded, no request.
     expect(outcome.ok).toBe(false);
-    expect(errorArm(outcome).message).not.toBe('Validation failed');
+    if (!isAbortedArm(outcome)) {
+      throw new Error(
+        `expected an aborted arm, got ${JSON.stringify(outcome)}`
+      );
+    }
+    expect(outcome.error.message).not.toBe('Validation failed');
     expect(result.current.error?.message).not.toBe('Validation failed');
     expect(fetchSpy).not.toHaveBeenCalled();
 
@@ -1514,7 +1677,7 @@ describe('mutate result arms', () => {
     expect(outcome).toMatchObject({ ok: false, kind: 'error' });
   });
 
-  it('keeps the success arm free of a kind discriminant', async () => {
+  it('carries kind: success on the success arm', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -1530,7 +1693,11 @@ describe('mutate result arms', () => {
       outcome = await result.current.mutate({ title: 'Dune' });
     });
 
-    expect(outcome).toEqual({ ok: true, data: { ok: true } });
+    expect(outcome).toEqual({
+      ok: true,
+      kind: 'success',
+      data: { ok: true },
+    });
   });
 });
 

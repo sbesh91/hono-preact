@@ -15,6 +15,7 @@ import {
 import { RouteManifestContext } from '../internal/route-manifest.js';
 import * as routeChange from '../internal/route-change.js';
 import { defineServerMiddleware } from '../define-middleware.js';
+import { definePage } from '../define-page.js';
 
 const noopView = () => Promise.resolve({ default: () => null });
 const noopLayout = () =>
@@ -721,5 +722,115 @@ describe('layout integration: state survives intra-group navigation', () => {
     expect(((await findByTestId('filter')) as HTMLInputElement).value).toBe(
       'hello'
     );
+  });
+});
+
+describe('bare leaf view dev-warning', () => {
+  it('warns once when a leaf view resolves without the definePage marker', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const Bare: ComponentType<ViewProps> = () =>
+      h('p', null, 'bare') as unknown as VNode;
+    Bare.displayName = 'BareLeaf';
+    const view = () => Promise.resolve({ default: Bare });
+
+    // Two separate registrations resolving the SAME component: the dedupe is
+    // keyed on the resolved component's identity, so this warns exactly once.
+    const manifestA = defineRoutes([{ path: '/bare-a', view }]);
+    const manifestB = defineRoutes([{ path: '/bare-b', view }]);
+
+    history.replaceState(null, '', '/bare-a');
+    const a = render(
+      h(LocationProvider, null, h(Routes, { routes: manifestA })) as VNode
+    );
+    await a.findByText('bare');
+
+    history.replaceState(null, '', '/bare-b');
+    const b = render(
+      h(LocationProvider, null, h(Routes, { routes: manifestB })) as VNode
+    );
+    await b.findByText('bare');
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('BareLeaf'));
+    warn.mockRestore();
+  });
+
+  it('does not warn for a leaf view wrapped in definePage', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const Wrapped = definePage(
+      () => h('p', null, 'wrapped') as unknown as VNode
+    );
+    const manifest = defineRoutes([
+      { path: '/wrapped', view: () => Promise.resolve({ default: Wrapped }) },
+    ]);
+
+    history.replaceState(null, '', '/wrapped');
+    const { findByText } = render(
+      h(LocationProvider, null, h(Routes, { routes: manifest })) as VNode
+    );
+    await findByText('wrapped');
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('does not warn for a layout (not a leaf view)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const Layout: ComponentType<LayoutProps> = ({ children }) =>
+      h('div', null, children as never);
+    const Index: ComponentType<ViewProps> = () =>
+      h('p', null, 'index') as unknown as VNode;
+
+    const manifest = defineRoutes([
+      {
+        path: '/grouped',
+        layout: () => Promise.resolve({ default: Layout }),
+        children: [
+          { path: '', view: () => Promise.resolve({ default: Index }) },
+        ],
+      },
+    ]);
+
+    history.replaceState(null, '', '/grouped');
+    const { findByText } = render(
+      h(LocationProvider, null, h(Routes, { routes: manifest })) as VNode
+    );
+    await findByText('index');
+
+    // The bare Index view itself has no definePage marker, so this DOES warn
+    // (it is a leaf); the assertion here is that the LAYOUT never triggers a
+    // separate warning of its own.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Index'));
+    warn.mockRestore();
+  });
+
+  it('warns about a missing default export instead of throwing when a leaf view module has none', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const rejections: unknown[] = [];
+    const onRejection = (e: PromiseRejectionEvent) => rejections.push(e.reason);
+    window.addEventListener('unhandledrejection', onRejection);
+
+    // A view module that forgot `export default`: `view()` resolves without
+    // a `default` key, the shape SSR/DEV also sees in production.
+    const view = () =>
+      Promise.resolve({} as unknown as { default: ComponentType<ViewProps> });
+    const manifest = defineRoutes([{ path: '/no-default', view }]);
+
+    history.replaceState(null, '', '/no-default');
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })) as VNode);
+
+    await waitFor(() => {
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('without a default export')
+      );
+    });
+
+    // The historical bug threw a TypeError from inside the WeakSet call
+    // instead of warning; make sure that path is gone.
+    expect(rejections.some((r) => String(r).includes('WeakSet'))).toBe(false);
+
+    window.removeEventListener('unhandledrejection', onRejection);
+    warn.mockRestore();
   });
 });

@@ -340,3 +340,18 @@ const _roomUseProbe = () => {
 };
 
 void _roomUseProbe;
+
+// Route-bound room Data default matches the bare `defineRoom` default
+// (#318): both must default to `undefined`, not `Record<string, unknown>`.
+// A factory-less room's `conn.data` is `Readonly<undefined>`, mirroring
+// `_noDataFactoryProbe` above but through `route.room(...)`.
+function _routeRoomDataDefaultProbe() {
+  const route = serverRoute('/');
+  route.room(roomChannel, {
+    onJoin(conn) {
+      expectTypeOf(conn.data).toEqualTypeOf<Readonly<undefined>>();
+      expectTypeOf(conn.data).not.toEqualTypeOf<Record<string, unknown>>();
+    },
+  });
+}
+void _routeRoomDataDefaultProbe;

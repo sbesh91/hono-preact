@@ -83,7 +83,9 @@ describe('serverOnlyPlugin: params threading from .server.ts to client Proxy', (
     const result = transform(code, importerId, { root: fixtureRoot });
     // The Proxy get() reads meta[name] and forwards its fields, guarding for the
     // no-entry (route-independent, default-params) case with `__meta &&`.
-    expect(result?.code).toContain(`params: __meta && __meta.params`);
+    expect(result?.code).toContain(
+      `cacheKeyParams: __meta && __meta.cacheKeyParams`
+    );
     expect(result?.code).toContain(`__routeBound: __meta && __meta.routeBound`);
   });
 

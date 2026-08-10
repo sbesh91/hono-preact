@@ -274,7 +274,7 @@ export const serverLoaders = {
     },
     {
       searchSchema: z.object({ page: z.coerce.number().min(1).default(1) }),
-      params: ['page'],
+      cacheKeyParams: ['page'],
     }
   ),
 };
@@ -302,7 +302,7 @@ The loader's `ctx.location.searchParams` and `ctx.location.pathParams` types nar
 
 **Note:** `useParams()` on the client always returns raw string params from the route match. The coerced types are a loader-side concern only.
 
-**Cache keys and search params:** `searchSchema` does not automatically add params to the client-side cache key. When the loader's data depends on a search param, declare that param in `params` (as shown above for `page`). Without it, navigating `?page=1` to `?page=2` returns the cached page-1 result.
+**Cache keys and search params:** `searchSchema` does not automatically add params to the client-side cache key. When the loader's data depends on a search param, declare that param in `cacheKeyParams` (as shown above for `page`). Without it, navigating `?page=1` to `?page=2` returns the cached page-1 result.
 
 ## Validation timing and what middleware sees
 

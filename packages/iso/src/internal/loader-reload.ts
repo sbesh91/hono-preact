@@ -119,7 +119,10 @@ export function runReload<T>(deps: ReloadDeps<T>): void {
         if (isBrowser()) {
           loaderRef.cache.set(
             value,
-            serializeLocationForCache(currentLocation(), loaderRef.params)
+            serializeLocationForCache(
+              currentLocation(),
+              loaderRef.cacheKeyParams
+            )
           );
         }
       },
@@ -135,7 +138,7 @@ export function runReload<T>(deps: ReloadDeps<T>): void {
       if (isBrowser())
         loaderRef.cache.set(
           result,
-          serializeLocationForCache(currentLocation(), loaderRef.params)
+          serializeLocationForCache(currentLocation(), loaderRef.cacheKeyParams)
         );
       // A fresh `success` per settle (clears reloading); `result` may be
       // `undefined`, which is a real state change here (review #10).

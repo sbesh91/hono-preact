@@ -1,13 +1,18 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/preact';
+import type { RouteHook } from 'preact-iso';
 import Home from '../home.js';
 
 afterEach(() => cleanup());
 
+// Home is wrapped in definePage, so it takes RouteHook props (unused by the
+// page body itself, but required by the wrapped component's type).
+const fakeLocation: RouteHook = { path: '/', pathParams: {}, searchParams: {} };
+
 describe('home (scroll experience)', () => {
   it('links to /docs/quick-start as the primary CTA', () => {
-    const { container } = render(<Home />);
+    const { container } = render(<Home {...fakeLocation} />);
     const hero = container.querySelector('.hx-hero') as HTMLElement;
     expect(
       within(hero)
@@ -16,7 +21,7 @@ describe('home (scroll experience)', () => {
     ).toBe('/docs/quick-start');
   });
   it('links to /demo as the secondary CTA', () => {
-    const { container } = render(<Home />);
+    const { container } = render(<Home {...fakeLocation} />);
     const hero = container.querySelector('.hx-hero') as HTMLElement;
     expect(
       within(hero)
@@ -25,7 +30,7 @@ describe('home (scroll experience)', () => {
     ).toBe('/demo');
   });
   it('links the repo, package, and license from the footer', () => {
-    const { container } = render(<Home />);
+    const { container } = render(<Home {...fakeLocation} />);
     const footer = container.querySelector('.hx-footer') as HTMLElement;
     expect(
       within(footer)
@@ -38,17 +43,17 @@ describe('home (scroll experience)', () => {
     expect(within(footer).getByText('MIT')).toBeInTheDocument();
   });
   it('mounts the hero shader background', () => {
-    const { container } = render(<Home />);
+    const { container } = render(<Home {...fakeLocation} />);
     const bg = container.querySelector('[aria-hidden="true"]');
     expect(bg?.querySelector('canvas')).not.toBeNull();
   });
   it('renders the hero headline', () => {
-    render(<Home />);
+    render(<Home {...fakeLocation} />);
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 
   it('mounts all twelve chapters (headings present)', () => {
-    render(<Home />);
+    render(<Home {...fakeLocation} />);
     for (const re of [
       /edge to browser/i, // hero
       /runs on the platform/i, // edge
@@ -76,7 +81,7 @@ describe('home (scroll experience)', () => {
       addEventListener() {},
       removeEventListener() {},
     }));
-    render(<Home />);
+    render(<Home {...fakeLocation} />);
     expect(screen.getByText(/routing is a manifest/i)).toBeInTheDocument();
     expect(screen.getByText(/live, both ways/i)).toBeInTheDocument();
     vi.restoreAllMocks();

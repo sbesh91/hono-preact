@@ -42,10 +42,11 @@ export interface OutcomeSink {
 
 /**
  * Dispatch a decoded action envelope to a consumer's {@link OutcomeSink}.
- * Returns `true` when a same-origin redirect was issued, so the caller can stop
- * (useAction parks on a never-settling promise; `<Form>` falls through to its
- * `finally`). Failure handling — throw or record-and-return — is entirely the
- * sink's, as is the `malformed` policy.
+ * Returns `true` when a same-origin redirect was issued, so the caller can
+ * settle rather than park: both `useAction` and `<Form>` stop without
+ * invalidating (useAction returns a `navigated` result; `<Form>` falls through
+ * to its `finally`). Failure handling, throw or record-and-return, is entirely
+ * the sink's, as is the `malformed` policy.
  */
 export function applyDecodedOutcome(
   decoded: DecodedEnvelope,

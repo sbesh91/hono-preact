@@ -110,18 +110,19 @@ export function parseServerLoaders(program: Program): ParsedLoaderEntry[] {
 }
 
 /**
- * Read the `params` option from a defineLoader opts ObjectExpression literal.
- * Returns `string[]` for array literals of string literals, `'*'` for the
- * wildcard string literal, or undefined if not present or unsupported shape.
+ * Read the `cacheKeyParams` option from a defineLoader opts ObjectExpression
+ * literal. Returns `string[]` for array literals of string literals, `'*'`
+ * for the wildcard string literal, or undefined if not present or
+ * unsupported shape.
  */
-export function readParamsOption(
+export function readCacheKeyParamsOption(
   opts: ObjectExpression
 ): string[] | '*' | undefined {
   for (const prop of opts.properties) {
     if (
       prop.type !== 'ObjectProperty' ||
       prop.key.type !== 'Identifier' ||
-      prop.key.name !== 'params'
+      prop.key.name !== 'cacheKeyParams'
     )
       continue;
 

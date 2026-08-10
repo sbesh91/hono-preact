@@ -10,9 +10,10 @@ import type { ServerLoaderMeta } from './source-extraction.js';
 
 // Source for the `serverLoaders` client stub: a Proxy whose every property read
 // constructs a fresh loader stub carrying the module key, loader name, and the
-// statically-mined metadata (params + route-binding) for that loader. `__meta`
-// is undefined for loaders with no entry (route-independent, default params), so
-// both reads guard with `__meta &&` and the stub falls back to its defaults.
+// statically-mined metadata (cacheKeyParams + route-binding) for that loader.
+// `__meta` is undefined for loaders with no entry (route-independent, default
+// cacheKeyParams), so both reads guard with `__meta &&` and the stub falls
+// back to its defaults.
 export function loaderStubSource(
   localName: string,
   moduleKey: string,
@@ -28,7 +29,7 @@ export function loaderStubSource(
     `    return __$createLoaderStub_hpiso({\n` +
     `      ${MODULE_KEY_EXPORT}: ${JSON.stringify(moduleKey)},\n` +
     `      ${LOADER_NAME_OPTION}: String(name),\n` +
-    `      params: __meta && __meta.params,\n` +
+    `      cacheKeyParams: __meta && __meta.cacheKeyParams,\n` +
     `      __routeBound: __meta && __meta.routeBound,\n` +
     `    });\n` +
     `  }\n` +

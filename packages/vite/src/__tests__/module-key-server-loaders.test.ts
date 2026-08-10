@@ -51,7 +51,7 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
       const route = serverRoute('/movies/:id');
       export const serverLoaders = {
         summary: route.loader(async () => ({})),
-        cast: route.loader(async function* () { yield {}; }, { params: ['q'] }),
+        cast: route.loader(async function* () { yield {}; }, { cacheKeyParams: ['q'] }),
       };
     `;
     const out = transform(code, '/Users/me/repo/src/pages/movie.server.ts');
@@ -63,7 +63,7 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
     expect(out).toContain(
       '__moduleKey: "src/pages/movie", __loaderName: "cast"'
     );
-    expect(out).toContain("params: ['q']");
+    expect(out).toContain("cacheKeyParams: ['q']");
   });
 
   it('serverRoute().loader: route id literal survives the transform (runtime sets __routeId)', () => {
@@ -136,7 +136,7 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
     const code = `
       import { defineLoader } from '@hono-preact/iso';
       export const serverLoaders = {
-        x: defineLoader(async () => ({}), { params: ['q'] }),
+        x: defineLoader(async () => ({}), { cacheKeyParams: ['q'] }),
       };
     `;
     const out = transform(code, '/Users/me/repo/src/pages/foo.server.ts') ?? '';
@@ -146,6 +146,6 @@ describe('moduleKeyPlugin: serverLoaders walking', () => {
     // into the existing object literal.
     expect(out).toContain('__moduleKey: "src/pages/foo"');
     expect(out).toContain('__loaderName: "x"');
-    expect(out).toContain("params: ['q']");
+    expect(out).toContain("cacheKeyParams: ['q']");
   });
 });

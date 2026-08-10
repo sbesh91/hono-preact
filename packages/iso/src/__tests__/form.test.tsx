@@ -11,6 +11,7 @@ import { renderToString } from 'preact-render-to-string';
 import { Form } from '../form.js';
 import { defineAction } from '../action.js';
 import type { ActionRef } from '../action.js';
+import { defineLoader } from '../define-loader.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from '../internal/contract.js';
 import {
   clearLastActionResult,
@@ -195,6 +196,39 @@ describe('<Form>', () => {
       expect(stored.status).toBe(422);
       expect(stored.message).toBe('bad');
     }
+  });
+
+  it('does NOT invalidate declared loaders on a same-origin redirect, matching useAction', async () => {
+    // A same-origin redirect drives window.location.assign: a full document
+    // load. The destination gets a fresh SSR payload and fresh in-memory
+    // loader caches, so nothing invalidated client-side can affect it.
+    // <Form>'s navigated sink must skip invalidation the same way useAction's
+    // navigated arm does.
+    const loader = defineLoader(async () => ({ n: 1 }));
+    loader.cache.set({ n: 1 });
+    const invalidateSpy = vi.spyOn(loader, 'invalidate');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const { container } = render(
+      <Form action={makeStub()} invalidate={[loader]}>
+        <input name="text" defaultValue="hi" />
+        <button type="submit">go</button>
+      </Form>
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
   it('writes success outcome to the client store', async () => {

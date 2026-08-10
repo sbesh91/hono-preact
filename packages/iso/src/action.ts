@@ -275,29 +275,47 @@ export type UseActionOptions<
   | UseActionWithoutMutate<TPayload, TResult, TChunk>;
 
 /**
- * The value `mutate` resolves to. A discriminated union so callers can
- * chain on success without awaiting then probing the hook's `data`/`error`
- * state, and without leaking unhandled rejections in fire-and-forget callers.
+ * The value `mutate` resolves to. A five-arm discriminated union, keyed
+ * uniformly on `kind`, so callers can chain on success without awaiting then
+ * probing the hook's `data`/`error` state, and without leaking unhandled
+ * rejections in fire-and-forget callers.
  *
- * - Success: `{ ok: true, data }`. `data` is `undefined` for streaming
- *   actions that close without emitting a `result` SSE event (the type
- *   reflects this honestly: callers must narrow before using `data`).
+ * - Success: `{ ok: true, kind: 'success', data }`. `data` is `undefined` for
+ *   streaming actions that close without emitting a `result` SSE event (the
+ *   type reflects this honestly: callers must narrow before using `data`).
+ * - Navigated: `{ ok: true, kind: 'navigated' }`. The action issued a
+ *   same-origin redirect and navigation is in flight. There is no result
+ *   value, `onSuccess` does not fire, and the component this was called from
+ *   is probably unmounting: do not assume it is still mounted after awaiting
+ *   this arm. Declared loaders are NOT invalidated, because the redirect is
+ *   a full document load: the destination receives a fresh SSR payload and
+ *   fresh in-memory loader caches, and client-side invalidation cannot affect it.
  * - Denied: `{ ok: false, kind: 'deny', deny }`. A guard (or a schema) refused
  *   the request. `deny` is the structured envelope -- status, message, the
  *   optional typed `code`, and `data` typed as the action's inferred deny
  *   type -- so a caller can branch on the REASON without re-parsing a message
  *   string. This is the parity the loader path gets from `LoaderDenyError`.
+ * - Aborted: `{ ok: false, kind: 'aborted', error }`. The mutation was
+ *   cancelled (unmount or a caller-supplied `signal`), not failed. `onError`
+ *   still fires, so an optimistic wrapper reverts its pending entry instead
+ *   of stranding it, but the hook's `error` state is deliberately NOT set: a
+ *   cancellation is not a rendered failure. A deny that was already decided
+ *   before the abort still reports `kind: 'deny'`, never `'aborted'`: the
+ *   server's answer takes precedence over the client giving up on waiting
+ *   for it.
  * - Failed: `{ ok: false, kind: 'error', error }`. Everything else: a thrown
  *   handler, a transport failure, a timeout, a malformed envelope.
  *
- * Both failure arms write the hook's `error` state; `onError` fires for both
- * except the client-side schema pre-validation deny, which short-circuits before
- * any request. Existing UI that renders `error` is unchanged; the structure is
- * additive to the RETURN value only.
+ * The deny and error arms write the hook's `error` state; `onError` fires for
+ * both except the client-side schema pre-validation deny, which short-circuits
+ * before any request. Existing UI that renders `error` is unchanged; the
+ * structure is additive to the RETURN value only.
  */
 export type MutateResult<TResult, TDenyData = unknown> =
-  | { ok: true; data: Serialize<TResult> | undefined }
+  | { ok: true; kind: 'success'; data: Serialize<TResult> | undefined }
+  | { ok: true; kind: 'navigated' }
   | { ok: false; kind: 'deny'; deny: DenyRecord<TDenyData> }
+  | { ok: false; kind: 'aborted'; error: Error }
   | { ok: false; kind: 'error'; error: Error };
 
 export type UseActionResult<TPayload, TResult, TDenyData = unknown> = {
@@ -465,9 +483,12 @@ export function useAction<
         // request path's post-await abort guard). A cold gate has no request in
         // flight, so there is nothing else to unwind.
         if (opts?.signal?.aborted) {
+          // A cold gate has no request in flight and no local `denied`: there
+          // is nothing that could have already decided a deny, so this is
+          // unconditionally the aborted arm.
           return {
             ok: false,
-            kind: 'error',
+            kind: 'aborted',
             error: toError(opts.signal.reason),
           };
         }
@@ -576,6 +597,12 @@ export function useAction<
         denied
           ? { ok: false, kind: 'deny', deny: denied }
           : { ok: false, kind: 'error', error: e };
+      // Cancellation variant of `failure`: a deny the server already decided
+      // still wins over the abort (the caller giving up on waiting does not
+      // erase an answer that already arrived), so this defers to `failure`
+      // when `denied` is set and only returns the aborted arm otherwise.
+      const abortedFailure = (e: Error): MutateResult<TResult, TDenyData> =>
+        denied ? failure(e) : { ok: false, kind: 'aborted', error: e };
       // Tracks whether a branch has already written to the action-result store.
       // The outer catch writes for unclassified errors (network failures, parse
       // errors) only when no branch has already recorded the outcome.
@@ -663,7 +690,8 @@ export function useAction<
           // body shaped as { __outcome, ... } regardless of HTTP status.
           // Failures throw to the surrounding catch (which sets `error`/`data`
           // and returns `{ ok: false }`); success falls through to
-          // `applyInvalidate` below; a same-origin redirect parks forever.
+          // `applyInvalidate` below; a same-origin redirect returns the
+          // navigated arm without invalidating.
           const decoded = await decodeActionResponse(response);
           const navigated = applyDecodedOutcome(decoded, {
             success: (data) => {
@@ -722,10 +750,20 @@ export function useAction<
             },
           });
           if (navigated) {
-            // Same-origin redirect issued; this promise never settles.
-            return await new Promise<MutateResult<TResult, TDenyData>>(
-              () => {}
-            );
+            // Same-origin redirect issued and navigation is in flight. Settle
+            // rather than parking forever: an unsettled promise dead-ends
+            // `await mutate()`, never runs `.finally()`, and leaks. Do NOT
+            // invalidate here: assignSafeRedirect drives this through
+            // `window.location.assign`, a full document load, so the
+            // destination gets a fresh SSR payload and fresh in-memory
+            // loader caches. Nothing invalidated client-side can affect it,
+            // and issuing one races the document teardown.
+            // setPending is a no-op after unmount, same as the abort branch
+            // below: navigation may be slow, blocked, or cancelled, and the
+            // component this was called from can still be mounted to observe
+            // it, so the framework must not leave `pending` stuck at true.
+            setPending(false);
+            return { ok: true, kind: 'navigated' };
           }
         }
 
@@ -739,7 +777,7 @@ export function useAction<
           // after unmount.
           invokeError(e);
           setPending(false);
-          return failure(e);
+          return abortedFailure(e);
         }
         // Write to the store only for unclassified errors (network failures,
         // parse errors). Per-branch errors set outcomeRecorded before throwing.
@@ -760,7 +798,7 @@ export function useAction<
         endSubmit(currentStub.__module, currentStub.__action);
       }
       setPending(false);
-      return { ok: true, data: finalResult };
+      return { ok: true, kind: 'success', data: finalResult };
     },
     []
   );

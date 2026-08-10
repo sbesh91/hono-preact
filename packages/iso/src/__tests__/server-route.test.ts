@@ -8,15 +8,17 @@ describe('serverRoute', () => {
     const ref = route.loader(fn);
     expect(typeof ref.__id).toBe('symbol');
     expect(ref.fn).toBe(fn);
-    expect(ref.params).toEqual([]);
+    expect(ref.cacheKeyParams).toEqual([]);
     expect(ref.__routeId).toBe('/things/:id');
     expect(typeof ref.invalidate).toBe('function');
   });
 
   it('forwards opts through to the loader ref', () => {
     const route = serverRoute('/things/:id');
-    const ref = route.loader(async () => ({ ok: true }), { params: ['q'] });
-    expect(ref.params).toEqual(['q']);
+    const ref = route.loader(async () => ({ ok: true }), {
+      cacheKeyParams: ['q'],
+    });
+    expect(ref.cacheKeyParams).toEqual(['q']);
     expect(ref.__routeId).toBe('/things/:id');
   });
 

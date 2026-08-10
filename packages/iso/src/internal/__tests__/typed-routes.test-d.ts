@@ -7,6 +7,7 @@
 import { expectTypeOf } from 'vitest';
 import type {
   RouteParams,
+  BuildParams,
   AbsolutePaths,
   RoutePaths,
 } from '../typed-routes.js';
@@ -26,6 +27,37 @@ expectTypeOf<RouteParams<'/files/:rest*'>>().toEqualTypeOf<{ rest?: string }>();
 
 // Rest `:param+` is required (one-or-more).
 expectTypeOf<RouteParams<'/files/:rest+'>>().toEqualTypeOf<{ rest: string }>();
+
+// ---------------------------------------------------------------------------
+// BuildParams: diverges from RouteParams ONLY on rest params. `RouteParams`
+// is the READ type (a live matched param is always a string, so widening it
+// would lie to `useParams` callers); `BuildParams` is the WRITE type `buildPath`
+// accepts, which additionally allows `string[]` for a rest param so callers can
+// build real slash-separated segments. A non-rest param must stay `string` in
+// both, and a rest param must accept `string[]` only in `BuildParams`.
+// ---------------------------------------------------------------------------
+
+// Non-rest `:id`: both allow only `string`.
+expectTypeOf<RouteParams<'/posts/:id'>>().toEqualTypeOf<{ id: string }>();
+expectTypeOf<BuildParams<'/posts/:id'>>().toEqualTypeOf<{ id: string }>();
+
+// Rest `:rest*`: RouteParams stays `string` (optional key); BuildParams
+// widens to `string | string[]` (still optional).
+expectTypeOf<RouteParams<'/files/:rest*'>>().toEqualTypeOf<{
+  rest?: string;
+}>();
+expectTypeOf<BuildParams<'/files/:rest*'>>().toEqualTypeOf<{
+  rest?: string | string[];
+}>();
+
+// Rest `:rest+`: RouteParams stays `string` (required key); BuildParams
+// widens to `string | string[]` (still required).
+expectTypeOf<RouteParams<'/files/:rest+'>>().toEqualTypeOf<{
+  rest: string;
+}>();
+expectTypeOf<BuildParams<'/files/:rest+'>>().toEqualTypeOf<{
+  rest: string | string[];
+}>();
 
 // The full `[A-Za-z0-9_]` name class is accepted: underscores, digits, and
 // uppercase are all valid param-name characters. These guard `ParamNameChar`

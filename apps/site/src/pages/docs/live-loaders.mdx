@@ -176,7 +176,7 @@ Because the cold-connect error surfaces in-view, the reconnect-on-error pattern 
 | ------ | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `live` | `boolean` | `false` | Marks this loader as a long-lived client subscription. Skipped on SSR; timeout defaults to `false`. Consume via the accumulating `loader.View` form. |
 
-All other `defineLoader` options (`params`, `cache`, `timeoutMs`, `use`) work the same for live loaders. See [Server Loaders](/docs/loaders) for the full option table.
+All other `defineLoader` options (`cacheKeyParams`, `cache`, `timeoutMs`, `use`) work the same for live loaders. See [Server Loaders](/docs/loaders) for the full option table.
 
 ### `loader.View(render, { initial, reduce })` (accumulating form)
 

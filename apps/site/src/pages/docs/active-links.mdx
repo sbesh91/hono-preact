@@ -60,6 +60,8 @@ const dashHref = buildPath('/dashboard');
 
 `buildPath` is the safe alternative to template literals: a wrong key or a missing param is a compile error, not a silent bug.
 
+For a rest param (`:rest*`, `:rest+`), pass `string[]` to build real slash-separated segments: `buildPath('/docs/:slug+', { slug: ['a', 'b'] })` builds `/docs/a/b`, encoding each entry individually. A plain `string` is still accepted and is encoded whole, so embedded `/` characters become `%2F` rather than additional segments.
+
 ## `<NavLink>`
 
 A `<a>` that applies an active or inactive class for you (and sets `aria-current="page"` when active).

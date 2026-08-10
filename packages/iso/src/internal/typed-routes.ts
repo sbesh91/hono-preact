@@ -158,6 +158,44 @@ export type RouteParams<Path extends string> =
       ? ParamFrom<Param>
       : {};
 
+// A rest param (`:name*` / `:name+`) may be BUILT from segments as well as
+// from a whole string. This is deliberately separate from `RouteParams`, which
+// is the READ type: a live param value off the route match is always a string,
+// so widening `RouteParams` would lie to `useParams` callers.
+type IsRestSeg<Seg extends string> = Seg extends `${string}*`
+  ? true
+  : Seg extends `${string}+`
+    ? true
+    : false;
+
+type BuildParamFrom<Seg extends string> =
+  StripModifier<Seg> extends {
+    name: infer Name extends string;
+    optional: infer Optional;
+  }
+    ? IsParamName<Name> extends true
+      ? IsRestSeg<Seg> extends true
+        ? Optional extends true
+          ? { [K in Name]?: string | string[] }
+          : { [K in Name]: string | string[] }
+        : Optional extends true
+          ? { [K in Name]?: string }
+          : { [K in Name]: string }
+      : {}
+    : {};
+
+/**
+ * The params object `buildPath` accepts for a pattern. Identical to
+ * `RouteParams` except that rest params (`:name*` / `:name+`) also accept
+ * `string[]`, whose entries are encoded individually and joined with `/`.
+ */
+export type BuildParams<Path extends string> =
+  Path extends `${string}:${infer Param}/${infer Rest}`
+    ? BuildParamFrom<Param> & BuildParams<`/${Rest}`>
+    : Path extends `${string}:${infer Param}`
+      ? BuildParamFrom<Param>
+      : {};
+
 /**
  * Augment this interface to register your app's routes for typed params. The
  * canonical registration is the tree form:

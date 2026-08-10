@@ -22,6 +22,8 @@ export default About;
 
 The page is a default-exported component. No `<Page>` wrapper, no `RouteHook` plumbing; those concerns belong to `definePage` (only when the page needs a `Wrapper` or an `errorFallback`).
 
+A leaf `view` registered without `definePage` silently loses its route error boundary. Dev builds warn about this, but only when that route's lazy `view` thunk actually resolves, which happens on the first visit to the route rather than at registration. A registered route that is never visited during a session never warns, so a green console is not proof every leaf view uses `definePage`; a route only clears this check once it has actually been navigated to.
+
 ### Step 2: Add to `src/routes.ts`
 
 ```ts

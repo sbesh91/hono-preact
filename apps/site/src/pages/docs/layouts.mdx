@@ -103,6 +103,8 @@ export default function Movie() {
 
 Register against `typeof routeTree` (the tree array), not `typeof routes` (the manifest `defineRoutes` returns). The manifest form creates a type cycle. Before you register, `useParams` still works: it accepts any string and projects that pattern's params.
 
+`useParams` requires the named route to be the active one; when it is not, the object it returns does not have the shape it projects, and dev builds warn. Reach for [`useRouteMatch`](/docs/active-links#useroutematch) when the route may legitimately not be active: it returns the match or `null` instead of projecting a shape that is not there.
+
 The tree form types the whole binding surface from the tree structure: the path union (what `RoutePaths<typeof routeTree>` extracts) plus a subtree pattern (`<path>/*`, what `RouteSubtrees<typeof routeTree>` extracts) for every node with children, so `serverRoute`'s subtree scope compiles for grouping nodes and index-only layouts alike. A `paths: RoutePaths<typeof routeTree>` registration is also supported; with only a path union to work from, it types subtree patterns heuristically, requiring a registered strict descendant.
 
 ## URL composition rules

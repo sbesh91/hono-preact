@@ -346,6 +346,9 @@ export function Form<TPayload, TResult>({
             if (lifecycle.current.reset) resetForm();
           },
           navigated: () => {
+            // Same-origin redirect: a full document load follows, so
+            // client-side invalidation can't affect the destination. See the
+            // matching comment in action.ts's navigated arm.
             handle?.settle();
           },
           crossOriginRedirect: (message) => {

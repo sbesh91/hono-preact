@@ -2,13 +2,13 @@ import type { RouteHook } from 'preact-iso';
 
 export function serializeLocationForCache(
   loc: RouteHook,
-  params: string[] | '*'
+  cacheKeyParams: string[] | '*'
 ): string {
   const sp = (loc.searchParams ?? {}) as Record<string, string>;
   const keys =
-    params === '*'
+    cacheKeyParams === '*'
       ? Object.keys(sp).sort()
-      : params.filter((k) => k in sp).sort();
+      : cacheKeyParams.filter((k) => k in sp).sort();
   const sortedSearch = keys.map((k) => `${k}=${sp[k]}`).join('&');
   return `${loc.path}?${sortedSearch}`;
 }

@@ -537,9 +537,9 @@ export const serverLoaders = {
 
 `LoaderFn<T>` is the route-independent single-value form, and its generics mirror the `LoaderRef<T>` the constructor hands back. The second one is the streaming discriminant: `LoaderFn<T, true>` is an `async function*` yielding `T`. The third supplies path params for a function that reads `ctx.location`, as in `LoaderFn<Movie, false, RouteParams<'/movies/:id'>>`; pass it only when you need it, since a route-independent `LoaderFn` asks less of its context and so composes with `route.loader` as well.
 
-## Search-param dependencies (`params`)
+## Search-param dependencies (`cacheKeyParams`)
 
-By default, a loader's cache key includes only the path and path params. Declare search-param dependencies per loader with the `params` option:
+By default, a loader's cache key includes only the path and path params. Declare search-param dependencies per loader with the `cacheKeyParams` option:
 
 ```ts
 const route = serverRoute('/movies/:id');
@@ -554,18 +554,18 @@ export const serverLoaders = {
   similar: route.loader(
     async ({ location }) =>
       fetchSimilar(location.pathParams.id, location.searchParams.genre),
-    { params: ['genre'] }
+    { cacheKeyParams: ['genre'] }
   ),
 
   // refetches on any search-param change; for search/filter pages
   results: route.loader(
     async ({ location }) => searchMovies(location.searchParams),
-    { params: '*' }
+    { cacheKeyParams: '*' }
   ),
 };
 ```
 
-The RPC request always sends the full location to the server; `params` only narrows the client-side cache key.
+The RPC request always sends the full location to the server; `cacheKeyParams` only narrows the client-side cache key.
 
 ## Cross-page invalidation
 
@@ -672,15 +672,15 @@ Two Vite plugins enforce that `.server.*` code never reaches the browser. `serve
 
 Pass a second argument to `defineLoader` or `route.loader` to configure a loader:
 
-| Option         | Type               | Default | Description                                                                 |
-| -------------- | ------------------ | ------- | --------------------------------------------------------------------------- |
-| `params`       | `string[] \| '*'`  | `[]`    | Search params that change the cache key; `'*'` means any. Route-bound only. |
-| `cache`        | `LoaderCache<T>`   | auto    | Shared cache; see Caching navigation results.                               |
-| `timeoutMs`    | `number \| false`  | `30000` | Per-loader deadline in milliseconds; `false` disables it.                   |
-| `live`         | `boolean`          | `false` | Skip SSR; start as a client-only subscription (streaming loaders only).     |
-| `use`          | `LoaderUse`        | none    | Per-loader middleware and stream observers.                                 |
-| `paramsSchema` | `StandardSchemaV1` | none    | Route-bound only: validates and coerces `pathParams`. Fails with 404.       |
-| `searchSchema` | `StandardSchemaV1` | none    | Route-bound only: validates and coerces `searchParams`. Fails with 400.     |
+| Option           | Type               | Default | Description                                                                 |
+| ---------------- | ------------------ | ------- | --------------------------------------------------------------------------- |
+| `cacheKeyParams` | `string[] \| '*'`  | `[]`    | Search params that change the cache key; `'*'` means any. Route-bound only. |
+| `cache`          | `LoaderCache<T>`   | auto    | Shared cache; see Caching navigation results.                               |
+| `timeoutMs`      | `number \| false`  | `30000` | Per-loader deadline in milliseconds; `false` disables it.                   |
+| `live`           | `boolean`          | `false` | Skip SSR; start as a client-only subscription (streaming loaders only).     |
+| `use`            | `LoaderUse`        | none    | Per-loader middleware and stream observers.                                 |
+| `paramsSchema`   | `StandardSchemaV1` | none    | Route-bound only: validates and coerces `pathParams`. Fails with 404.       |
+| `searchSchema`   | `StandardSchemaV1` | none    | Route-bound only: validates and coerces `searchParams`. Fails with 400.     |
 
 Most options have a dedicated section above; this table is the at-a-glance summary.
 

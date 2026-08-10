@@ -181,12 +181,7 @@ export interface RouteBinder<RouteId extends string> {
    * advisory names the mismatch even when boot does not fail closed. Keep the
    * names aligned regardless.
    */
-  room<
-    Name extends string,
-    Payload,
-    State = void,
-    Data = Record<string, unknown>,
-  >(
+  room<Name extends string, Payload, State = void, Data = undefined>(
     channel: Channel<Name, Payload>,
     handler: RoomHandler<Payload, Payload, State, Data, RouteParams<Name>>
   ): RoomRef<Payload, Payload, State, RouteParams<Name>>;
