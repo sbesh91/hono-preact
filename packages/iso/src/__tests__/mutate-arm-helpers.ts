@@ -5,7 +5,7 @@ import type { DenyRecord } from '../internal/deny-record.js';
  * Narrow a `mutate` result to one of its two failure arms, throwing a
  * descriptive failure when it is the other one.
  *
- * `mutate` resolves to a four-arm union, so a test that just checks
+ * `mutate` resolves to a five-arm union, so a test that just checks
  * `!result.ok` no longer says which failure it expected. Going through these
  * makes the arm part of the assertion: a deny that regresses into a generic
  * error (or the reverse) fails loudly instead of type-erroring at the reader.
@@ -32,4 +32,14 @@ export function isNavigatedArm(
   result: MutateResult<unknown>
 ): result is { ok: true; kind: 'navigated' } {
   return result.ok && result.kind === 'navigated';
+}
+
+/**
+ * Narrow a `mutate` result to the aborted arm, so tests read the same way as
+ * `denyArm` and `errorArm` instead of poking `.kind` directly.
+ */
+export function isAbortedArm(
+  result: MutateResult<unknown>
+): result is { ok: false; kind: 'aborted'; error: Error } {
+  return !result.ok && result.kind === 'aborted';
 }

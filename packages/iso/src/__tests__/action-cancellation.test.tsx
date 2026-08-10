@@ -3,8 +3,9 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { render, cleanup, fireEvent, act } from '@testing-library/preact';
 import { h } from 'preact';
 import { useEffect } from 'preact/hooks';
-import { useAction, type ActionRef } from '../action.js';
+import { useAction, type ActionRef, type MutateResult } from '../action.js';
 import { Form } from '../form.js';
+import { isAbortedArm, denyArm } from './mutate-arm-helpers.js';
 
 afterEach(() => {
   cleanup();
@@ -87,7 +88,7 @@ describe('action cancellation', () => {
     fetchSpy.mockRestore();
   });
 
-  it('clears pending when caller signal aborts while component stays mounted', async () => {
+  it('clears pending when caller signal aborts while component stays mounted, and resolves the aborted arm without setting error state', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
       (_url, init) =>
         new Promise((_resolve, reject) => {
@@ -99,17 +100,21 @@ describe('action cancellation', () => {
 
     const onError = vi.fn();
     const pendingRef = { current: false };
+    const errorRef: { current: Error | null } = { current: null };
     const callerCtrl = new AbortController();
     let mutateFn:
       | ((
           p: { x: number },
           opts?: { signal?: AbortSignal }
-        ) => Promise<unknown>)
+        ) => Promise<MutateResult<{ ok: boolean }>>)
       | undefined;
 
     function Comp() {
-      const { mutate, pending } = useAction(makeActionStub(), { onError });
+      const { mutate, pending, error } = useAction(makeActionStub(), {
+        onError,
+      });
       pendingRef.current = pending;
+      errorRef.current = error;
       mutateFn = mutate;
       return null;
     }
@@ -124,14 +129,74 @@ describe('action cancellation', () => {
 
     // Abort while still mounted.
     callerCtrl.abort();
+    let outcome!: MutateResult<{ ok: boolean }>;
     await act(async () => {
-      await mutatePromise;
+      outcome = await mutatePromise;
     });
 
-    // Caller-signal abort while mounted: pending must be cleared and onError
-    // must be called so that optimistic wrappers can revert their state.
+    // Caller-signal abort while mounted: pending must be cleared, onError
+    // must be called so that optimistic wrappers can revert their state, the
+    // returned arm must be `aborted` (not `error`), and the hook's `error`
+    // state must stay unset since a cancellation is not a rendered failure.
     expect(pendingRef.current).toBe(false);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(isAbortedArm(outcome)).toBe(true);
+    expect(errorRef.current).toBeNull();
+    fetchSpy.mockRestore();
+  });
+
+  it('reports a deny that already landed as `deny`, not `aborted`, when the caller then aborts', async () => {
+    // The mock fetch ignores the abort signal (a real fetch given to an
+    // already-committed server response behaves the same way: the response
+    // is already on the wire) and resolves with a deny envelope. The deny
+    // sink sets the mutate's local `denied` and throws; by the time the
+    // outer catch runs, the caller has also aborted, so this exercises the
+    // precedence: a deny that was already decided must win over the abort.
+    let resolveFetch!: (response: Response) => void;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        })
+    );
+
+    const callerCtrl = new AbortController();
+    let mutateFn:
+      | ((
+          p: { x: number },
+          opts?: { signal?: AbortSignal }
+        ) => Promise<MutateResult<{ ok: boolean }>>)
+      | undefined;
+
+    function Comp() {
+      const { mutate } = useAction(makeActionStub());
+      mutateFn = mutate;
+      return null;
+    }
+
+    render(h(Comp, {}));
+    await Promise.resolve();
+
+    const mutatePromise = mutateFn!({ x: 1 }, { signal: callerCtrl.signal });
+    await Promise.resolve();
+
+    // Abort the caller signal, then let the already-in-flight response
+    // resolve to a deny. The deny sink runs after the abort, mirroring a
+    // deny that was decided server-side before the client gave up waiting.
+    callerCtrl.abort();
+    resolveFetch(
+      new Response(
+        JSON.stringify({ __outcome: 'deny', message: 'Forbidden' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    let outcome!: MutateResult<{ ok: boolean }>;
+    await act(async () => {
+      outcome = await mutatePromise;
+    });
+
+    expect(denyArm(outcome).message).toBe('Forbidden');
     fetchSpy.mockRestore();
   });
 

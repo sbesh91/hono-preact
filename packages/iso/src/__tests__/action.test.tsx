@@ -59,7 +59,12 @@ import {
   clearLastActionResult,
 } from '../internal/action-result-store.js';
 import { getValidationIssues } from '../get-validation-issues.js';
-import { denyArm, errorArm, isNavigatedArm } from './mutate-arm-helpers.js';
+import {
+  denyArm,
+  errorArm,
+  isNavigatedArm,
+  isAbortedArm,
+} from './mutate-arm-helpers.js';
 import {
   VALIDATION_ISSUES_KEY,
   VALIDATION_FAILED_MESSAGE,
@@ -1504,7 +1509,12 @@ describe('useAction client pre-validation (schema)', () => {
     });
 
     expect(outcome.ok).toBe(false);
-    expect(errorArm(outcome).message).not.toBe('Validation failed');
+    if (!isAbortedArm(outcome)) {
+      throw new Error(
+        `expected an aborted arm, got ${JSON.stringify(outcome)}`
+      );
+    }
+    expect(outcome.error.message).not.toBe('Validation failed');
     expect(result.current.error?.message).not.toBe('Validation failed');
 
     const recorded = getLastActionResult({
@@ -1547,7 +1557,12 @@ describe('useAction client pre-validation (schema)', () => {
 
     // Cancelled: no spurious validation error, no deny recorded, no request.
     expect(outcome.ok).toBe(false);
-    expect(errorArm(outcome).message).not.toBe('Validation failed');
+    if (!isAbortedArm(outcome)) {
+      throw new Error(
+        `expected an aborted arm, got ${JSON.stringify(outcome)}`
+      );
+    }
+    expect(outcome.error.message).not.toBe('Validation failed');
     expect(result.current.error?.message).not.toBe('Validation failed');
     expect(fetchSpy).not.toHaveBeenCalled();
 
