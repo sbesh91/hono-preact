@@ -28,9 +28,18 @@ export interface HonoPreactCssOptions {
    * also link it manually. Enables the build-time auto-split by default.
    */
   global?: string;
-  /** Default true (when `global` is set). Set false to deliver it unsplit. */
+  /**
+   * Split the global stylesheet per route chunk at build time.
+   * Only meaningful when `global` is set.
+   * @default true
+   */
   autoSplit?: boolean;
-  /** Minimum per-chunk scoped sheet size in bytes; smaller stays global. Default 1024. */
+
+  /**
+   * Minimum per-chunk scoped sheet size in bytes; anything smaller stays in
+   * the global sheet.
+   * @default 1024
+   */
   minSize?: number;
 }
 
