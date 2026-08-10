@@ -34,8 +34,16 @@ export function nodeAdapter(): HonoPreactAdapter {
         `import { installWebSocketUpgrader } from 'hono-preact/internal/runtime';\n` +
         `import { installPreloadModules } from 'hono-preact/server/internal/runtime';\n` +
         `import { readFileSync } from 'node:fs';\n` +
+        `import { join } from 'node:path';\n` +
         `import coreApp from ${JSON.stringify(ctx.coreAppModuleId)};\n` +
         `\n` +
+        // The built server entry lands at <root>/dist/server/, so the client
+        // build is deterministically ../client from it. Resolving from
+        // import.meta.dirname rather than the process cwd is what lets the
+        // built server run from anywhere: a systemd unit with no
+        // WorkingDirectory, a Docker image with a different WORKDIR, or a
+        // monorepo script invoked from the repo root.
+        `const __hpClientDir = join(import.meta.dirname, '../client');\n` +
         // The modulepreload artifact (entry closure + per-route chunk map,
         // plus globalCss/routeCss, which are render-critical), written to the
         // client build output by the framework's preload-manifest plugin.
@@ -61,15 +69,21 @@ export function nodeAdapter(): HonoPreactAdapter {
         `installPreloadModules(() => {\n` +
         `  if (!import.meta.env.PROD) return {};\n` +
         `  try {\n` +
-        `    return JSON.parse(readFileSync('./dist/client/${PRELOAD_MANIFEST_FILE}', 'utf8'));\n` +
+        `    return JSON.parse(readFileSync(join(__hpClientDir, '${PRELOAD_MANIFEST_FILE}'), 'utf8'));\n` +
         `  } catch (err) {\n` +
-        `    throw new Error('[hono-preact] preload manifest read failed at ./dist/client/${PRELOAD_MANIFEST_FILE}: ' + (err instanceof Error ? err.message : String(err)));\n` +
+        `    throw new Error('[hono-preact] preload manifest read failed in ' + __hpClientDir + ': ' + (err instanceof Error ? err.message : String(err)));\n` +
         `  }\n` +
         `});\n` +
         `\n` +
-        `const app = new Hono()\n` +
-        `  .use('/static/*', serveStatic({ root: './dist/client' }))\n` +
-        `  .route('/', coreApp);\n` +
+        `const app = new Hono();\n` +
+        `// Only in production: in dev this wrapper is loaded from\n` +
+        `// node_modules/.vite/hono-preact/, where ../client does not exist, and\n` +
+        `// Vite serves client assets itself. serveStatic existsSync-checks its\n` +
+        `// root at setup and would console.error on every dev boot.\n` +
+        `if (import.meta.env.PROD) {\n` +
+        `  app.use('/static/*', serveStatic({ root: __hpClientDir }));\n` +
+        `}\n` +
+        `app.route('/', coreApp);\n` +
         `\n` +
         `// The framework owns the single node-ws instance: it powers GET /__sockets\n` +
         `// (via the installed upgrader) and any raw api.ts WS (via the public\n` +

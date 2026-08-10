@@ -34,6 +34,14 @@ type BuiltTarget = {
   /** How to serve the built artifact, given a port. */
   serve: (port: number) => { cmd: string; args: string[] };
   routes: string[];
+  /**
+   * When set, the built server is also started a second time from the repo
+   * root instead of the app directory, and a real client asset is fetched
+   * from it. This is the only way to catch a cwd-relative path baked into the
+   * emitted entry: it is a property of the built module's runtime cwd, so no
+   * unit test can reproduce it.
+   */
+  foreignCwdServe?: (port: number) => { cmd: string; args: string[] };
 };
 
 const TARGETS: BuiltTarget[] = [
@@ -43,6 +51,10 @@ const TARGETS: BuiltTarget[] = [
     distProbe: 'dist/server/server-entry.js',
     serve: () => ({ cmd: 'node', args: ['dist/server/server-entry.js'] }),
     routes: ['/', '/about'],
+    foreignCwdServe: () => ({
+      cmd: 'node',
+      args: [resolve(repoRoot, 'apps/example-node/dist/server/server-entry.js')],
+    }),
   },
   {
     name: 'Cloudflare adapter (apps/site)',
@@ -129,7 +141,7 @@ function freePort(): Promise<number> {
 
 describe.each(TARGETS)(
   'built output smoke: $name',
-  ({ root, distProbe, serve, routes }) => {
+  ({ root, distProbe, serve, routes, foreignCwdServe }) => {
     let port: number;
     let child: ChildProcess;
 
@@ -163,5 +175,33 @@ describe.each(TARGETS)(
         `${path} -> ${res.status}\n${body.slice(0, 800)}`
       ).toBeLessThan(400);
     });
+
+    it.skipIf(!foreignCwdServe)(
+      'serves client assets when started from a foreign cwd',
+      async () => {
+        // Discover a real asset URL from the rendered page rather than
+        // hard-coding a hashed filename.
+        const html = await (await fetch(`http://localhost:${port}/`)).text();
+        const asset = /\/static\/[A-Za-z0-9._-]+\.js/.exec(html)?.[0];
+        expect(asset, `no /static/*.js URL in the rendered page`).toBeTruthy();
+
+        const foreignPort = await freePort();
+        const { cmd, args } = foreignCwdServe!(foreignPort);
+        const foreign = spawn(cmd, args, {
+          cwd: repoRoot,
+          stdio: 'pipe',
+          shell: false,
+          env: { ...PROD_ENV, PORT: String(foreignPort), CI: 'true' },
+        });
+        try {
+          await waitForServer(foreignPort, 60_000);
+          const res = await fetch(`http://localhost:${foreignPort}${asset}`);
+          expect(res.status, `${asset} from a foreign cwd -> ${res.status}`).toBe(200);
+        } finally {
+          foreign.kill('SIGTERM');
+        }
+      },
+      120_000
+    );
   }
 );

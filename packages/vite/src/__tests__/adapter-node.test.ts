@@ -97,3 +97,39 @@ describe('nodeAdapter', () => {
     expect(tail).toContain('import.meta.env.PROD');
   });
 });
+
+describe('nodeAdapter wrapEntry client-dir resolution', () => {
+  const src = nodeAdapter().wrapEntry(ctx);
+
+  it('resolves the client build directory from import.meta.dirname', () => {
+    expect(src).toContain(
+      "const __hpClientDir = join(import.meta.dirname, '../client')"
+    );
+    expect(src).toContain("import { join } from 'node:path'");
+  });
+
+  // The cwd-relative spellings are the defect. If either reappears, the built
+  // server only works when started from the project root.
+  it('emits no cwd-relative dist/client path', () => {
+    expect(src).not.toContain("'./dist/client'");
+    expect(src).not.toContain('./dist/client/');
+  });
+
+  it('serves static assets and reads the manifest from that directory', () => {
+    expect(src).toContain('serveStatic({ root: __hpClientDir })');
+    expect(src).toContain('join(__hpClientDir,');
+  });
+
+  // serveStatic's setup does an existsSync on `root` and console.errors when it
+  // is missing. In dev the wrapper is loaded through the SSR module runner from
+  // node_modules/.vite/hono-preact/, where ../client never exists, so mounting
+  // it unconditionally would print a spurious error on every dev boot. Dev also
+  // has no business serving a build directory at all: Vite serves those assets.
+  it('mounts the static middleware only in production', () => {
+    expect(src).toContain('if (import.meta.env.PROD) {');
+    const mountIdx = src.indexOf('serveStatic({ root: __hpClientDir })');
+    const guardIdx = src.indexOf('if (import.meta.env.PROD) {');
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(mountIdx).toBeGreaterThan(guardIdx);
+  });
+});
