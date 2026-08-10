@@ -43,14 +43,23 @@ export interface NodeDevServerOptions {
    * A string matches by prefix; a RegExp matches by `.test()`. Matched
    * against the query-stripped request path.
    *
-   * This is additive only. The built-in prefixes stay in force for everything
-   * else, so no app config can break HMR or module loading by getting the
-   * Vite-internal list wrong.
+   * This cannot override Vite's own endpoints (its HMR client, `/@id/`,
+   * `/@fs/`, `/@react-refresh`): those always reach Vite regardless of any
+   * pattern given here, so this option can't break HMR or module loading.
    *
-   * @example ['/@'] // an app with /@:username profile routes
+   * @example /^\/@(?!vite\/|id\/|fs\/)[^/]+$/ // an app with /@:username profile routes
    */
   devSsrInclude?: readonly (string | RegExp)[];
 }
+
+/**
+ * Prefixes Vite owns outright: its HMR client, its module-id and filesystem
+ * resolution endpoints, and the React-refresh runtime it injects for JSX
+ * fast refresh. Serving any of these from the framework's router instead of
+ * Vite's own middleware breaks HMR and module loading, so `devSsrInclude`
+ * cannot override them; they are checked before any user pattern.
+ */
+const VITE_OWNED_PREFIXES = ['/@vite/', '/@id/', '/@fs/', '/@react-refresh'];
 
 /**
  * True when `path` matches any force-to-SSR pattern.
@@ -66,27 +75,36 @@ export function shouldForceSsr(
   patterns: readonly (string | RegExp)[]
 ): boolean {
   return patterns.some((p) => {
-    if (typeof p === 'string') return path.startsWith(p);
-    const stateless =
-      p.flags.includes('g') || p.flags.includes('y')
-        ? new RegExp(p.source, p.flags.replace(/[gy]/g, ''))
-        : p;
-    return stateless.test(path);
+    const stateless = normalizePattern(p);
+    return typeof stateless === 'string'
+      ? path.startsWith(stateless)
+      : stateless.test(path);
   });
 }
 
 /**
- * Strip the `g` and `y` flags: both make `.test()` stateful via `lastIndex`,
- * which would make a user's pattern match every other request.
+ * Strip the `g` and `y` flags from a single pattern: both make `.test()`
+ * stateful via `lastIndex`, which would make a user's pattern match every
+ * other request.
+ */
+function normalizePattern(p: string | RegExp): string | RegExp {
+  if (typeof p === 'string') return p;
+  return p.flags.includes('g') || p.flags.includes('y')
+    ? new RegExp(p.source, p.flags.replace(/[gy]/g, ''))
+    : p;
+}
+
+/**
+ * Pre-normalize every pattern once at plugin construction, so per-request
+ * matching in the dev middleware never re-allocates a stripped-flags RegExp.
+ * `shouldForceSsr` still normalizes on every call too, via `normalizePattern`:
+ * it is exported as a pure function direct callers may invoke with raw,
+ * un-normalized patterns.
  */
 function normalizePatterns(
   patterns: readonly (string | RegExp)[]
 ): readonly (string | RegExp)[] {
-  return patterns.map((p) =>
-    typeof p === 'string'
-      ? p
-      : new RegExp(p.source, p.flags.replace(/[gy]/g, ''))
-  );
+  return patterns.map(normalizePattern);
 }
 
 export function nodeDevServerPlugin(
@@ -138,14 +156,20 @@ export function nodeDevServerPlugin(
           // owns application routes, so pass these through. Same model as
           // @hono/vite-dev-server's `exclude` option.
           const path = (req.url ?? '').split('?')[0];
-          // `devSsrInclude` is checked FIRST: an app route like /@:username
-          // otherwise disappears into the Vite-internal pass-through below and
-          // never reaches SSR in dev, while working fine in production.
-          if (
-            !shouldForceSsr(path, forcePatterns) &&
-            (path.startsWith('/@') || path.startsWith('/node_modules/'))
-          ) {
+          // Vite's own endpoints always pass through: no `devSsrInclude`
+          // pattern can claim them, so getting that option wrong can't break
+          // HMR or module loading.
+          if (VITE_OWNED_PREFIXES.some((prefix) => path.startsWith(prefix))) {
             return next();
+          }
+          // The remaining built-in prefixes (`/@`, `/node_modules/`) are
+          // overridable: an app route like /@:username needs to win here, or
+          // it disappears into the pass-through below and never reaches SSR
+          // in dev, while working fine in production. Only consult the user's
+          // patterns for requests that could actually be affected, i.e. ones
+          // that already match a built-in prefix.
+          if (path.startsWith('/@') || path.startsWith('/node_modules/')) {
+            if (!shouldForceSsr(path, forcePatterns)) return next();
           }
 
           const { default: app } = (await runner.import(

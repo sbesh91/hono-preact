@@ -151,4 +151,22 @@ describe('nodeDevServerPlugin dev pass-through', () => {
     ).catch(() => {});
     expect(nexted).toBe(false);
   });
+
+  it('still passes /@vite/client through even with a broad devSsrInclude pattern', async () => {
+    const handler = await captureSsrMiddleware({ devSsrInclude: ['/@'] });
+    let nexted = false;
+    await handler({ url: '/@vite/client' }, {}, () => (nexted = true));
+    expect(nexted).toBe(true);
+  });
+
+  it('still forces a genuine app route to SSR under that same broad pattern', async () => {
+    const handler = await captureSsrMiddleware({ devSsrInclude: ['/@'] });
+    let nexted = false;
+    await handler(
+      { url: '/@alice', headers: {} },
+      { setHeader() {}, write() {}, end() {} },
+      () => (nexted = true)
+    ).catch(() => {});
+    expect(nexted).toBe(false);
+  });
 });

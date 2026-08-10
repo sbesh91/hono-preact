@@ -15,10 +15,11 @@ export interface NodeAdapterOptions {
   /**
    * Paths that must reach SSR in dev even though they collide with the Vite
    * dev server's internal `/@` and `/node_modules/` prefixes. A string matches
-   * by prefix, a RegExp by `.test()`. Additive: the built-in prefixes still
-   * apply to everything else.
+   * by prefix, a RegExp by `.test()`. Vite's own endpoints (its HMR client,
+   * `/@id/`, `/@fs/`, `/@react-refresh`) always reach Vite regardless of any
+   * pattern given here, so this option can't break HMR or module loading.
    *
-   * @example nodeAdapter({ devSsrInclude: ['/@'] })
+   * @example nodeAdapter({ devSsrInclude: [/^\/@(?!vite\/|id\/|fs\/)[^/]+$/] })
    */
   devSsrInclude?: NodeDevServerOptions['devSsrInclude'];
 }
