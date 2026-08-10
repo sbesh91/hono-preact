@@ -4,6 +4,7 @@ import { h } from 'preact';
 import type { ComponentChildren } from 'preact';
 import { render } from '@testing-library/preact';
 import { contentRoutes } from '../content-routes.js';
+import { isDefinePageComponent } from '../define-page.js';
 
 // Build a fake glob map. Each value is a lazy importer whose `default` is a
 // component rendering `label`, mirroring `import.meta.glob`'s shape.
@@ -72,6 +73,12 @@ describe('contentRoutes view', () => {
     const root = container.firstChild as HTMLElement;
     expect(root.tagName).toBe('ARTICLE');
     expect(root.className).toBe('mdx-content');
+  });
+
+  it('stamps the resolved view as a definePage component (no bare-leaf warning)', async () => {
+    const [route] = contentRoutes({ './a/index.mdx': mod('hello') });
+    const { default: View } = await route.view!();
+    expect(isDefinePageComponent(View)).toBe(true);
   });
 
   it('forwards route props to the content component', async () => {

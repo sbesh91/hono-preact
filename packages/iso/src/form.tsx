@@ -347,6 +347,7 @@ export function Form<TPayload, TResult>({
           },
           navigated: () => {
             handle?.settle();
+            applyInvalidate(lifecycle.current.invalidate);
           },
           crossOriginRedirect: (message) => {
             // Revert optimistic, surface as an error result so

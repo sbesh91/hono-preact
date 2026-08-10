@@ -17,7 +17,7 @@ export type PageBindings = {
  */
 export const DEFINE_PAGE_MARKER = Symbol.for('hono-preact.definePage');
 
-type DefinePageComponent = FunctionComponent<RouteHook> & {
+export type DefinePageComponent = FunctionComponent<RouteHook> & {
   [DEFINE_PAGE_MARKER]: true;
 };
 
@@ -28,7 +28,7 @@ type DefinePageComponent = FunctionComponent<RouteHook> & {
  */
 export function isDefinePageComponent(
   value: unknown
-): value is FunctionComponent<RouteHook> {
+): value is DefinePageComponent {
   return typeof value === 'function' && DEFINE_PAGE_MARKER in value;
 }
 

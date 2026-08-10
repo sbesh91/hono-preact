@@ -11,6 +11,7 @@ import { renderToString } from 'preact-render-to-string';
 import { Form } from '../form.js';
 import { defineAction } from '../action.js';
 import type { ActionRef } from '../action.js';
+import { defineLoader } from '../define-loader.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from '../internal/contract.js';
 import {
   clearLastActionResult,
@@ -195,6 +196,38 @@ describe('<Form>', () => {
       expect(stored.status).toBe(422);
       expect(stored.message).toBe('bad');
     }
+  });
+
+  it('invalidates declared loaders on a same-origin redirect, matching useAction', async () => {
+    // useAction's navigated arm calls applyInvalidate(currentOptions?.invalidate);
+    // <Form>'s navigated sink must do the same, or `<Form invalidate={[loader]}>`
+    // against a redirecting action leaves loaders stale while the identical
+    // useAction({ invalidate: [loader] }) call refreshes them.
+    const loader = defineLoader(async () => ({ n: 1 }));
+    loader.cache.set({ n: 1 });
+    const invalidateSpy = vi.spyOn(loader, 'invalidate');
+
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const { container } = render(
+      <Form action={makeStub()} invalidate={[loader]}>
+        <input name="text" defaultValue="hi" />
+        <button type="submit">go</button>
+      </Form>
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
   });
 
   it('writes success outcome to the client store', async () => {

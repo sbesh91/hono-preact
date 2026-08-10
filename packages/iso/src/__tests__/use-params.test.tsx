@@ -79,6 +79,19 @@ describe('useParams', () => {
     warn.mockRestore();
   });
 
+  test('does not warn for an ancestor route read from a descendant path', () => {
+    // Real in-repo case (project-header.tsx, task.tsx): a layout or nested
+    // leaf reads an ancestor route's params while the active URL is a
+    // descendant of that route (non-exact match), not the route itself.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    renderAtPath('/demo/projects/p1/tasks/t1', () => {
+      useParams('/demo/projects/:projectId');
+      return null;
+    });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   test('warns only once per route pattern', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     renderAtPath('/projects/abc', () => {

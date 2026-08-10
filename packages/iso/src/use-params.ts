@@ -1,5 +1,5 @@
-import { useRoute } from 'preact-iso';
-import { useRouteMatch } from './route-active.js';
+import { useLocation, useRoute } from 'preact-iso';
+import { matchRouteParams } from './internal/match-route.js';
 import type { RegisteredPaths, RouteParams } from './internal/typed-routes.js';
 
 // Dedupe key is the route pattern: a mismatched `useParams` in a component
@@ -31,20 +31,29 @@ export function __resetParamsWarningsForTesting(): void {
  * entry supplies.
  */
 export function useParams<P extends RegisteredPaths>(route: P): RouteParams<P> {
-  const match = useRouteMatch(route);
-  if (match === null && !warnedRoutes.has(route)) {
-    warnedRoutes.add(route);
-    if (
-      typeof import.meta.env === 'undefined' ||
-      import.meta.env.SSR ||
-      import.meta.env.DEV
-    ) {
+  // useLocation, not useRouteMatch: the warning check below is dev-only, so
+  // the match itself must stay dev-only too, or every render pays for
+  // preact-iso's exec() in production for a check whose result is never
+  // used. useLocation is the only hook here, so hook order is unaffected by
+  // the dev gate.
+  const { path } = useLocation();
+  if (
+    typeof import.meta.env === 'undefined' ||
+    import.meta.env.SSR ||
+    import.meta.env.DEV
+  ) {
+    // Non-exact: an ancestor route reading a descendant's active params (a
+    // layout or nested leaf) is correct usage, not a mismatch. Only a path
+    // that does not descend from `route` at all is worth warning about.
+    const match = matchRouteParams(path, route, false);
+    if (match === null && !warnedRoutes.has(route)) {
       console.warn(
         `hono-preact: useParams('${route}') was called where that route is ` +
           `not the active route, so the returned params do not have the ` +
           `shape it projects. Use useRouteMatch('${route}') when the route ` +
           `may not be active; it returns null instead of a mis-shaped object.`
       );
+      warnedRoutes.add(route);
     }
   }
   // The structural read off Record<string, string> is the one sanctioned cast
