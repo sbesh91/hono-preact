@@ -157,7 +157,10 @@ Deploy the same way you would any Node server: a container image (Docker),
 a system service (systemd), or a PaaS that runs Node processes. Static assets
 must be served from `dist/client/`; the Node adapter serves them in-process
 when you run the bundled server, so a single `node` process handles both
-assets and SSR.
+assets and SSR. The built server resolves its client build relative to its own
+file location, not the process working directory, so it runs correctly under
+a systemd unit with no `WorkingDirectory` set or a Docker image with a
+different `WORKDIR`.
 
 ## See also
 
