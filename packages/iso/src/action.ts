@@ -737,6 +737,11 @@ export function useAction<
             // first, since the destination usually renders the data this
             // mutation just changed and would otherwise serve a stale loader.
             applyInvalidate(currentOptions?.invalidate);
+            // setPending is a no-op after unmount, same as the abort branch
+            // below: navigation may be slow, blocked, or cancelled, and the
+            // component this was called from can still be mounted to observe
+            // it, so the framework must not leave `pending` stuck at true.
+            setPending(false);
             return { ok: true, kind: 'navigated' };
           }
         }

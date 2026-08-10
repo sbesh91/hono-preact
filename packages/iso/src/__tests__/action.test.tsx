@@ -59,7 +59,7 @@ import {
   clearLastActionResult,
 } from '../internal/action-result-store.js';
 import { getValidationIssues } from '../get-validation-issues.js';
-import { denyArm, errorArm } from './mutate-arm-helpers.js';
+import { denyArm, errorArm, isNavigatedArm } from './mutate-arm-helpers.js';
 import {
   VALIDATION_ISSUES_KEY,
   VALIDATION_FAILED_MESSAGE,
@@ -759,7 +759,34 @@ describe('useAction — outcome envelope decoding', () => {
     await act(async () => {
       mutateResult = await result.current.mutate({ title: 'Dune' });
     });
-    expect(mutateResult!).toEqual({ ok: true, kind: 'navigated' });
+    expect(isNavigatedArm(mutateResult!)).toBe(true);
+  });
+
+  it('pending is false after a redirecting mutate resolves', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ __outcome: 'redirect', to: '/login', status: 302 }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+      )
+    );
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const { result } = renderHook(() => useAction(stub));
+    let mutateResult: Awaited<ReturnType<typeof result.current.mutate>>;
+    await act(async () => {
+      mutateResult = await result.current.mutate({ title: 'Dune' });
+    });
+    expect(isNavigatedArm(mutateResult!)).toBe(true);
+    expect(result.current.pending).toBe(false);
   });
 
   it('onSuccess does not fire for the navigated arm', async () => {
@@ -792,6 +819,7 @@ describe('useAction — outcome envelope decoding', () => {
     const loader = defineLoader(async () => ({ n: 1 }));
     loader.cache.set({ n: 1 });
     expect(loader.cache.has()).toBe(true);
+    const invalidateSpy = vi.spyOn(loader, 'invalidate');
 
     vi.stubGlobal(
       'fetch',
@@ -823,6 +851,7 @@ describe('useAction — outcome envelope decoding', () => {
     });
 
     expect(loader.cache.has()).toBe(false);
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
   });
 
   it('the success arm carries kind: success', async () => {
