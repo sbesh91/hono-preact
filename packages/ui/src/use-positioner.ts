@@ -1,4 +1,4 @@
-import type { JSX, RefObject } from 'preact';
+import type { RefObject, CSSProperties } from 'preact';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { usePosition } from './use-position.js';
 import type {
@@ -15,7 +15,7 @@ import { mergeRefs } from './merge-refs.js';
 // to the top layer (overflow/inset/margin/border/padding/background): without
 // this the UA `overflow: auto` clips the popup's box-shadow and `inset: 0`
 // fights the computed left/top. One stable reference (shared by all 5).
-const POSITIONER_STYLE: JSX.CSSProperties = {
+const POSITIONER_STYLE: CSSProperties = {
   position: 'fixed',
   inset: 'auto',
   margin: 0,
@@ -28,8 +28,8 @@ const POSITIONER_STYLE: JSX.CSSProperties = {
 export interface UsePositionerOptions {
   open: boolean;
   // The element the overlay is positioned against.
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
   side: Side;
   align: Align;
   offset: number;
@@ -47,7 +47,7 @@ export interface PositionerElementProps {
   hidden?: true;
   'data-side': Side;
   'data-align': Align;
-  style: JSX.CSSProperties;
+  style: CSSProperties;
 }
 
 export interface UsePositionerResult {
@@ -59,7 +59,7 @@ export interface UsePositionerResult {
   // The resolved position, for a Positioner to publish via PositionerContext.
   position: PositionState;
   // The ref floating-ui measures and the Arrow attaches to.
-  arrowRef: RefObject<HTMLElement>;
+  arrowRef: RefObject<HTMLElement | null>;
 }
 
 export function usePositioner(opts: UsePositionerOptions): UsePositionerResult {

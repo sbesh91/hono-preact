@@ -6,9 +6,9 @@ import type { Side, Align } from '../use-position.js';
 export interface PopoverContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>; // the Positioner element
-  popupRef: RefObject<HTMLElement>; // the Popup element (focus target)
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>; // the Positioner element
+  popupRef: RefObject<HTMLElement | null>; // the Popup element (focus target)
   triggerId: string;
   popupId: string;
   titleId: string;

@@ -2,8 +2,8 @@ import {
   createContext,
   h,
   type ComponentChildren,
-  type JSX,
   type VNode,
+  type HTMLAttributes,
 } from 'preact';
 import { useContext, useId } from 'preact/hooks';
 import { renderElement, type RenderProp } from './render-element.js';
@@ -18,7 +18,7 @@ export const OptionGroupContext = createContext<OptionGroupContextValue | null>(
 export type OptionGroupProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 // Return type left inferred: h(OptionGroupContext.Provider, ...) yields a VNode
 // with more specific props than VNode<{}>, same pattern as Positioner.
@@ -37,7 +37,7 @@ export function OptionGroup(props: OptionGroupProps) {
 export type OptionGroupLabelProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function OptionGroupLabel(props: OptionGroupLabelProps): VNode {
   const { render, children, ...rest } = props;

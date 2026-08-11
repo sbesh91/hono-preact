@@ -2,8 +2,8 @@ import {
   cloneElement,
   h,
   type ComponentChildren,
-  type JSX,
   type VNode,
+  type HTMLAttributes,
 } from 'preact';
 import { mergeRefs, type AnyRef } from './merge-refs.js';
 
@@ -194,5 +194,5 @@ export function renderElement<State = Record<never, never>>(
           ref: withTriggerWarn(props.ref as AnyRef<HTMLElement>, props),
         }
       : props;
-  return h(tag, tagProps as JSX.HTMLAttributes, children) as VNode;
+  return h(tag, tagProps as HTMLAttributes, children) as VNode;
 }

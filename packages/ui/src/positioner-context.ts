@@ -8,7 +8,7 @@ import type { PositionState } from './use-position.js';
 // so position changes no longer invalidate the component's main context.
 export interface PositionerContextValue {
   position: PositionState;
-  arrowRef: RefObject<HTMLElement>;
+  arrowRef: RefObject<HTMLElement | null>;
 }
 
 export const PositionerContext = createContext<PositionerContextValue | null>(

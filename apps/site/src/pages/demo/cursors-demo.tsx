@@ -1,5 +1,5 @@
 import { definePage, useTitle, useComputed, For, Show } from 'hono-preact';
-import type { JSX, FunctionComponent } from 'preact';
+import type { FunctionComponent, TargetedPointerEvent } from 'preact';
 import { useCallback, useEffect, useRef } from 'preact/hooks';
 import { serverRooms } from './cursors-demo.server.js';
 
@@ -29,7 +29,7 @@ const CursorsDemo: FunctionComponent = () => {
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handlePointerMove = useCallback(
-    (e: JSX.TargetedPointerEvent<HTMLDivElement>) => {
+    (e: TargetedPointerEvent<HTMLDivElement>) => {
       const rect = e.currentTarget.getBoundingClientRect();
       pendingRef.current = {
         x: e.clientX - rect.left,

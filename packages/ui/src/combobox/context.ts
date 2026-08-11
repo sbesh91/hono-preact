@@ -33,14 +33,14 @@ export interface ComboboxContextValue {
   activeId: string | null;
   setActiveId: (id: string | null) => void;
   // refs + ids
-  inputRef: RefObject<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement | null>;
   // The positioning anchor. Defaults to the input; a <Combobox.Anchor> wrapper
   // overrides it (it wraps the input, so its parent ref wins last-write).
-  anchorRef: RefObject<HTMLElement>;
-  triggerRef: RefObject<HTMLElement>;
-  clearRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
-  listboxRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  triggerRef: RefObject<HTMLElement | null>;
+  clearRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
+  listboxRef: RefObject<HTMLElement | null>;
   inputId: string;
   listboxId: string;
   // flags + positioning

@@ -1,12 +1,12 @@
 import { renderElement, type RenderProp } from 'hono-preact-ui';
-import type { ComponentChildren, JSX, VNode } from 'preact';
+import type { ComponentChildren, VNode, HTMLAttributes } from 'preact';
 import { useState } from 'preact/hooks';
 
 type DemoButtonProps = {
   render?: RenderProp<{ pressed: boolean }>;
   pressed?: boolean;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 // The render-prop Button from the docs page, built on renderElement.
 function DemoButton({

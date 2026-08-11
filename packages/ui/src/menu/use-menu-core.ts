@@ -28,9 +28,9 @@ export interface MenuCore {
   menuCtx: MenuContextValue;
   open: boolean;
   setOpen: (open: boolean) => void;
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
-  popupRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
+  popupRef: RefObject<HTMLElement | null>;
   pendingEdgeRef: RefObject<'first' | 'last'>;
   baseId: string;
   triggerId: string;

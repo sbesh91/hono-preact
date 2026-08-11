@@ -13,10 +13,10 @@ const FOCUSABLE_SELECTOR = [
 
 export interface UseFocusReturnOptions {
   open: boolean;
-  popupRef: RefObject<HTMLElement>;
+  popupRef: RefObject<HTMLElement | null>;
   // Optional element to focus first; defaults to the first focusable, then the
   // popup container itself.
-  initialFocusRef?: RefObject<HTMLElement>;
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export function useFocusReturn(opts: UseFocusReturnOptions): void {

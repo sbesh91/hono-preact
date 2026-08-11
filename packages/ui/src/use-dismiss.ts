@@ -5,7 +5,7 @@ import { registerDismissLayer, type DismissReason } from './dismiss-stack.js';
 
 export interface UseDismissOptions {
   enabled: boolean; // typically the open state
-  refs: Array<RefObject<HTMLElement>>; // stable RefObjects treated as "inside"
+  refs: Array<RefObject<HTMLElement | null>>; // stable RefObjects treated as "inside"
   escape?: boolean; // default true
   outsidePress?: boolean; // default true
   // Dismiss-tree node id for menus. Omitted = single-node layer (Popover/Tooltip).

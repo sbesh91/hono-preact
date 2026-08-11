@@ -2,8 +2,8 @@ import {
   cloneElement,
   h,
   type ComponentChildren,
-  type JSX,
   type VNode,
+  type HTMLAttributes,
 } from 'preact';
 import { mergeRefs } from './merge-refs.js';
 
@@ -66,5 +66,5 @@ export function renderElement(opts: RenderElementOptions): VNode {
     return cloneElement(render, merged, mergedChildren);
   }
   const tag = typeof render === 'string' ? render : defaultTag;
-  return h(tag, props as JSX.HTMLAttributes, children) as VNode;
+  return h(tag, props as HTMLAttributes, children) as VNode;
 }

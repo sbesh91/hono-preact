@@ -1,4 +1,10 @@
-import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
+import {
+  h,
+  type ComponentChildren,
+  type VNode,
+  type HTMLAttributes,
+  type TargetedMouseEvent,
+} from 'preact';
 import {
   useEffect,
   useId,
@@ -23,7 +29,7 @@ export interface DialogRootProps {
 export type DialogTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 // Return type is inferred: rendering a typed context Provider yields a
 // VNode<ProviderProps> that does not unify with the bare `VNode` the other
@@ -76,7 +82,7 @@ export function DialogTrigger(props: DialogTriggerProps): VNode {
   const { render, children, onClick, ...rest } = props;
   const ctx = useDialogContext('Trigger');
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     ctx.setOpen(true);
   };
@@ -102,7 +108,7 @@ export function DialogTrigger(props: DialogTriggerProps): VNode {
 export type DialogTitleProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLHeadingElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLHeadingElement>, 'children'>;
 
 export function DialogTitle(props: DialogTitleProps): VNode {
   const { render, children, ...rest } = props;
@@ -120,7 +126,7 @@ export type DialogPopupProps = {
   'aria-label'?: string; // alternative to a Title
   closeOnBackdropClick?: boolean; // default true
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDialogElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDialogElement>, 'children'>;
 
 export function DialogPopup(props: DialogPopupProps): VNode {
   const {
@@ -180,7 +186,7 @@ export function DialogPopup(props: DialogPopupProps): VNode {
     return () => el.removeEventListener('cancel', onCancel);
   }, [ctx.setOpen]);
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDialogElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLDialogElement>) => {
     onClick?.(event);
     // A modal <dialog> reports backdrop clicks as targeting the element itself.
     if (closeOnBackdropClick && event.target === ctx.dialogRef.current) {
@@ -209,7 +215,7 @@ export function DialogPopup(props: DialogPopupProps): VNode {
 export type DialogDescriptionProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLParagraphElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLParagraphElement>, 'children'>;
 
 export function DialogDescription(props: DialogDescriptionProps): VNode {
   const { render, children, ...rest } = props;
@@ -228,13 +234,13 @@ export function DialogDescription(props: DialogDescriptionProps): VNode {
 export type DialogCloseProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function DialogClose(props: DialogCloseProps): VNode {
   const { render, children, onClick, ...rest } = props;
   const ctx = useDialogContext('Close');
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     ctx.setOpen(false);
   };

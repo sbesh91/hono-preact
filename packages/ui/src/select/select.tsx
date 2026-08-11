@@ -3,8 +3,11 @@ import {
   h,
   Fragment,
   type ComponentChildren,
-  type JSX,
   type VNode,
+  type HTMLAttributes,
+  type TargetedKeyboardEvent,
+  type TargetedMouseEvent,
+  type TargetedPointerEvent,
 } from 'preact';
 import { useId, useMemo, useRef, useState } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
@@ -172,7 +175,7 @@ export { OPTION_SELECTOR } from '../listbox/selection.js';
 export type SelectTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function SelectTrigger(props: SelectTriggerProps): VNode {
   const { render, children, onClick, onKeyDown, ...rest } = props;
@@ -193,14 +196,12 @@ export function SelectTrigger(props: SelectTriggerProps): VNode {
 
   useHighlightSelectedOnOpen(nav, ctx.open);
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     if (ctx.disabled) return;
     ctx.setOpen(!ctx.open);
   };
-  const handleKeyDown = (
-    event: JSX.TargetedKeyboardEvent<HTMLButtonElement>
-  ) => {
+  const handleKeyDown = (event: TargetedKeyboardEvent<HTMLButtonElement>) => {
     onKeyDown?.(event);
     if (ctx.disabled || event.defaultPrevented) return;
     if (!ctx.open) {
@@ -260,7 +261,7 @@ export type SelectValueProps = {
   placeholder?: string;
   render?: RenderProp<{ selectedLabels: string[] }>;
   children?: (value: { selectedLabels: string[] }) => ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLSpanElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLSpanElement>, 'children'>;
 
 export function SelectValue(props: SelectValueProps): VNode {
   const { placeholder, render, children, ...rest } = props;
@@ -283,7 +284,7 @@ export function SelectValue(props: SelectValueProps): VNode {
 export type SelectPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function SelectPositioner(props: SelectPositionerProps) {
   const { render, children, ...rest } = props;
@@ -309,7 +310,7 @@ export type SelectPopupProps = {
   render?: RenderProp<{ open: boolean }>;
   'aria-label'?: string;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function SelectPopup(props: SelectPopupProps): VNode {
   const { render, children, 'aria-label': ariaLabel, ...rest } = props;
@@ -350,7 +351,7 @@ export type SelectOptionProps<Value = string> = {
   }>;
   disabled?: boolean;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function SelectOption<Value = string>(
   props: SelectOptionProps<Value>
@@ -376,14 +377,12 @@ export function SelectOption<Value = string>(
   const stringLabel = typeof children === 'string' ? children : undefined;
   useRegisterOption(ctx.registerOption, id, value, stringLabel);
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLDivElement>) => {
     onClick?.(event);
     if (disabled) return;
     ctx.toggle(value);
   };
-  const handlePointerEnter = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerEnter = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerEnter?.(event);
     if (disabled) return;
     ctx.setActiveId(id);

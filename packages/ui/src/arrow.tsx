@@ -1,4 +1,8 @@
-import { type ComponentChildren, type JSX, type VNode } from 'preact';
+import {
+  type ComponentChildren,
+  type VNode,
+  type HTMLAttributes,
+} from 'preact';
 import { renderElement, type RenderProp } from './render-element.js';
 import type { Side } from './use-position.js';
 import { usePositionerContext } from './positioner-context.js';
@@ -6,7 +10,7 @@ import { usePositionerContext } from './positioner-context.js';
 export type ArrowProps = {
   render?: RenderProp<{ side: Side }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 // One Arrow for every overlay. Reads the resolved position from the enclosing
 // Positioner (via PositionerContext) and attaches the ref floating-ui measures.

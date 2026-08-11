@@ -77,9 +77,9 @@ function defaultRect(): ClientRectObject {
 
 export interface UsePositionOptions {
   open: boolean;
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
-  arrowRef?: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
+  arrowRef?: RefObject<HTMLElement | null>;
   // When provided, positions against this rect (a floating-ui virtual element)
   // instead of anchorRef.current. Used by the context menu to anchor at the
   // pointer. Returning null yields a zero rect at the origin (defaultRect), so

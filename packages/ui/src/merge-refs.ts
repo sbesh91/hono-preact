@@ -1,6 +1,9 @@
 import type { Ref } from 'preact';
 
-export type AnyRef<T> = Ref<T> | null | undefined;
+// `Ref<T | null>` rather than `Ref<T>`: `RefObject` is covariant in its type
+// argument, so a `RefObject<HTMLElement | null>` (what `useRef<T>(null)` yields
+// under Preact 11) is not assignable to `RefObject<T>`.
+export type AnyRef<T> = Ref<T | null> | null | undefined;
 
 // Combine several refs into one callback ref. Function refs are invoked with
 // the node; object refs have `.current` assigned; null/undefined are skipped.

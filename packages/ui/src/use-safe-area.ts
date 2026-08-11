@@ -10,8 +10,8 @@ import {
 
 export interface UseSafeAreaOptions {
   enabled: boolean; // typically the open state of a hover-driven element
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
   onClose: () => void; // pointer left the safe region and the grace expired
   graceMs?: number; // close grace after leaving the safe region, default 300
 }

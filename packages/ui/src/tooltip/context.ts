@@ -10,8 +10,8 @@ export interface TooltipContextValue {
   scheduleOpen: () => void;
   setOpenImmediate: (open: boolean) => void;
   cancelPending: () => void;
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
   popupId: string;
   side: Side;
   align: Align;

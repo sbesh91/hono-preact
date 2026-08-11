@@ -1,5 +1,12 @@
 // packages/ui/src/tooltip/tooltip.tsx
-import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
+import {
+  h,
+  type ComponentChildren,
+  type VNode,
+  type HTMLAttributes,
+  type TargetedFocusEvent,
+  type TargetedPointerEvent,
+} from 'preact';
 import { useCallback, useEffect, useId, useMemo, useRef } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
 import { useControllableState } from '../use-controllable-state.js';
@@ -101,7 +108,7 @@ export function TooltipRoot(props: TooltipRootProps) {
 export type TooltipTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function TooltipTrigger(props: TooltipTriggerProps): VNode {
   const {
@@ -116,7 +123,7 @@ export function TooltipTrigger(props: TooltipTriggerProps): VNode {
   const ctx = useTooltipContext('Trigger');
 
   const handlePointerEnter = (
-    event: JSX.TargetedPointerEvent<HTMLButtonElement>
+    event: TargetedPointerEvent<HTMLButtonElement>
   ) => {
     onPointerEnter?.(event);
     // Tooltips are inaccessible on touch; do not open on a touch pointer.
@@ -124,7 +131,7 @@ export function TooltipTrigger(props: TooltipTriggerProps): VNode {
     ctx.scheduleOpen();
   };
   const handlePointerLeave = (
-    event: JSX.TargetedPointerEvent<HTMLButtonElement>
+    event: TargetedPointerEvent<HTMLButtonElement>
   ) => {
     onPointerLeave?.(event);
     if (event.pointerType === 'touch') return;
@@ -132,11 +139,11 @@ export function TooltipTrigger(props: TooltipTriggerProps): VNode {
     // While open, the safe corridor (useSafeArea in Popup) governs the close.
     ctx.cancelPending();
   };
-  const handleFocus = (event: JSX.TargetedFocusEvent<HTMLButtonElement>) => {
+  const handleFocus = (event: TargetedFocusEvent<HTMLButtonElement>) => {
     onFocus?.(event);
     ctx.setOpenImmediate(true);
   };
-  const handleBlur = (event: JSX.TargetedFocusEvent<HTMLButtonElement>) => {
+  const handleBlur = (event: TargetedFocusEvent<HTMLButtonElement>) => {
     onBlur?.(event);
     ctx.setOpenImmediate(false);
   };
@@ -163,7 +170,7 @@ export function TooltipTrigger(props: TooltipTriggerProps): VNode {
 export type TooltipPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function TooltipPositioner(props: TooltipPositionerProps) {
   const { render, children, ...rest } = props;
@@ -185,7 +192,7 @@ export function TooltipPositioner(props: TooltipPositionerProps) {
 export type TooltipPopupProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function TooltipPopup(props: TooltipPopupProps): VNode {
   const { render, children, onPointerEnter, onPointerLeave, ...rest } = props;
@@ -213,15 +220,11 @@ export function TooltipPopup(props: TooltipPopupProps): VNode {
 
   // Hoverable (WCAG 1.4.13): moving onto the popup keeps it open. The close is
   // governed by the safe corridor (useSafeArea), not a leave timer.
-  const handlePointerEnter = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerEnter = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerEnter?.(event);
     ctx.cancelPending();
   };
-  const handlePointerLeave = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerLeave = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerLeave?.(event);
   };
 
