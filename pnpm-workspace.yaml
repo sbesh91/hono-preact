@@ -11,9 +11,6 @@ allowBuilds:
   '@parcel/watcher': true
   sharp: false
 
-minimumReleaseAgeExclude:
-  - preact@11.0.0-rc.0
-
 overrides:
   # The framework targets preact-iso v3 (searchParams/pathParams RouteHook
   # shape), which is only published on the GitHub branch. Force every

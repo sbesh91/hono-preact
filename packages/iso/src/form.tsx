@@ -1,4 +1,5 @@
 import type { ComponentChildren, InputEventHandler, JSX } from 'preact';
+import type { DistributiveOmit } from './internal/element-props.js';
 import {
   useState,
   useCallback,
@@ -57,10 +58,6 @@ import { createFieldErrorStore } from './internal/field-error-signal.js';
 type FormActionInput<TPayload, TResult> =
   | ActionRef<TPayload, TResult, never>
   | UseOptimisticActionResult<TPayload, TResult, unknown>;
-
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
 
 export type FormProps<TPayload, TResult> = DistributiveOmit<
   JSX.IntrinsicElements['form'],

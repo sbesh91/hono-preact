@@ -1,20 +1,16 @@
 import type { VNode, JSX, TargetedMouseEvent } from 'preact';
+import type { DistributiveOmit } from './internal/element-props.js';
 import { useRouteActive } from './route-active.js';
 import type { RoutePattern } from './internal/typed-routes.js';
 import { skipNextNavTransition } from './internal/route-change.js';
 
 // Anchor-specific, not the generic element attributes: `target`, `rel`,
-// `download`, `ping`, and `referrerpolicy` live only on AnchorHTMLAttributes,
-// and `willSoftNavigate` below reads `target` and `download` off the rendered
-// anchor. Typing the props as the narrower HTMLAttributes made props the
-// runtime already depends on unspellable by a caller.
-// Preact 11 types `<a>` as a union discriminated on `href` so `role` is
-// narrowed to anchor-legal roles. A plain `Omit` collapses that union and
-// widens `role` back to every AriaRole, which then fails to assign to `<a>`.
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
-
+// `download`, `ping`, and `referrerpolicy` are anchor-only, and
+// `willSoftNavigate` below reads `target` and `download` off the rendered
+// anchor. Deriving from the generic element attributes made props the runtime
+// already depends on unspellable by a caller. `JSX.IntrinsicElements['a']` is
+// the spelling that carries them *and* preserves the per-element `role`
+// narrowing; see `DistributiveOmit` for why the omit has to distribute.
 export type NavLinkProps = DistributiveOmit<
   JSX.IntrinsicElements['a'],
   'class' | 'className'

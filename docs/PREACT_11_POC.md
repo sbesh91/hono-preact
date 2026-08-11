@@ -1,6 +1,8 @@
 # Preact 11 RC compatibility POC
 
-Status: exploratory. Branch `worktree-preact11-poc`. Not intended to merge as-is.
+Status: findings record. The compatibility work described here is
+dual-major and verified green on Preact 10; adopting Preact 11 itself is
+blocked upstream (see item 5).
 
 Pins the whole workspace to `preact@11.0.0-rc.0` via a `pnpm-workspace.yaml`
 override (`preact-render-to-string@6.7.0` already supports both majors), then
@@ -37,12 +39,12 @@ pnpm --filter site build
 | Gate | Before fixes | After the fixes in this branch |
 | --- | --- | --- |
 | framework build / `typecheck` | 118 errors (`ui` 125, `iso` 8) | pass |
-| `typecheck:tests` | — | pass |
-| `test:types` | — | pass (41) |
+| `typecheck:tests` |, | pass |
+| `test:types` |, | pass (41) |
 | `test` | 47 failed / 3535 | 9 failed / 3535 |
 | `test:integration` | blocked by the build | pass (13) |
 | `test:smoke` | blocked by the build | **pass (13)** |
-| `apps/site` build | — | pass |
+| `apps/site` build |, | pass |
 
 37 of the original 47 unit failures were the ungenerated agents corpus, not
 Preact. The real count was 10; nine remain, and eight of those are one behavior
@@ -96,7 +98,7 @@ The two majors define the type differently:
 
 So `RefObject<T | null>` denotes the same shape in both, and it is the spelling
 every *slot* that receives a ref should use. Every context type and hook option
-declaring `RefObject<HTMLElement>` was widened — mostly `packages/ui`
+declaring `RefObject<HTMLElement>` was widened. Most of these are in `packages/ui`
 (`use-position`, `use-positioner`, `use-dismiss`, `use-focus-return`,
 `dismiss-stack`, `list-navigation`, and the six component context modules).
 
@@ -160,17 +162,17 @@ teardown runs. Probed directly:
 
 It lands on preact's `afterPaint` scheduler (rAF raced with a 100 ms timeout),
 not on any tick a test can await cheaply. Every failing assertion is the same
-shape — "unsubscribes / aborts / disconnects on unmount", asserted immediately
+shape ("unsubscribes / aborts / disconnects on unmount"), asserted immediately
 after `unmount()`:
 
-- `packages/iso/src/__tests__/action-cancellation.test.tsx` (2) — the submit
+- `packages/iso/src/__tests__/action-cancellation.test.tsx` (2): the submit
   `AbortSignal` is not yet aborted
 - `packages/iso/src/__tests__/view-transition-types.test.tsx` (3) and
-  `view-transition-lifecycle.test.tsx` (1) — subscriptions still fire
-- `apps/site/src/components/__tests__/HeroShader.test.tsx` (2) — worker not
+  `view-transition-lifecycle.test.tsx` (1): subscriptions still fire
+- `apps/site/src/components/__tests__/HeroShader.test.tsx` (2): worker not
   terminated, ResizeObserver not disconnected
 
-These are test-timing failures, not framework defects — but the underlying
+These are test-timing failures, not framework defects, but the underlying
 behavior change is real and user-visible: an in-flight action now keeps running
 for up to a frame past unmount, and a WebGL worker or observer survives that
 long too. Anything where the teardown is load-bearing (aborting requests,
@@ -187,12 +189,12 @@ the incoming guarded chain is pending. The user-visible regression is a blank
 flash on every guarded navigation.
 
 This is **not our code**. `preact-iso` v3 implements hold-alive by reaching into
-Preact 10 private internals — `this.__v.__k.reverse()` to suppress diffing,
+Preact 10 private internals, `this.__v.__k.reverse()` to suppress diffing,
 `__u |= MODE_HYDRATE | MODE_SUSPENDED`, `__h`, `this.__v.__e`, and the `__c`
 suspension hook. Hydration 2.0 reworked exactly those internals.
 
 Its published peer range already claims `preact: ">=10 || >= 11.0.0-0"`, which
-is optimistic — the package resolves and runs, it just loses this behavior. That
+is optimistic, the package resolves and runs, it just loses this behavior. That
 peer range is a hazard for us in the other direction too: it means nothing stops
 a user from installing Preact 11 under our current pins.
 
@@ -212,7 +214,7 @@ chunk plus its static-import closure, 19 chunks both ways):
 | raw | 57 465 B | 57 020 B | −445 B |
 
 Flat. `scripts/measure-framework-size.mjs` shows no movement at all, as
-expected — it externalizes peers, so it measures our code, which is unchanged.
+expected, it externalizes peers, so it measures our code, which is unchanged.
 
 ## Verified on Preact 10
 
@@ -231,8 +233,8 @@ That is the mergeable artifact here. Under Preact 11 RC the same tree leaves the
    with peer minimums raised to `>=10.28.0`. It is mechanical, it is verified
    green under the current major, and it removes 118 of the 128 upgrade errors
    from the future.
-2. **Audit `useEffect` teardown where timing matters** (item 4) — realtime
-   sockets, action aborts, observers — and move the load-bearing ones off
+2. **Audit `useEffect` teardown where timing matters** (item 4), realtime
+   sockets, action aborts, observers, and move the load-bearing ones off
    passive-effect cleanup.
 3. **Do not adopt Preact 11 until `preact-iso` is ported.** Track that upstream.
    Until then, consider whether our peer ranges should exclude 11 explicitly
@@ -240,12 +242,14 @@ That is the mergeable artifact here. Under Preact 11 RC the same tree leaves the
 4. Re-run this branch against each RC. Everything except item 5 is now green,
    so the re-check is cheap.
 
+Tracked in #379 (Preact 11 readiness).
+
 ## Upstream context
 
 - [Preact 11.0.0-RC.0](https://github.com/preactjs/preact/releases/tag/11.0.0-rc.0)
 - [Hydration 2.0 RFC](https://github.com/preactjs/preact/issues/4442)
-- [JoviDeCroock/pracht#245](https://github.com/JoviDeCroock/pracht/pull/245) —
-  the parallel streaming-hydration experiment; its standing guidance is to
+- [JoviDeCroock/pracht#245](https://github.com/JoviDeCroock/pracht/pull/245):
+  the parallel streaming-hydration experiment. Its standing guidance is to
   render `<head>` in the shell and stream only `<body>`, because a suspended
   `<head>` serves placeholder metadata to any client that does not run the
   stream's patcher script.
