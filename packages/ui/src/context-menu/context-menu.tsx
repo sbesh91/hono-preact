@@ -1,5 +1,11 @@
 // packages/ui/src/context-menu/context-menu.tsx
-import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
+import {
+  h,
+  type ComponentChildren,
+  type VNode,
+  type HTMLAttributes,
+  type TargetedMouseEvent,
+} from 'preact';
 import { renderElement, type RenderProp } from '../render-element.js';
 import type { PositioningProps } from '../use-position.js';
 import { MenuContext, useMenuContext } from '../menu/context.js';
@@ -43,13 +49,13 @@ export function ContextMenuRoot(props: ContextMenuRootProps) {
 export type ContextMenuTriggerProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function ContextMenuTrigger(props: ContextMenuTriggerProps): VNode {
   const { render, children, onContextMenu, ...rest } = props;
   const ctx = useMenuContext('Trigger');
 
-  const handleContextMenu = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+  const handleContextMenu = (event: TargetedMouseEvent<HTMLDivElement>) => {
     onContextMenu?.(event);
     event.preventDefault(); // suppress the native context menu
     ctx.openAt?.(event.clientX, event.clientY);

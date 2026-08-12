@@ -3,8 +3,16 @@ import {
   h,
   Fragment,
   type ComponentChildren,
-  type JSX,
   type VNode,
+  type CSSProperties,
+  type HTMLAttributes,
+  type InputHTMLAttributes,
+  type TargetedCompositionEvent,
+  type TargetedFocusEvent,
+  type TargetedInputEvent,
+  type TargetedKeyboardEvent,
+  type TargetedMouseEvent,
+  type TargetedPointerEvent,
 } from 'preact';
 import {
   useCallback,
@@ -267,7 +275,7 @@ export function ComboboxRoot<Value extends {} = string>(
 export type ComboboxPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function ComboboxPositioner(props: ComboboxPositionerProps) {
   const { render, children, ...rest } = props;
@@ -299,7 +307,7 @@ export type ComboboxPopupProps = {
   render?: RenderProp<{ open: boolean }>;
   'aria-label'?: string;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function ComboboxPopup(props: ComboboxPopupProps): VNode {
   const { render, children, 'aria-label': ariaLabel, ...rest } = props;
@@ -344,7 +352,7 @@ export function ComboboxPopup(props: ComboboxPopupProps): VNode {
 export type ComboboxAnchorProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLElement>, 'children'>;
 
 // Optional wrapper that becomes the positioning anchor for the popup. Wrap the
 // Input (and any chips / Trigger / Clear) in it so the popup aligns to the whole
@@ -377,7 +385,7 @@ export type ComboboxOptionProps<Value = string> = {
   }>;
   disabled?: boolean;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function ComboboxOption<Value = string>(
   props: ComboboxOptionProps<Value>
@@ -413,14 +421,12 @@ export function ComboboxOption<Value = string>(
     }
   };
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLDivElement>) => {
     onClick?.(event);
     if (disabled) return;
     commit();
   };
-  const handlePointerEnter = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerEnter = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerEnter?.(event);
     if (disabled) return;
     ctx.setActiveId(id);
@@ -457,7 +463,7 @@ export {
   type OptionGroupLabelProps as ComboboxOptionGroupLabelProps,
 } from '../option-group.js';
 
-const VISUALLY_HIDDEN: JSX.CSSProperties = {
+const VISUALLY_HIDDEN: CSSProperties = {
   position: 'absolute',
   width: 1,
   height: 1,
@@ -471,7 +477,7 @@ const VISUALLY_HIDDEN: JSX.CSSProperties = {
 
 export type ComboboxStatusProps = {
   render?: RenderProp<{ count: number; open: boolean }>;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'render'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'render'>;
 
 export function ComboboxStatus(props: ComboboxStatusProps): VNode {
   const { render, style, ...rest } = props;
@@ -491,7 +497,7 @@ export function ComboboxStatus(props: ComboboxStatusProps): VNode {
       role: 'status',
       'aria-live': 'polite',
       'aria-atomic': 'true',
-      style: { ...VISUALLY_HIDDEN, ...(style as JSX.CSSProperties) },
+      style: { ...VISUALLY_HIDDEN, ...(style as CSSProperties) },
     },
     state: { count, open: ctx.open },
     children: render ? undefined : message,
@@ -500,7 +506,7 @@ export function ComboboxStatus(props: ComboboxStatusProps): VNode {
 
 export type ComboboxInputProps = {
   render?: RenderProp<{ open: boolean }>;
-} & Omit<JSX.InputHTMLAttributes<HTMLInputElement>, 'value' | 'render'>;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'render'>;
 
 export function ComboboxInput(props: ComboboxInputProps): VNode {
   const { render, onInput, onKeyDown, onFocus, onClick, ...rest } = props;
@@ -603,7 +609,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     if (inline && forward) attemptRef.current = true;
   };
 
-  const handleInput = (event: JSX.TargetedInputEvent<HTMLInputElement>) => {
+  const handleInput = (event: TargetedInputEvent<HTMLInputElement>) => {
     onInput?.(event);
     const raw = event.currentTarget.value;
     if (composingRef.current) {
@@ -617,7 +623,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     composingRef.current = true;
   };
   const handleCompositionEnd = (
-    event: JSX.TargetedCompositionEvent<HTMLInputElement>
+    event: TargetedCompositionEvent<HTMLInputElement>
   ) => {
     composingRef.current = false;
     runInput(event.currentTarget.value);
@@ -629,9 +635,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     if (current >= 0) list[current].click();
   };
 
-  const handleKeyDown = (
-    event: JSX.TargetedKeyboardEvent<HTMLInputElement>
-  ) => {
+  const handleKeyDown = (event: TargetedKeyboardEvent<HTMLInputElement>) => {
     onKeyDown?.(event);
     if (ctx.disabled || event.defaultPrevented) return;
 
@@ -710,7 +714,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
 
   // Second Escape (already closed) reverts the input to the committed value.
   const handleClosedEscape = (
-    event: JSX.TargetedKeyboardEvent<HTMLInputElement>
+    event: TargetedKeyboardEvent<HTMLInputElement>
   ) => {
     if (event.key !== 'Escape' || ctx.open) return;
     event.preventDefault();
@@ -722,7 +726,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
   const openIfFocusOpen = () => {
     if (ctx.openOnFocus && !ctx.disabled && !ctx.open) ctx.setOpen(true);
   };
-  const handleFocus = (event: JSX.TargetedFocusEvent<HTMLInputElement>) => {
+  const handleFocus = (event: TargetedFocusEvent<HTMLInputElement>) => {
     onFocus?.(event);
     // Select the text so the first keystroke starts a fresh search (keyboard
     // focus; a mouse click then places the caret, which is the expected
@@ -730,7 +734,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
     event.currentTarget.select();
     openIfFocusOpen();
   };
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLInputElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLInputElement>) => {
     onClick?.(event);
     openIfFocusOpen();
   };
@@ -760,7 +764,7 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
       onClick: handleClick,
       onCompositionStart: handleCompositionStart,
       onCompositionEnd: handleCompositionEnd,
-      onKeyDown: (event: JSX.TargetedKeyboardEvent<HTMLInputElement>) => {
+      onKeyDown: (event: TargetedKeyboardEvent<HTMLInputElement>) => {
         handleKeyDown(event);
         handleClosedEscape(event);
       },
@@ -772,12 +776,12 @@ export function ComboboxInput(props: ComboboxInputProps): VNode {
 export type ComboboxTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function ComboboxTrigger(props: ComboboxTriggerProps): VNode {
   const { render, children, onClick, ...rest } = props;
   const ctx = useComboboxContext('Trigger');
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     if (ctx.disabled) return;
     ctx.setOpen(!ctx.open);
@@ -806,12 +810,12 @@ export function ComboboxTrigger(props: ComboboxTriggerProps): VNode {
 export type ComboboxClearProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function ComboboxClear(props: ComboboxClearProps): VNode {
   const { render, children, onClick, ...rest } = props;
   const ctx = useComboboxContext('Clear');
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     if (ctx.disabled) return;
     ctx.clear();
@@ -834,7 +838,7 @@ export function ComboboxClear(props: ComboboxClearProps): VNode {
 export type ComboboxEmptyProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function ComboboxEmpty(props: ComboboxEmptyProps): VNode | null {
   const { render, children, ...rest } = props;
@@ -856,7 +860,7 @@ export interface ComboboxValueState<Value = unknown> {
 export type ComboboxValueProps<Value = unknown> = {
   render?: RenderProp<ComboboxValueState<Value>>;
   children?: (state: ComboboxValueState<Value>) => ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLSpanElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLSpanElement>, 'children'>;
 
 export function ComboboxValue<Value = unknown>(
   props: ComboboxValueProps<Value>

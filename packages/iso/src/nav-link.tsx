@@ -1,15 +1,18 @@
-import type { JSX, VNode } from 'preact';
+import type { VNode, JSX, TargetedMouseEvent } from 'preact';
+import type { DistributiveOmit } from './internal/element-props.js';
 import { useRouteActive } from './route-active.js';
 import type { RoutePattern } from './internal/typed-routes.js';
 import { skipNextNavTransition } from './internal/route-change.js';
 
 // Anchor-specific, not the generic element attributes: `target`, `rel`,
-// `download`, `ping`, and `referrerpolicy` live only on AnchorHTMLAttributes,
-// and `willSoftNavigate` below reads `target` and `download` off the rendered
-// anchor. Typing the props as the narrower HTMLAttributes made props the
-// runtime already depends on unspellable by a caller.
-export type NavLinkProps = Omit<
-  JSX.AnchorHTMLAttributes<HTMLAnchorElement>,
+// `download`, `ping`, and `referrerpolicy` are anchor-only, and
+// `willSoftNavigate` below reads `target` and `download` off the rendered
+// anchor. Deriving from the generic element attributes made props the runtime
+// already depends on unspellable by a caller. `JSX.IntrinsicElements['a']` is
+// the spelling that carries them *and* preserves the per-element `role`
+// narrowing; see `DistributiveOmit` for why the omit has to distribute.
+export type NavLinkProps = DistributiveOmit<
+  JSX.IntrinsicElements['a'],
   'class' | 'className'
 > & {
   href: string;
@@ -34,7 +37,7 @@ export type NavLinkProps = Omit<
 // gate. Deliberately does NOT gate on `e.defaultPrevented`: handleNav ignores
 // it too, so an upstream capture-phase preventDefault still soft-navigates.
 function willSoftNavigate(
-  e: JSX.TargetedMouseEvent<HTMLAnchorElement>,
+  e: TargetedMouseEvent<HTMLAnchorElement>,
   href: string
 ): boolean {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
@@ -79,7 +82,7 @@ export function NavLink(props: NavLinkProps): VNode {
   const ariaCurrent =
     'aria-current' in props ? ariaCurrentProp : active ? 'page' : undefined;
 
-  const handleClick = (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => {
+  const handleClick = (e: TargetedMouseEvent<HTMLAnchorElement>) => {
     // Keyed to the resolved href: if no navigated flush follows (a same-URL
     // push), the arm expires at the next navigation instead of stranding.
     if (transition === false && willSoftNavigate(e, href))

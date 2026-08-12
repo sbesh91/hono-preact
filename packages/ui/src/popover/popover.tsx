@@ -1,5 +1,11 @@
 // packages/ui/src/popover/popover.tsx
-import { h, type ComponentChildren, type JSX, type VNode } from 'preact';
+import {
+  h,
+  type ComponentChildren,
+  type VNode,
+  type HTMLAttributes,
+  type TargetedMouseEvent,
+} from 'preact';
 import { useId, useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import { useDescriptionRegistry } from '../use-description-registry.js';
 import { useDismiss } from '../use-dismiss.js';
@@ -84,13 +90,13 @@ export function PopoverRoot(props: PopoverRootProps) {
 export type PopoverTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function PopoverTrigger(props: PopoverTriggerProps): VNode {
   const { render, children, onClick, ...rest } = props;
   const ctx = usePopoverContext('Trigger');
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     ctx.setOpen(!ctx.open);
   };
@@ -119,7 +125,7 @@ export function PopoverTrigger(props: PopoverTriggerProps): VNode {
 export type PopoverAnchorProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLSpanElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLSpanElement>, 'children'>;
 
 // Optional: positions the popover relative to this element instead of the
 // Trigger. Sets the shared anchorRef, overriding the Trigger's ref (last write
@@ -138,7 +144,7 @@ export function PopoverAnchor(props: PopoverAnchorProps): VNode {
 export type PopoverPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function PopoverPositioner(props: PopoverPositionerProps) {
   const { render, children, ...rest } = props;
@@ -161,7 +167,7 @@ export type PopoverPopupProps = {
   render?: RenderProp<{ open: boolean }>;
   'aria-label'?: string; // alternative to a Title
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function PopoverPopup(props: PopoverPopupProps): VNode {
   const { render, children, 'aria-label': ariaLabel, ...rest } = props;
@@ -202,7 +208,7 @@ export {
 export type PopoverTitleProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLHeadingElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLHeadingElement>, 'children'>;
 
 export function PopoverTitle(props: PopoverTitleProps): VNode {
   const { render, children, ...rest } = props;
@@ -218,7 +224,7 @@ export function PopoverTitle(props: PopoverTitleProps): VNode {
 export type PopoverDescriptionProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLParagraphElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLParagraphElement>, 'children'>;
 
 export function PopoverDescription(props: PopoverDescriptionProps): VNode {
   const { render, children, ...rest } = props;
@@ -235,12 +241,12 @@ export function PopoverDescription(props: PopoverDescriptionProps): VNode {
 export type PopoverCloseProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function PopoverClose(props: PopoverCloseProps): VNode {
   const { render, children, onClick, ...rest } = props;
   const ctx = usePopoverContext('Close');
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     ctx.setOpen(false);
   };

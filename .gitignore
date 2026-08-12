@@ -65,3 +65,10 @@ packages/create-hono-preact/templates/agents/llms-full.txt
 # local registry storage for the scaffold-smoke job (.github/verdaccio.yaml
 # resolves `storage` relative to itself). Written on every smoke run.
 .github/.verdaccio-storage/
+
+# Scratch directories from the bundle-size probe (scripts/measure-framework-size.mjs
+# and its tests). Both are removed in a `finally`, but vitest kills the worker on
+# a test timeout, which skips it; ignoring them keeps a timed-out run from
+# dirtying the working tree.
+.hp-size-probe-*/
+packages/*/dist-missing-module-*/

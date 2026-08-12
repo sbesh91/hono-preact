@@ -4,7 +4,7 @@ import { useContext } from 'preact/hooks';
 export interface DialogContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
-  dialogRef: RefObject<HTMLDialogElement>;
+  dialogRef: RefObject<HTMLDialogElement | null>;
   triggerId: string;
   popupId: string;
   titleId: string;

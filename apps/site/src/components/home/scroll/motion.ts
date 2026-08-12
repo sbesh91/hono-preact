@@ -1,4 +1,3 @@
-import type { RefObject } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 
 function useMediaQuery(query: string): boolean {
@@ -39,7 +38,7 @@ export function useInView<T extends Element>({
   disabled?: boolean;
   threshold?: number;
   rootMargin?: string;
-} = {}): [RefObject<T>, boolean] {
+} = {}): [{ current: T | null }, boolean] {
   const ref = useRef<T>(null);
   const [inView, setInView] = useState(false);
   useEffect(() => {

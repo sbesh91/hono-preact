@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   bundleSize,
   measureSectionA,
@@ -10,6 +10,18 @@ import { mkdtempSync, cpSync, rmSync, existsSync } from 'node:fs';
 
 const ISO = resolve('packages/iso/dist');
 const UI = resolve('packages/ui/dist');
+
+// Every test here drives real Vite/esbuild builds, and `measureSectionA`
+// drives one per feature bucket. That comfortably fits vitest's 5s default in
+// isolation and does not when this file runs alongside the other 466 in the
+// parallel pool, where it times out.
+//
+// The timeout is not merely cosmetic. Vitest terminates the worker on a
+// timeout, which skips the `finally` blocks that remove the probe and
+// dist-copy scratch directories, so a timeout here leaves untracked
+// directories behind in the working tree. (`.gitignore` covers the leftovers
+// as a backstop, since no `finally` can survive a killed worker.)
+vi.setConfig({ testTimeout: 120_000 });
 
 describe('bundleSize', () => {
   it('returns positive gzip for a real iso module', async () => {

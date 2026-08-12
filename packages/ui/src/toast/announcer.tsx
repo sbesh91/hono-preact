@@ -1,4 +1,4 @@
-import { h, type JSX } from 'preact';
+import { h, type CSSProperties } from 'preact';
 import { useCallback, useRef } from 'preact/hooks';
 import type { ToastRecord } from './toast-store.js';
 
@@ -7,7 +7,7 @@ import type { ToastRecord } from './toast-store.js';
 const ANNOUNCE_CLEAR_MS = 1000;
 
 // Visually-hidden but available to assistive tech (the standard sr-only recipe).
-export const SR_ONLY_STYLE: JSX.CSSProperties = {
+export const SR_ONLY_STYLE: CSSProperties = {
   position: 'absolute',
   width: '1px',
   height: '1px',

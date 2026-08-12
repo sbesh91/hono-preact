@@ -4,8 +4,11 @@ import {
   createContext,
   type RefObject,
   type ComponentChildren,
-  type JSX,
   type VNode,
+  type HTMLAttributes,
+  type TargetedKeyboardEvent,
+  type TargetedMouseEvent,
+  type TargetedPointerEvent,
 } from 'preact';
 import {
   useCallback,
@@ -33,8 +36,8 @@ interface SubmenuContextValue {
   setOpen: (open: boolean) => void;
   triggerId: string;
   popupId: string;
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
   pendingEdgeRef: RefObject<'first' | 'last'>;
   scheduleOpen: () => void;
   cancelOpen: () => void;
@@ -133,7 +136,7 @@ export type SubmenuTriggerProps = {
   render?: RenderProp<{ open: boolean; highlighted: boolean }>;
   disabled?: boolean;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function SubmenuTrigger(props: SubmenuTriggerProps): VNode {
   const {
@@ -163,24 +166,20 @@ export function SubmenuTrigger(props: SubmenuTriggerProps): VNode {
     graceMs: sub.closeDelay,
   });
 
-  const handlePointerEnter = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerEnter = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerEnter?.(event);
     if (disabled || event.pointerType === 'touch') return;
     parent.setActiveId(id);
     event.currentTarget.focus();
     sub.scheduleOpen();
   };
-  const handlePointerLeave = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerLeave = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerLeave?.(event);
     if (event.pointerType === 'touch') return;
     // Cancel a pending open; while open the safe corridor governs the close.
     sub.cancelOpen();
   };
-  const handleKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: TargetedKeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
     if (disabled) return;
     if (
@@ -199,7 +198,7 @@ export function SubmenuTrigger(props: SubmenuTriggerProps): VNode {
       sub.setOpen(true);
     }
   };
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLDivElement>) => {
     onClick?.(event);
     if (disabled) return;
     // Same focus-before-open sequencing as handleKeyDown: the focus must land
@@ -239,7 +238,7 @@ export function SubmenuTrigger(props: SubmenuTriggerProps): VNode {
 export type SubmenuPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 // The submenu surface reuses the generic Menu Positioner/Popup against the
 // submenu's MenuContext (provided here, not by SubmenuRoot).
@@ -257,7 +256,7 @@ export type SubmenuPopupProps = MenuPopupProps;
 export function SubmenuPopup(props: SubmenuPopupProps) {
   const { onKeyDown, ...rest } = props;
   const ctx = useMenuContext('SubmenuPopup'); // submenu MenuContext (provided by SubmenuPositioner)
-  const handleKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: TargetedKeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
     if (event.key === 'ArrowLeft') {
       event.preventDefault();

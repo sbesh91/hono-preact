@@ -7,11 +7,11 @@ import type { RefObject } from 'preact';
  * native cancelable `reset` event; on reset (unless `defaultPrevented`) calls
  * `onReset`. `onReset` is read through a ref so a changing handler identity
  * does not resubscribe the listener. Generic over the element type so a
- * `RefObject<HTMLInputElement>` (or any `HTMLElement` ref) passes without a
+ * `RefObject<HTMLInputElement | null>` (or any `HTMLElement` ref) passes without a
  * cast.
  */
 export function useFormReset<T extends HTMLElement>(
-  ref: RefObject<T>,
+  ref: RefObject<T | null>,
   onReset: () => void
 ): void {
   const onResetRef = useRef(onReset);

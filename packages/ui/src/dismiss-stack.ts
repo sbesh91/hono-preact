@@ -11,7 +11,7 @@ export interface DismissLayer {
   parentId?: string | null;
   // Elements considered "inside" this layer. A pointerdown within any of them
   // is not an outside-press. Pass the floating element and the anchor/trigger.
-  refs: Array<RefObject<HTMLElement>>;
+  refs: Array<RefObject<HTMLElement | null>>;
   escape: boolean;
   outsidePress: boolean;
   onDismiss: (reason: DismissReason) => void;

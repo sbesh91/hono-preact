@@ -1,4 +1,5 @@
-import type { JSX, ComponentChildren } from 'preact';
+import type { ComponentChildren, InputEventHandler, JSX } from 'preact';
+import type { DistributiveOmit } from './internal/element-props.js';
 import {
   useState,
   useCallback,
@@ -58,8 +59,8 @@ type FormActionInput<TPayload, TResult> =
   | ActionRef<TPayload, TResult, never>
   | UseOptimisticActionResult<TPayload, TResult, unknown>;
 
-export type FormProps<TPayload, TResult> = Omit<
-  JSX.HTMLAttributes<HTMLFormElement>,
+export type FormProps<TPayload, TResult> = DistributiveOmit<
+  JSX.IntrinsicElements['form'],
   'action' | 'method' | 'onSubmit' | 'enctype'
 > & {
   action: FormActionInput<TPayload, TResult>;
@@ -482,7 +483,7 @@ export function Form<TPayload, TResult>({
   // Compose consumer's onInput with the framework's live-clear handler so both
   // run on every input event. Consumer fires first. useCallback stabilizes the
   // reference so the <form> does not reattach the listener on every render.
-  const composedOnInput: JSX.InputEventHandler<HTMLFormElement> = useCallback(
+  const composedOnInput: InputEventHandler<HTMLFormElement> = useCallback(
     consumerOnInput
       ? (e) => {
           consumerOnInput(e);

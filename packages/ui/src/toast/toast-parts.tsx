@@ -1,13 +1,14 @@
 import {
   h,
   type ComponentChildren,
-  type JSX,
-  type Ref,
   type VNode,
+  type HTMLAttributes,
+  type TargetedMouseEvent,
+  type TargetedPointerEvent,
 } from 'preact';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
-import { mergeRefs } from '../merge-refs.js';
+import { mergeRefs, type AnyRef } from '../merge-refs.js';
 import { usePresence } from '../use-presence.js';
 import { toastStore, type ToastRecord } from './toast-store.js';
 import {
@@ -25,7 +26,7 @@ export type ToastRootProps = {
   toast: ToastRecord;
   render?: RenderProp<{ type: string; open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLLIElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLLIElement>, 'children'>;
 
 // Return type is intentionally inferred: h(ToastItemContext.Provider, ...) yields
 // a VNode with more specific props than VNode<{}>, same pattern as OptionGroup.
@@ -106,26 +107,26 @@ export function ToastRoot(props: ToastRootProps) {
       defaultTag: 'li',
       props: {
         ...rest,
-        onPointerDown: (e: JSX.TargetedPointerEvent<HTMLLIElement>) => {
+        onPointerDown: (e: TargetedPointerEvent<HTMLLIElement>) => {
           onPointerDown?.(e);
           swipe.handlers.onPointerDown?.(e);
         },
-        onPointerMove: (e: JSX.TargetedPointerEvent<HTMLLIElement>) => {
+        onPointerMove: (e: TargetedPointerEvent<HTMLLIElement>) => {
           onPointerMove?.(e);
           swipe.handlers.onPointerMove?.(e);
         },
-        onPointerUp: (e: JSX.TargetedPointerEvent<HTMLLIElement>) => {
+        onPointerUp: (e: TargetedPointerEvent<HTMLLIElement>) => {
           onPointerUp?.(e);
           swipe.handlers.onPointerUp?.(e);
         },
-        onPointerCancel: (e: JSX.TargetedPointerEvent<HTMLLIElement>) => {
+        onPointerCancel: (e: TargetedPointerEvent<HTMLLIElement>) => {
           onPointerCancel?.(e);
           swipe.handlers.onPointerCancel?.(e);
         },
         ref: mergeRefs<Element>(
           presenceRef,
-          elRef as Ref<Element>,
-          userRef as Ref<Element>
+          elRef as AnyRef<Element>,
+          userRef as AnyRef<Element>
         ),
         'data-type': record.type,
         'data-state': open ? 'open' : 'closed',
@@ -151,7 +152,7 @@ export function ToastRoot(props: ToastRootProps) {
 export type ToastTitleProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function ToastTitle(props: ToastTitleProps): VNode {
   const { render, children, ...rest } = props;
@@ -167,7 +168,7 @@ export function ToastTitle(props: ToastTitleProps): VNode {
 export type ToastDescriptionProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function ToastDescription(props: ToastDescriptionProps): VNode | null {
   const { render, children, ...rest } = props;
@@ -185,14 +186,14 @@ export function ToastDescription(props: ToastDescriptionProps): VNode | null {
 export type ToastActionProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function ToastAction(props: ToastActionProps): VNode | null {
   const { render, children, onClick, ...rest } = props;
   const { record } = useToastItemContext('Action');
   if (!record.action) return null;
   const action = record.action;
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     action.onClick(event);
     toastStore.dismiss(record.id, 'user');
@@ -208,12 +209,12 @@ export function ToastAction(props: ToastActionProps): VNode | null {
 export type ToastCloseProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function ToastClose(props: ToastCloseProps): VNode {
   const { render, children, onClick, 'aria-label': ariaLabel, ...rest } = props;
   const { record } = useToastItemContext('Close');
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     toastStore.dismiss(record.id, 'user');
   };

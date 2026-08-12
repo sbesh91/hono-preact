@@ -1,5 +1,5 @@
 import { useTypeahead } from 'hono-preact-ui';
-import type { JSX } from 'preact';
+import type { TargetedKeyboardEvent } from 'preact';
 import { useState } from 'preact/hooks';
 
 const ITEMS = ['Argon', 'Boron', 'Calcium', 'Carbon', 'Cobalt', 'Neon'];
@@ -13,7 +13,7 @@ export function UseTypeaheadDemo() {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const handleKeyDown = (e: JSX.TargetedKeyboardEvent<HTMLUListElement>) => {
+  const handleKeyDown = (e: TargetedKeyboardEvent<HTMLUListElement>) => {
     if (e.key.length !== 1) return; // ignore non-printable keys (Arrow, Enter, ...)
     const q = onChar(e.key);
     setQuery(q);

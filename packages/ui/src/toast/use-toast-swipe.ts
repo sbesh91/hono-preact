@@ -1,5 +1,5 @@
 import { useRef, useState } from 'preact/hooks';
-import type { JSX } from 'preact';
+import type { HTMLAttributes, TargetedPointerEvent } from 'preact';
 import type { ToastPosition } from './toast-store.js';
 
 // Drag distance (px) past which a release dismisses the toast.
@@ -26,7 +26,7 @@ export interface UseToastSwipeResult {
   swiping: boolean;
   amount: number;
   handlers: Pick<
-    JSX.HTMLAttributes<HTMLElement>,
+    HTMLAttributes<HTMLElement>,
     'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel'
   >;
 }
@@ -48,7 +48,7 @@ export function useToastSwipe(opts: UseToastSwipeOptions): UseToastSwipeResult {
     return Math.max(0, raw * sign);
   };
 
-  const onPointerDown = (event: JSX.TargetedPointerEvent<HTMLElement>) => {
+  const onPointerDown = (event: TargetedPointerEvent<HTMLElement>) => {
     if (disabled || event.button !== 0) return;
     // Do not start a swipe from an interactive control (the close/action
     // buttons, links, or form fields). Pointer-capturing the toast here would
@@ -68,12 +68,12 @@ export function useToastSwipe(opts: UseToastSwipeOptions): UseToastSwipeResult {
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
-  const onPointerMove = (event: JSX.TargetedPointerEvent<HTMLElement>) => {
+  const onPointerMove = (event: TargetedPointerEvent<HTMLElement>) => {
     if (!start.current) return;
     setAmount(delta(event));
   };
 
-  const finish = (event: JSX.TargetedPointerEvent<HTMLElement>) => {
+  const finish = (event: TargetedPointerEvent<HTMLElement>) => {
     if (!start.current) return;
     const moved = delta(event);
     start.current = null;

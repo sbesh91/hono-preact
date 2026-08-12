@@ -62,7 +62,7 @@ export type ListNavigationMode = 'roving' | 'activedescendant';
 
 export interface UseListNavigationOptions {
   enabled: boolean;
-  containerRef: RefObject<HTMLElement>; // element holding the items
+  containerRef: RefObject<HTMLElement | null>; // element holding the items
   itemSelector: string;
   activeId: string | null;
   setActiveId: (id: string | null) => void;

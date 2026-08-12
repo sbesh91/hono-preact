@@ -3,8 +3,11 @@ import {
   h,
   createContext,
   type ComponentChildren,
-  type JSX,
   type VNode,
+  type HTMLAttributes,
+  type TargetedKeyboardEvent,
+  type TargetedMouseEvent,
+  type TargetedPointerEvent,
 } from 'preact';
 import { useContext, useId, useLayoutEffect, useMemo } from 'preact/hooks';
 import { renderElement, type RenderProp } from '../render-element.js';
@@ -59,20 +62,18 @@ export function MenuRoot(props: MenuRootProps) {
 export type MenuTriggerProps = {
   render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLButtonElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLButtonElement>, 'children'>;
 
 export function MenuTrigger(props: MenuTriggerProps): VNode {
   const { render, children, onClick, onKeyDown, ...rest } = props;
   const ctx = useMenuContext('Trigger');
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLButtonElement>) => {
     onClick?.(event);
     ctx.pendingEdgeRef.current = 'first';
     ctx.setOpen(!ctx.open);
   };
-  const handleKeyDown = (
-    event: JSX.TargetedKeyboardEvent<HTMLButtonElement>
-  ) => {
+  const handleKeyDown = (event: TargetedKeyboardEvent<HTMLButtonElement>) => {
     onKeyDown?.(event);
     if (
       event.key === 'ArrowDown' ||
@@ -115,7 +116,7 @@ export type MenuItemProps = {
   // Activation handler. Call event.preventDefault() to keep the menu open.
   onSelect?: (event: Event) => void;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect'>;
 
 export function MenuItem(props: MenuItemProps): VNode {
   const {
@@ -137,14 +138,12 @@ export function MenuItem(props: MenuItemProps): VNode {
     if (!event.defaultPrevented) ctx.closeAll();
   };
 
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLDivElement>) => {
     onClick?.(event);
     if (disabled) return;
     activate();
   };
-  const handlePointerEnter = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerEnter = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerEnter?.(event);
     if (disabled) return;
     ctx.setActiveId(id);
@@ -174,7 +173,7 @@ export function MenuItem(props: MenuItemProps): VNode {
 export type MenuPositionerProps = {
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function MenuPositioner(props: MenuPositionerProps) {
   const { render, children, ...rest } = props;
@@ -198,7 +197,7 @@ export type MenuPopupProps = {
   render?: RenderProp<{ open: boolean }>;
   'aria-label'?: string;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function MenuPopup(props: MenuPopupProps): VNode {
   const {
@@ -244,7 +243,7 @@ export function MenuPopup(props: MenuPopupProps): VNode {
     );
   }, [ctx.open]);
 
-  const handleKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (event: TargetedKeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
     if (event.defaultPrevented) return;
     nav.onKeyDown(event);
@@ -291,10 +290,7 @@ export type MenuCheckboxItemProps = {
   disabled?: boolean;
   onSelect?: (event: Event) => void;
   children?: ComponentChildren;
-} & Omit<
-  JSX.HTMLAttributes<HTMLDivElement>,
-  'children' | 'onSelect' | 'checked'
->;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect' | 'checked'>;
 
 export function MenuCheckboxItem(props: MenuCheckboxItemProps): VNode {
   const {
@@ -324,14 +320,12 @@ export function MenuCheckboxItem(props: MenuCheckboxItemProps): VNode {
     onSelect?.(event);
     if (!event.defaultPrevented) ctx.closeAll();
   };
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLDivElement>) => {
     onClick?.(event);
     if (disabled) return;
     activate();
   };
-  const handlePointerEnter = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerEnter = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerEnter?.(event);
     if (disabled) return;
     ctx.setActiveId(id);
@@ -370,7 +364,7 @@ export type MenuRadioGroupProps<V extends string = string> = {
   onValueChange?: (value: V) => void;
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'value'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'value'>;
 
 export function MenuRadioGroup<V extends string = string>(
   props: MenuRadioGroupProps<V>
@@ -417,7 +411,7 @@ export type MenuRadioItemProps = {
   disabled?: boolean;
   onSelect?: (event: Event) => void;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children' | 'onSelect'>;
 
 export function MenuRadioItem(props: MenuRadioItemProps): VNode {
   const {
@@ -442,14 +436,12 @@ export function MenuRadioItem(props: MenuRadioItemProps): VNode {
     onSelect?.(event);
     if (!event.defaultPrevented) ctx.closeAll();
   };
-  const handleClick = (event: JSX.TargetedMouseEvent<HTMLDivElement>) => {
+  const handleClick = (event: TargetedMouseEvent<HTMLDivElement>) => {
     onClick?.(event);
     if (disabled) return;
     activate();
   };
-  const handlePointerEnter = (
-    event: JSX.TargetedPointerEvent<HTMLDivElement>
-  ) => {
+  const handlePointerEnter = (event: TargetedPointerEvent<HTMLDivElement>) => {
     onPointerEnter?.(event);
     if (disabled) return;
     ctx.setActiveId(id);
@@ -488,7 +480,7 @@ const MenuGroupContext = createContext<{ labelId: string } | null>(null);
 export type MenuGroupProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function MenuGroup(props: MenuGroupProps) {
   const { render, children, ...rest } = props;
@@ -505,7 +497,7 @@ export function MenuGroup(props: MenuGroupProps) {
 export type MenuGroupLabelProps = {
   render?: RenderProp;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 export function MenuGroupLabel(props: MenuGroupLabelProps): VNode {
   const { render, children, ...rest } = props;
@@ -522,7 +514,7 @@ export function MenuGroupLabel(props: MenuGroupLabelProps): VNode {
 
 export type MenuSeparatorProps = {
   render?: RenderProp;
-} & JSX.HTMLAttributes<HTMLDivElement>;
+} & HTMLAttributes<HTMLDivElement>;
 
 export function MenuSeparator(props: MenuSeparatorProps): VNode {
   const { render, ...rest } = props;

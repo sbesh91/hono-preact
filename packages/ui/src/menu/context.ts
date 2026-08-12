@@ -15,9 +15,9 @@ export interface MenuContextValue {
   // Position anchor for Menu (the Trigger). For ContextMenu positioning uses
   // getAnchorRect instead, so anchorRef there is the dismiss "inside" region
   // (a press on the trigger area is not an outside-press), not the anchor.
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>; // Positioner element
-  popupRef: RefObject<HTMLElement>; // Popup surface (focus + nav root)
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>; // Positioner element
+  popupRef: RefObject<HTMLElement | null>; // Popup surface (focus + nav root)
   triggerId: string;
   popupId: string;
   // Roving tabindex: the id of the active item (null until open focuses one).

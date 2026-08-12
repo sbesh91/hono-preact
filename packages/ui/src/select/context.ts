@@ -17,9 +17,9 @@ export interface SelectContextValue {
   setActiveId: (id: string | null) => void;
   registerOption: (id: string, value: unknown, label: string) => () => void;
   selectedLabels: () => string[];
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
-  listboxRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
+  listboxRef: RefObject<HTMLElement | null>;
   triggerId: string;
   listboxId: string;
   disabled: boolean;

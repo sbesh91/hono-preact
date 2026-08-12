@@ -1,4 +1,9 @@
-import { h, type ComponentChildren, type JSX, type RefObject } from 'preact';
+import {
+  h,
+  type ComponentChildren,
+  type RefObject,
+  type HTMLAttributes,
+} from 'preact';
 import { useMemo } from 'preact/hooks';
 import { renderElement, type RenderProp } from './render-element.js';
 import { usePositioner } from './use-positioner.js';
@@ -7,8 +12,8 @@ import { PositionerContext } from './positioner-context.js';
 
 export type PositionerProps = {
   open: boolean;
-  anchorRef: RefObject<HTMLElement>;
-  floatingRef: RefObject<HTMLElement>;
+  anchorRef: RefObject<HTMLElement | null>;
+  floatingRef: RefObject<HTMLElement | null>;
   side: Side;
   align: Align;
   offset: number;
@@ -16,7 +21,7 @@ export type PositionerProps = {
   mount: 'unmount' | 'hidden';
   render?: RenderProp<{ side: Side; align: Align }>;
   children?: ComponentChildren;
-} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'>;
+} & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
 // The shared overlay-positioning surface: runs usePositioner, publishes the
 // resolved position + arrow ref via PositionerContext, and renders the
