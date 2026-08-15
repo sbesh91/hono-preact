@@ -19,6 +19,7 @@ import {
 import { createRootRef } from './root.js';
 import type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
 import { BASELINE_TARGETS } from './css-targets.js';
+import { emitClientAsset, type ClientAssets } from './client-assets.js';
 
 export interface HonoPreactCssOptions {
   /**
@@ -88,6 +89,16 @@ export interface HonoPreactOptions {
 
   /** Framework-owned global stylesheet delivery and auto-split tuning. */
   css?: HonoPreactCssOptions;
+
+  /**
+   * Generated files emitted into the client build and served from the same
+   * thunk in dev, so the two halves cannot drift. Keyed by output file name
+   * relative to the client out dir, so `'llms.txt'` serves at `/llms.txt`.
+   *
+   * The thunk runs once during the build and per request in dev, which is what
+   * makes a dev edit appear without restarting the server.
+   */
+  assets?: ClientAssets;
 }
 
 export function honoPreact(options: HonoPreactOptions): Plugin[] {
@@ -104,6 +115,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     serverDir = 'src/server',
     clientEntry = VIRTUAL_CLIENT_ENTRY_ID,
     css,
+    assets,
   } = options ?? {};
 
   if (!adapter) {
@@ -131,6 +143,9 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     get entryWrapperId() {
       return generatedEntryWrapperAbsPath(rootRef.get());
     },
+    // Not a getter: the declared names come straight off the options object,
+    // so they are known synchronously here and need no lazy resolution.
+    assetNames: Object.keys(assets ?? {}),
   };
 
   // Shared config plus the `client` build environment's input. The worker
@@ -244,12 +259,14 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       adapter,
       rootRef,
       cssGlobal,
+      assetNames: ctx.assetNames,
     }),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),
     routeServerAutodiscoveryPlugin(),
     serverOnlyPlugin(),
     guardStripPlugin(),
+    ...(assets ? [emitClientAsset(assets)] : []),
     ...adapter.vitePlugins(ctx),
     ...preact({ reactAliasesEnabled: false }),
   ];

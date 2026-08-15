@@ -12,3 +12,4 @@ export {
 export type { HonoPreactAdapter, HonoPreactAdapterContext } from './adapter.js';
 export { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
 export { guardStripPlugin } from './guard-strip.js';
+export type { ClientAssets, ClientAssetSource } from './client-assets.js';

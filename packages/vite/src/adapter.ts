@@ -12,6 +12,11 @@ import type { Plugin } from 'vite';
  * (`vitePlugins()`'s returned plugins, or `wrapEntry()`, which the framework
  * calls from its own `config` hook), never from the body of `vitePlugins()`
  * itself.
+ *
+ * `assetNames` is the one field exempt from that rule: it is derived
+ * synchronously from the options object honoPreact() was called with, so it
+ * holds its final value from the moment the context is built and is safe to
+ * read anywhere, including the body of `vitePlugins()`.
  */
 export interface HonoPreactAdapterContext {
   /** The resolved Vite project root. */
@@ -24,6 +29,16 @@ export interface HonoPreactAdapterContext {
    *  that need to reach api-module exports (e.g. the Node adapter's
    *  WebSocket `injectWebSocket`). Undefined when the project has no api.ts. */
   apiModuleId?: string;
+  /**
+   * Output file names declared via `honoPreact({ assets })`, relative to the
+   * client out dir (e.g. `['llms.txt']`). Empty when the app declared none.
+   *
+   * Adapters whose runtime does not serve the client output directory at the
+   * root (the Node adapter) use this to serve exactly these names and nothing
+   * else. Adapters that already serve the whole client output at the root
+   * (Cloudflare, via the ASSETS binding) can ignore it.
+   */
+  assetNames: readonly string[];
 }
 
 /**

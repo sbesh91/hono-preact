@@ -5,6 +5,7 @@ const ctx = {
   root: '/p',
   coreAppModuleId: '/p/node_modules/.vite/hono-preact/core-app.tsx',
   entryWrapperId: '/p/node_modules/.vite/hono-preact/server-entry.tsx',
+  assetNames: [],
 };
 
 describe('cloudflareAdapter', () => {

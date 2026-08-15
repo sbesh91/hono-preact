@@ -5,7 +5,7 @@ import { remarkPlugins, rehypePlugins } from './src/mdx-plugins.js';
 import { highlightPlugin } from './src/shiki/vite-plugin-highlight.js';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { nav } from './src/pages/docs/nav.js';
@@ -68,45 +68,14 @@ export default defineConfig((env) => ({
     honoPreact({
       adapter: cloudflareAdapter(),
       css: { global: 'src/styles/root.css' },
+      assets: {
+        // Generated per request in dev, so a docs edit is reflected with no
+        // restart and no cache to invalidate by hand.
+        'llms.txt': () => generateLlmsFiles(nav, docsDir).llmsTxt,
+        'llms-full.txt': () => generateLlmsFiles(nav, docsDir).llmsFullTxt,
+      },
     }),
     docsIndexPlugin(nav, docsDir),
-    {
-      name: 'emit-llms-txt',
-      closeBundle() {
-        // Emit only during the client (static-assets) build. dist/client is the
-        // Cloudflare assets directory, so files written here serve at the site
-        // root (/llms.txt, /llms-full.txt). The worker build shares no asset root.
-        if (this.environment && this.environment.name !== 'client') return;
-        const { llmsTxt, llmsFullTxt } = generateLlmsFiles(nav, docsDir);
-        const outDir = resolve(__dirname, 'dist/client');
-        mkdirSync(outDir, { recursive: true });
-        writeFileSync(resolve(outDir, 'llms.txt'), llmsTxt);
-        writeFileSync(resolve(outDir, 'llms-full.txt'), llmsFullTxt);
-      },
-      configureServer(server) {
-        // In dev there is no client build, and the Cloudflare dev server does
-        // not serve the dist/client assets dir, so the worker catch-all would
-        // render a not-found page for these paths. Serve them directly. The
-        // corpus is generated once and cached, then invalidated when a docs
-        // page changes, so repeated requests don't re-read every MDX file while
-        // dev edits still stay reflected. (Production serves the static files
-        // emitted by closeBundle; this middleware runs in dev only.)
-        let cache: { llmsTxt: string; llmsFullTxt: string } | null = null;
-        server.watcher.on('all', (_event, file) => {
-          if (file.startsWith(docsDir) && file.endsWith('.mdx')) cache = null;
-        });
-        server.middlewares.use((req, res, next) => {
-          const path = (req.url || '').split('?')[0];
-          if (path !== '/llms.txt' && path !== '/llms-full.txt') {
-            next();
-            return;
-          }
-          cache ??= generateLlmsFiles(nav, docsDir);
-          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-          res.end(path === '/llms.txt' ? cache.llmsTxt : cache.llmsFullTxt);
-        });
-      },
-    },
     Object.assign(mdx(mdxOptions), { enforce: 'pre' as const }),
     ...(visualize && env.mode === 'client'
       ? [

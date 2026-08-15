@@ -20,16 +20,42 @@ export default defineConfig({
 
 ## honoPreact(options)
 
-| Option        | Type                                                         | Default                        | Description                                                                                                                                |
-| ------------- | ------------------------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `adapter`     | `HonoPreactAdapter`                                          | required                       | Deployment target, e.g. `cloudflareAdapter()` or `nodeAdapter()`.                                                                          |
-| `layout`      | `string`                                                     | `'src/Layout.tsx'`             | Root layout component path.                                                                                                                |
-| `routes`      | `string`                                                     | `'src/routes.ts'`              | Route table path.                                                                                                                          |
-| `api`         | `string`                                                     | `'src/api.ts'`                 | Optional custom routes; loaded only if the file exists.                                                                                    |
-| `appConfig`   | `string`                                                     | `'src/app-config.ts'`          | Optional app config; loaded only if the file exists.                                                                                       |
-| `serverDir`   | `string`                                                     | `'src/server'`                 | Registry folder for route-less server modules; globbed if it exists. See [The `src/server` registry](/docs/routes#the-srcserver-registry). |
-| `clientEntry` | `string`                                                     | `'virtual:hono-preact/client'` | Client entry module id.                                                                                                                    |
-| `css`         | `{ global?: string; autoSplit?: boolean; minSize?: number }` | `undefined`                    | Framework-owned global stylesheet delivery and build-time auto-split tuning. See [Styling](/docs/styling) for the full pipeline.           |
+| Option        | Type                                                                          | Default                        | Description                                                                                                                                |
+| ------------- | ----------------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `adapter`     | `HonoPreactAdapter`                                                           | required                       | Deployment target, e.g. `cloudflareAdapter()` or `nodeAdapter()`.                                                                          |
+| `layout`      | `string`                                                                      | `'src/Layout.tsx'`             | Root layout component path.                                                                                                                |
+| `routes`      | `string`                                                                      | `'src/routes.ts'`              | Route table path.                                                                                                                          |
+| `api`         | `string`                                                                      | `'src/api.ts'`                 | Optional custom routes; loaded only if the file exists.                                                                                    |
+| `appConfig`   | `string`                                                                      | `'src/app-config.ts'`          | Optional app config; loaded only if the file exists.                                                                                       |
+| `serverDir`   | `string`                                                                      | `'src/server'`                 | Registry folder for route-less server modules; globbed if it exists. See [The `src/server` registry](/docs/routes#the-srcserver-registry). |
+| `clientEntry` | `string`                                                                      | `'virtual:hono-preact/client'` | Client entry module id.                                                                                                                    |
+| `css`         | `{ global?: string; autoSplit?: boolean; minSize?: number }`                  | `undefined`                    | Framework-owned global stylesheet delivery and build-time auto-split tuning. See [Styling](/docs/styling) for the full pipeline.           |
+| `assets`      | `Record<string, () => string \| Uint8Array \| Promise<string \| Uint8Array>>` | `undefined`                    | Extra files to emit alongside the client build. See [assets](#assets) below.                                                               |
+
+## assets
+
+`assets` maps an output file name to a function that produces its bytes. The key is a path relative to the client out dir, so `'llms.txt'` serves at `/llms.txt` and a root-level key like `'sw.js'` lands at the client build's root, `/sw.js`:
+
+```ts
+import { honoPreact } from 'hono-preact/vite';
+import { cloudflareAdapter } from 'hono-preact/adapter-cloudflare';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [
+    honoPreact({
+      adapter: cloudflareAdapter(),
+      assets: {
+        'llms.txt': () => renderLlmsTxt(),
+      },
+    }),
+  ],
+});
+```
+
+The function runs once during the build and once per request in dev, so it can read from disk or generate content dynamically and an edit shows up on the next request with no server restart. It may be sync or async, and it may return a `string` or a `Uint8Array`.
+
+A root-level key is what makes a service worker at `/sw.js` possible: nothing about the file name or its position needs adapter-specific handling to reach that URL.
 
 ## nodeAdapter(options?)
 

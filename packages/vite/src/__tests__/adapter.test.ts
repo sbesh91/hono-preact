@@ -11,6 +11,7 @@ describe('HonoPreactAdapter interface', () => {
       coreAppModuleId: '/project/node_modules/.vite/hono-preact/core-app.tsx',
       entryWrapperId:
         '/project/node_modules/.vite/hono-preact/server-entry.tsx',
+      assetNames: [],
     };
     const adapter: HonoPreactAdapter = {
       name: 'fake',

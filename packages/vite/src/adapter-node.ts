@@ -36,6 +36,33 @@ export function nodeAdapter(
       ];
     },
     wrapEntry(ctx) {
+      // Declared client assets (honoPreact({ assets })) land in the client
+      // build output next to /static, but the Node adapter serves only
+      // /static/* from that directory, so `dist/client/llms.txt` would not be
+      // reachable at `/llms.txt` the way it is under Cloudflare's ASSETS
+      // binding. Mount exactly the declared names at the root to close that
+      // parity gap. Only the declared names: blanket-mounting the client
+      // directory at `/` would expose every build artifact and could shadow
+      // real routes.
+      //
+      // Names are emitted with JSON.stringify, never interpolated raw, so a
+      // quote or backslash in a file name cannot break out of the string
+      // literal. That is also why no identifier validation is needed here,
+      // unlike adapter-cloudflare's realtimeClass, which is emitted verbatim
+      // as a class declaration name.
+      const assetNames = ctx.assetNames;
+      const assetMount =
+        assetNames.length === 0
+          ? ''
+          : // Registered INSIDE the PROD guard and BEFORE app.route('/',
+            // coreApp) below. The ordering is load-bearing: coreApp ends in
+            // the SSR catch-all, so a mount registered after it never runs
+            // and every asset path renders the not-found page instead.
+            `  const __hpAssetNames = ${JSON.stringify(assetNames)};\n` +
+            `  for (const name of __hpAssetNames) {\n` +
+            `    app.get('/' + name, serveStatic({ root: __hpClientDir, path: name }));\n` +
+            `  }\n`;
+
       // The outer app serves built client assets under /static/* and mounts
       // the framework's core Hono app at the root.
       //
@@ -104,6 +131,7 @@ export function nodeAdapter(
         `// root at setup and would console.error on every dev boot.\n` +
         `if (import.meta.env.PROD) {\n` +
         `  app.use('/static/*', serveStatic({ root: __hpClientDir }));\n` +
+        assetMount +
         `}\n` +
         `app.route('/', coreApp);\n` +
         `\n` +

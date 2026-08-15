@@ -43,6 +43,13 @@ type SmokeTarget = {
   root: string;
   /** Paths that must render. Keep these to real pages, not API routes. */
   routes: string[];
+  /**
+   * A `honoPreact({ assets })` output name declared by this app, if any. Fetched
+   * against the real dev middleware stack and asserted to be non-HTML, proving
+   * the asset-serving middleware actually wins the race against the SSR
+   * catch-all rather than falling through to the not-found page.
+   */
+  assetProbe?: string;
 };
 
 const TARGETS: SmokeTarget[] = [
@@ -57,54 +64,82 @@ const TARGETS: SmokeTarget[] = [
     // `/demo/login` is load-bearing: it is the only route in the repo with no
     // loader whose component calls signals hooks directly, which is exactly the
     // shape that produced bug 1. Do not drop it for being "just another page".
-    routes: ['/', '/demo', '/demo/login', '/demo/cursors', '/docs'],
+    // `/llms.txt` is a declared `honoPreact({ assets })` output (see
+    // apps/site/vite.config.ts); it must come back as the generated text, not
+    // the SSR not-found page.
+    routes: [
+      '/',
+      '/demo',
+      '/demo/login',
+      '/demo/cursors',
+      '/docs',
+      '/llms.txt',
+    ],
+    assetProbe: '/llms.txt',
   },
 ];
 
-describe.each(TARGETS)('page render smoke: $name', ({ root, routes }) => {
-  let server: ViteDevServer;
-  let originalCwd: string;
-  let port: number;
+describe.each(TARGETS)(
+  'page render smoke: $name',
+  ({ root, routes, assetProbe }) => {
+    let server: ViteDevServer;
+    let originalCwd: string;
+    let port: number;
 
-  beforeAll(async () => {
-    // `honoPreact()` writes its generated server-entry files relative to
-    // process.cwd(), and the entry wrapper's bare imports resolve through the
-    // app's own node_modules. Apps are normally run from their own directory,
-    // so mirror that or the generated files land in the repo root and the
-    // bare imports fail to resolve.
-    originalCwd = process.cwd();
-    process.chdir(root);
-    server = await createServer({
-      root,
-      server: { port: 0 },
-      logLevel: 'warn',
-      // Force a COLD dep-optimizer run, matching `pnpm dev` (which is
-      // `vite --force`). This is not incidental: bug 2 above only reproduces on
-      // a cold cache, because it is a late dep discovery forcing a re-optimize
-      // mid-startup. Against a warm `node_modules/.vite` the re-optimize never
-      // happens and the suite goes green on genuinely broken code.
-      optimizeDeps: { force: true },
+    beforeAll(async () => {
+      // `honoPreact()` writes its generated server-entry files relative to
+      // process.cwd(), and the entry wrapper's bare imports resolve through the
+      // app's own node_modules. Apps are normally run from their own directory,
+      // so mirror that or the generated files land in the repo root and the
+      // bare imports fail to resolve.
+      originalCwd = process.cwd();
+      process.chdir(root);
+      server = await createServer({
+        root,
+        server: { port: 0 },
+        logLevel: 'warn',
+        // Force a COLD dep-optimizer run, matching `pnpm dev` (which is
+        // `vite --force`). This is not incidental: bug 2 above only reproduces on
+        // a cold cache, because it is a late dep discovery forcing a re-optimize
+        // mid-startup. Against a warm `node_modules/.vite` the re-optimize never
+        // happens and the suite goes green on genuinely broken code.
+        optimizeDeps: { force: true },
+      });
+      await server.listen();
+      const addr = server.httpServer!.address();
+      port = typeof addr === 'object' && addr ? addr.port : 0;
+    }, 180_000);
+
+    afterAll(async () => {
+      await server?.close();
+      if (originalCwd) process.chdir(originalCwd);
     });
-    await server.listen();
-    const addr = server.httpServer!.address();
-    port = typeof addr === 'object' && addr ? addr.port : 0;
-  }, 180_000);
 
-  afterAll(async () => {
-    await server?.close();
-    if (originalCwd) process.chdir(originalCwd);
-  });
+    it.each(routes)('renders %s', async (path) => {
+      const res = await fetch(`http://localhost:${port}${path}`);
+      const body = await res.text();
 
-  it.each(routes)('renders %s', async (path) => {
-    const res = await fetch(`http://localhost:${port}${path}`);
-    const body = await res.text();
+      // Redirects are legitimate for guarded routes; anything at or above 400 is
+      // not. The body slice goes into the message because an SSR 500 here prints
+      // the framework's error page, which names the actual throw.
+      expect(
+        res.status,
+        `${path} -> ${res.status}\n${body.slice(0, 800)}`
+      ).toBeLessThan(400);
+    });
 
-    // Redirects are legitimate for guarded routes; anything at or above 400 is
-    // not. The body slice goes into the message because an SSR 500 here prints
-    // the framework's error page, which names the actual throw.
-    expect(
-      res.status,
-      `${path} -> ${res.status}\n${body.slice(0, 800)}`
-    ).toBeLessThan(400);
-  });
-});
+    it.skipIf(!assetProbe)(
+      'serves a declared asset from the real dev middleware stack, not the SSR page',
+      async () => {
+        const res = await fetch(`http://localhost:${port}${assetProbe}`);
+        const contentType = res.headers.get('content-type') ?? '';
+        // The SSR not-found page (the silent-failure mode this guards against)
+        // always comes back as text/html; the declared asset thunk never does.
+        expect(
+          contentType,
+          `${assetProbe} -> content-type ${contentType}, looks like the SSR page`
+        ).not.toMatch(/text\/html/);
+      }
+    );
+  }
+);

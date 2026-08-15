@@ -90,7 +90,8 @@
     "@preact/signals": "^2.11.0",
     "@standard-schema/spec": "^1.1.0",
     "lightningcss": "^1.32.0",
-    "magic-string": "^0.30.21"
+    "magic-string": "^0.30.21",
+    "mrmime": "^2.0.1"
   },
   "peerDependencies": {
     "@cloudflare/vite-plugin": "^1.37.1",
