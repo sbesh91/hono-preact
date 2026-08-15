@@ -155,6 +155,12 @@ export function NavLink(props: NavLinkProps): VNode {
 
   const handlePointerEnter = (e: TargetedPointerEvent<HTMLAnchorElement>) => {
     if (prefetch === 'hover') {
+      // Defensive: real `pointerenter` cannot repeat without an intervening
+      // `pointerleave` (it does not bubble and does not re-fire across
+      // descendants -- that is `pointerover`), but a synthetic or
+      // programmatically dispatched re-entry would otherwise orphan the first
+      // timer where `handlePointerLeave` can no longer cancel it.
+      if (hoverTimer.current !== null) clearTimeout(hoverTimer.current);
       hoverTimer.current = setTimeout(firePrefetch, HOVER_INTENT_MS);
     }
     onPointerEnterProp?.(e);

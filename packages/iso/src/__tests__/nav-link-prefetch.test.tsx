@@ -172,6 +172,29 @@ describe('NavLink prefetch', () => {
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  // SYNTHETIC re-entry only: a real browser cannot fire `pointerenter` twice
+  // without an intervening `pointerleave` (it does not bubble and does not
+  // re-fire across descendants -- that is `pointerover`). This covers the
+  // dispatched-event case, where an un-cleared first timer would be orphaned
+  // beyond `handlePointerLeave`'s reach and fire after the cursor left.
+  it('a synthetic repeated pointerEnter leaves no orphaned timer', () => {
+    const { getByText } = render(
+      <LocationProvider>
+        <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
+          A
+        </NavLink>
+      </LocationProvider>
+    );
+    const a = getByText('A');
+    fireEvent.pointerEnter(a);
+    vi.advanceTimersByTime(50);
+    fireEvent.pointerEnter(a);
+    vi.advanceTimersByTime(50);
+    fireEvent.pointerLeave(a);
+    vi.advanceTimersByTime(500);
+    expect(prefetchSpy).not.toHaveBeenCalled();
+  });
+
   it('a changed href on the same instance becomes prefetchable again', () => {
     const { getByText, rerender } = render(
       <LocationProvider>

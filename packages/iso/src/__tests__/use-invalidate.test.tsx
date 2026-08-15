@@ -91,4 +91,51 @@ describe('useInvalidate', () => {
     expect(other.invalidate).toHaveBeenCalledTimes(1);
     expect(reload).toHaveBeenCalledTimes(1);
   });
+
+  // The removed pre-v0.14 spellings. TypeScript rejects all three, so these
+  // cases exist for the untyped-JavaScript caller: without the dev guard each
+  // one falls through as a no-op and leaves a stale UI with nothing to debug.
+  // `as never` only defeats the compile-time break the guard backstops at
+  // runtime; it does not weaken the guard itself.
+  describe('removed invalidate spellings', () => {
+    function apply(value: unknown) {
+      const reload = vi.fn();
+      const { result } = renderHook(() => useInvalidate(), {
+        wrapper: wrapper(reload, Symbol('active')),
+      });
+      return { call: () => result.current(value as never), reload };
+    }
+
+    it("throws on the legacy string 'auto'", () => {
+      const { call, reload } = apply('auto');
+      expect(call).toThrow(/no longer a supported shape/);
+      expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('throws on a bare array of loader refs', () => {
+      const ref = makeRef(Symbol('a'));
+      const { call, reload } = apply([ref]);
+      expect(call).toThrow(/array of loader refs/);
+      expect(ref.invalidate).not.toHaveBeenCalled();
+      expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('throws on the legacy `false`', () => {
+      const { call, reload } = apply(false);
+      expect(call).toThrow(/no longer a supported shape/);
+      expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('stays silent for undefined', () => {
+      const { call, reload } = apply(undefined);
+      expect(call).not.toThrow();
+      expect(reload).not.toHaveBeenCalled();
+    });
+
+    it('stays silent for a valid object', () => {
+      const { call, reload } = apply({ refetchActive: true });
+      expect(call).not.toThrow();
+      expect(reload).toHaveBeenCalledTimes(1);
+    });
+  });
 });
