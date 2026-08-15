@@ -30,3 +30,33 @@ describe('honoPreact({ assets })', () => {
     expect(names).not.toContain('hono-preact:client-assets');
   });
 });
+
+describe('honoPreact({ assets }) adapter context', () => {
+  // Capturing adapter: the context is internal, so the only observable
+  // surface is what an adapter is handed.
+  function capturingAdapter(seen: { ctx?: { assetNames: readonly string[] } }) {
+    return {
+      name: 'capturing',
+      vitePlugins: (c: { assetNames: readonly string[] }) => {
+        seen.ctx = c;
+        return [];
+      },
+      wrapEntry: () => '',
+    } as unknown as HonoPreactAdapter;
+  }
+
+  it('hands the adapter the declared asset names', () => {
+    const seen: { ctx?: { assetNames: readonly string[] } } = {};
+    honoPreact({
+      adapter: capturingAdapter(seen),
+      assets: { 'llms.txt': () => 'x', 'robots.txt': () => 'y' },
+    });
+    expect(seen.ctx?.assetNames).toEqual(['llms.txt', 'robots.txt']);
+  });
+
+  it('hands the adapter an empty list when assets are omitted', () => {
+    const seen: { ctx?: { assetNames: readonly string[] } } = {};
+    honoPreact({ adapter: capturingAdapter(seen) });
+    expect(seen.ctx?.assetNames).toEqual([]);
+  });
+});

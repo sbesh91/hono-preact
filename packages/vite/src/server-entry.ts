@@ -309,6 +309,12 @@ export interface ServerEntryPluginOptions {
    * install; prod delivery reads the build artifact instead.
    */
   cssGlobal?: string;
+  /**
+   * Output file names declared via `honoPreact({ assets })`, forwarded to the
+   * adapter's `wrapEntry()` as `HonoPreactAdapterContext.assetNames`. Defaults
+   * to none, which is what a standalone call to this plugin wants.
+   */
+  assetNames?: readonly string[];
 }
 
 export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
@@ -400,6 +406,7 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
         coreAppModuleId: coreAppPath,
         entryWrapperId: entryWrapperPath,
         apiModuleId: apiAbsPath,
+        assetNames: opts.assetNames ?? [],
       });
       fs.writeFileSync(entryWrapperPath, wrapper, 'utf8');
     },

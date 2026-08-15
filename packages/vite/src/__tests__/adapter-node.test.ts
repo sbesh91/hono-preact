@@ -5,6 +5,7 @@ const ctx = {
   root: '/p',
   coreAppModuleId: '/p/node_modules/.vite/hono-preact/core-app.tsx',
   entryWrapperId: '/p/node_modules/.vite/hono-preact/server-entry.tsx',
+  assetNames: [],
 };
 
 describe('nodeAdapter', () => {
@@ -131,5 +132,61 @@ describe('nodeAdapter wrapEntry client-dir resolution', () => {
     const guardIdx = src.indexOf('if (import.meta.env.PROD) {');
     expect(guardIdx).toBeGreaterThan(-1);
     expect(mountIdx).toBeGreaterThan(guardIdx);
+  });
+});
+
+// Cross-adapter parity for honoPreact({ assets }). Under Cloudflare the client
+// output is served by the ASSETS binding, so `dist/client/llms.txt` answers at
+// `/llms.txt` for free. The Node adapter serves only /static/* from that
+// directory, so without an explicit mount a declared asset falls through to the
+// SSR catch-all and renders the not-found page: a silent wrong response.
+describe('nodeAdapter wrapEntry declared client assets', () => {
+  const withAssets = (assetNames: string[]) =>
+    nodeAdapter().wrapEntry({ ...ctx, assetNames });
+
+  it('mounts each declared asset name at the root', () => {
+    const src = withAssets(['llms.txt', 'robots.txt']);
+    expect(src).toContain('const __hpAssetNames = ["llms.txt","robots.txt"]');
+    expect(src).toContain(
+      "app.get('/' + name, serveStatic({ root: __hpClientDir, path: name }))"
+    );
+  });
+
+  it('emits no asset mount at all when the app declares none', () => {
+    const src = withAssets([]);
+    expect(src).not.toContain('__hpAssetNames');
+    expect(src).not.toContain('path: name');
+    // Byte-identical to the pre-feature entry: no assets means no change.
+    expect(src).toBe(nodeAdapter().wrapEntry(ctx));
+  });
+
+  it("registers the asset mount BEFORE app.route('/', coreApp)", () => {
+    // The whole bug. coreApp ends in the SSR catch-all, so a mount registered
+    // after it never runs.
+    const src = withAssets(['llms.txt']);
+    const mountIdx = src.indexOf('__hpAssetNames');
+    const coreIdx = src.indexOf("app.route('/', coreApp)");
+    expect(mountIdx).toBeGreaterThan(-1);
+    expect(coreIdx).toBeGreaterThan(-1);
+    expect(mountIdx).toBeLessThan(coreIdx);
+  });
+
+  it('registers the asset mount inside the PROD guard, after /static/*', () => {
+    const src = withAssets(['llms.txt']);
+    const guardIdx = src.indexOf('if (import.meta.env.PROD) {');
+    const staticIdx = src.indexOf('serveStatic({ root: __hpClientDir })');
+    const mountIdx = src.indexOf('__hpAssetNames');
+    const guardEnd = src.indexOf("app.route('/', coreApp)");
+    expect(mountIdx).toBeGreaterThan(staticIdx);
+    expect(staticIdx).toBeGreaterThan(guardIdx);
+    expect(src.slice(mountIdx, guardEnd)).toContain('}');
+  });
+
+  it('JSON-escapes asset names rather than interpolating them raw', () => {
+    const src = withAssets(['we"ird.txt']);
+    // Raw interpolation would close the string literal and produce a syntax
+    // error in the generated entry.
+    expect(src).toContain(String.raw`["we\"ird.txt"]`);
+    expect(src).not.toContain('"we"ird.txt"');
   });
 });

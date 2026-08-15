@@ -5,7 +5,9 @@ describe('contentTypeFor', () => {
   it('maps known extensions', () => {
     expect(contentTypeFor('llms.txt')).toBe('text/plain; charset=utf-8');
     expect(contentTypeFor('sw.js')).toBe('text/javascript; charset=utf-8');
-    expect(contentTypeFor('manifest.webmanifest')).toBe('application/manifest+json');
+    expect(contentTypeFor('manifest.webmanifest')).toBe(
+      'application/manifest+json'
+    );
     expect(contentTypeFor('data.json')).toBe('application/json; charset=utf-8');
     expect(contentTypeFor('feed.xml')).toBe('application/xml; charset=utf-8');
   });
@@ -38,14 +40,20 @@ function fakeRes() {
   return {
     headers: {} as Record<string, string>,
     body: undefined as unknown,
-    setHeader(k: string, v: string) { this.headers[k] = v; },
-    end(b: unknown) { this.body = b; },
+    setHeader(k: string, v: string) {
+      this.headers[k] = v;
+    },
+    end(b: unknown) {
+      this.body = b;
+    },
   };
 }
 
 describe('emitClientAsset dev half', () => {
   it('serves a declared asset with the right content type', async () => {
-    const handler = devHandlerFor(emitClientAsset({ 'llms.txt': () => 'hello' }));
+    const handler = devHandlerFor(
+      emitClientAsset({ 'llms.txt': () => 'hello' })
+    );
     const res = fakeRes();
     const next = vi.fn();
     handler({ url: '/llms.txt' }, res, next);
@@ -57,7 +65,9 @@ describe('emitClientAsset dev half', () => {
 
   it('calls the thunk PER REQUEST so dev edits appear without a restart', async () => {
     let n = 0;
-    const handler = devHandlerFor(emitClientAsset({ 'llms.txt': () => `v${++n}` }));
+    const handler = devHandlerFor(
+      emitClientAsset({ 'llms.txt': () => `v${++n}` })
+    );
     const r1 = fakeRes();
     handler({ url: '/llms.txt' }, r1, vi.fn());
     await vi.waitFor(() => expect(r1.body).toBeDefined());
@@ -70,7 +80,9 @@ describe('emitClientAsset dev half', () => {
   });
 
   it('passes undeclared paths through to the next middleware', () => {
-    const handler = devHandlerFor(emitClientAsset({ 'llms.txt': () => 'hello' }));
+    const handler = devHandlerFor(
+      emitClientAsset({ 'llms.txt': () => 'hello' })
+    );
     const res = fakeRes();
     const next = vi.fn();
     handler({ url: '/some/page' }, res, next);
@@ -79,7 +91,9 @@ describe('emitClientAsset dev half', () => {
   });
 
   it('ignores the query string when matching', async () => {
-    const handler = devHandlerFor(emitClientAsset({ 'llms.txt': () => 'hello' }));
+    const handler = devHandlerFor(
+      emitClientAsset({ 'llms.txt': () => 'hello' })
+    );
     const res = fakeRes();
     handler({ url: '/llms.txt?v=2' }, res, vi.fn());
     await vi.waitFor(() => expect(res.body).toBe('hello'));
@@ -99,7 +113,11 @@ describe('emitClientAsset dev half', () => {
   it('forwards a thunk failure to next() instead of hanging', async () => {
     const boom = new Error('generation failed');
     const handler = devHandlerFor(
-      emitClientAsset({ 'llms.txt': () => { throw boom; } })
+      emitClientAsset({
+        'llms.txt': () => {
+          throw boom;
+        },
+      })
     );
     const next = vi.fn();
     handler({ url: '/llms.txt' }, fakeRes(), next);
@@ -112,7 +130,8 @@ describe('emitClientAsset build half', () => {
     const emitted: Array<{ fileName: string; source: unknown }> = [];
     const ctx = {
       environment: { name: envName },
-      emitFile: (f: any) => emitted.push({ fileName: f.fileName, source: f.source }),
+      emitFile: (f: any) =>
+        emitted.push({ fileName: f.fileName, source: f.source }),
     };
     return (plugin.generateBundle as any).call(ctx).then(() => emitted);
   }
@@ -135,7 +154,10 @@ describe('emitClientAsset build half', () => {
 
   it('calls each thunk exactly once during the build', async () => {
     let n = 0;
-    await runGenerateBundle(emitClientAsset({ 'llms.txt': () => `v${++n}` }), 'client');
+    await runGenerateBundle(
+      emitClientAsset({ 'llms.txt': () => `v${++n}` }),
+      'client'
+    );
     expect(n).toBe(1);
   });
 

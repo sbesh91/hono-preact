@@ -143,6 +143,9 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     get entryWrapperId() {
       return generatedEntryWrapperAbsPath(rootRef.get());
     },
+    // Not a getter: the declared names come straight off the options object,
+    // so they are known synchronously here and need no lazy resolution.
+    assetNames: Object.keys(assets ?? {}),
   };
 
   // Shared config plus the `client` build environment's input. The worker
@@ -256,6 +259,7 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
       adapter,
       rootRef,
       cssGlobal,
+      assetNames: ctx.assetNames,
     }),
     serverLoaderValidationPlugin(),
     moduleKeyPlugin(),

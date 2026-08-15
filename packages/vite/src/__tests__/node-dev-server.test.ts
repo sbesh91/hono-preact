@@ -26,6 +26,7 @@ const ctx = {
   root: '/p',
   coreAppModuleId: '/p/node_modules/.vite/hono-preact/core-app.tsx',
   entryWrapperId: '/p/node_modules/.vite/hono-preact/server-entry.tsx',
+  assetNames: [],
 };
 
 describe('nodeBuildPlugin', () => {
@@ -70,6 +71,7 @@ describe('nodeDevServerPlugin', () => {
       root: '/p',
       coreAppModuleId: '/p/a.tsx',
       entryWrapperId: '/p/b.tsx',
+      assetNames: [],
     });
     expect(plugin.name).toBe('hono-preact:node-dev-server');
     expect(plugin.apply).toBe('serve');
