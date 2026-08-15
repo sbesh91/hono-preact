@@ -74,7 +74,13 @@ function IssueLink({ href }: { href: string }) {
 Pass one loader or an array. A warm cache makes repeat fires free, so binding to
 several events is fine.
 
+`<NavLink>` wraps this same hook behind a `prefetch` prop, so a nav link that
+should warm its target's loaders on hover or on scrolling into view needs no
+manual event binding at all. See [Active Links](/docs/active-links#prefetching-a-links-data)
+for that form.
+
 ## See also
 
+- [Active Links](/docs/active-links): `<NavLink>`'s built-in `prefetch` / `prefetchLoaders` props.
 - [Middleware](/docs/middleware): `defineApp` accepts other options beyond `speculation`, including `use` for middleware composition.
 - [renderPage](/docs/render-page): how the `appConfig` (including `speculation`) is threaded into the server render.

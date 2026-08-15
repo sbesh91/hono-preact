@@ -138,10 +138,10 @@ describe('LoaderRef.View', () => {
     });
     const View: FunctionComponent<{ label: string }> = ref.View<{
       label: string;
-    }>((s) =>
+    }>((s, props) =>
       s.status === 'loading' ? null : (
         <span data-testid="composed">
-          {s.label}:{s.data.value}
+          {props.label}:{s.data.value}
         </span>
       )
     );

@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe('action -> loader revalidation (end-to-end through real handlers)', () => {
-  it('invalidate:"auto" refetches the active loader from the server after an action commits', async () => {
+  it('invalidate: { refetchActive: true } refetches the active loader from the server after an action commits', async () => {
     // Server state the loader reads and the action mutates. The point of
     // this test: every existing optimistic/invalidation test fakes the
     // server side by manually swapping `base` props. Here we stand up the
@@ -145,7 +145,9 @@ describe('action -> loader revalidation (end-to-end through real handlers)', () 
       // in s` does NOT narrow: the cold arm declares `data?: never`, so the key
       // is present on every arm of the union.)
       const s = countLoader.useData().value;
-      const { mutate } = useAction(incrementStub, { invalidate: 'auto' });
+      const { mutate } = useAction(incrementStub, {
+        invalidate: { refetchActive: true },
+      });
       return (
         <div>
           <span data-testid="count">

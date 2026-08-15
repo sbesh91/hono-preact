@@ -6,8 +6,8 @@ import {
 } from './action.js';
 import type { ReadonlySignal } from '@preact/signals';
 import { useOptimistic, type OptimisticHandle } from './optimistic.js';
-import type { AnyLoaderRef } from './define-loader.js';
 import type { Serialize } from './internal/serialize.js';
+import type { InvalidateInput } from './use-invalidate.js';
 import { OPTIMISTIC_BRAND } from './internal/optimistic-brand.js';
 
 // Re-exported for API stability: the brand's single definition lives in the
@@ -31,7 +31,7 @@ export type UseOptimisticActionOptions<
 > & {
   base: TBase;
   apply: (current: TBase, payload: TPayload) => TBase;
-  invalidate?: 'auto' | ReadonlyArray<AnyLoaderRef>;
+  invalidate?: InvalidateInput;
   // The action result reaches the client JSON round-tripped (`Serialize`).
   onSuccess?: (data: Serialize<TResult>) => void;
   onError?: (err: Error) => void;

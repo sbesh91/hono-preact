@@ -57,6 +57,10 @@ function renderIn(href: string, refs: AnyLoaderRef) {
 }
 
 describe('usePrefetch', () => {
+  // Synchronous: the hook statically imports the prefetch machinery, because
+  // calling it IS opting into prefetching. `<NavLink>` is the one that defers
+  // the import, since it must render without the cost when given no `prefetch`
+  // prop.
   it('resolves nested-leaf params from the manifest and prefetches the loader', () => {
     const { getByRole } = renderIn('/demo/projects/p1/issues/i1', ref);
     fireEvent.click(getByRole('button'));

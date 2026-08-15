@@ -54,11 +54,6 @@ const PANEL = 'rounded-xl border border-border bg-background p-5';
 
 // ---- Section: task header + body + status control ----
 // Lives inside taskLoader's View context. Owns the status-change action.
-// Sibling loaders in the invalidate list (activityLoader, project-board
-// loader) have their caches cleared but don't refetch from here; their
-// pages refetch on next mount, so the back-nav to the project board sees
-// the new status on the card. taskLoader IS the active loader so its
-// auto-reload runs and the header re-renders with the new status.
 
 const TaskHeaderAndActions: FunctionComponent<{
   task: TaskData;
@@ -97,7 +92,7 @@ const TaskHeaderAndActions: FunctionComponent<{
   } = useOptimisticAction(serverActions.setStatus, {
     base: task.status,
     apply: (_current, payload) => payload.status,
-    invalidate: [activityLoader, boardLoaders.default],
+    invalidate: { clear: [activityLoader, boardLoaders.default] },
     onSuccess: () => {
       setError(null);
       reloadTask();
@@ -261,7 +256,7 @@ const CommentsSection: FunctionComponent<{
       <Form
         action={addComment}
         reset
-        invalidate={[commentsLoader]}
+        invalidate={{ clear: [commentsLoader] }}
         class="space-y-2.5 border-t border-border pt-4"
       >
         <input type="hidden" name="taskId" value={taskId} />
@@ -324,7 +319,7 @@ CommentsSection.displayName = 'CommentsSection';
 // `connecting` phase (data is undefined); once `open`, even an empty list
 // renders the empty state via CommentsSection.
 const CommentsView = commentsLoader.View<CommentData[], { taskId: string }>(
-  ({ data, taskId }) =>
+  ({ data }, { taskId }) =>
     data ? (
       <CommentsSection comments={data} taskId={taskId} />
     ) : (

@@ -15,11 +15,15 @@ afterEach(() => {
 // Mounts `ViewRenderer` under a `LoaderDataContext` already carrying the
 // PROJECTED union (the projection now happens once in `loader.tsx`, not here).
 // The context channel is a signal, so the state goes in as one here too.
-// ViewRenderer's job is to read that union and merge the consumer's spread
-// props, so these assert it passes the union through unchanged (plus props).
+// ViewRenderer's job is to read that union and hand it to the render fn as the
+// first argument, with the consumer's own props as a separate second argument,
+// so these assert both arrive unmerged.
 function renderViewRenderer(
   state: LoaderState<unknown> | StreamState<unknown>,
-  renderFn: (args: ViewState) => ComponentChildren,
+  renderFn: (
+    state: ViewState,
+    props: Record<string, unknown>
+  ) => ComponentChildren,
   props: Record<string, unknown> = {}
 ) {
   render(
@@ -100,21 +104,23 @@ describe('ViewRenderer', () => {
     });
   });
 
-  it('merges spread props into the union', () => {
-    const seen: ViewState[] = [];
+  it('passes the consumer props as a separate second argument, unmerged', () => {
+    const seenState: ViewState[] = [];
+    const seenProps: Record<string, unknown>[] = [];
     renderViewRenderer(
       { status: 'success', data: { title: 'Dune' } },
-      (s) => {
-        seen.push(s);
+      (s, p) => {
+        seenState.push(s);
+        seenProps.push(p);
         return null;
       },
       { extra: 'x' }
     );
-    expect(seen[0]).toEqual({
+    expect(seenState[0]).toEqual({
       status: 'success',
       data: { title: 'Dune' },
-      extra: 'x',
     });
+    expect(seenProps[0]).toEqual({ extra: 'x' });
   });
 
   it('re-renders the render fn when the context signal changes (the read subscribes)', () => {

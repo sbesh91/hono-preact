@@ -66,7 +66,7 @@
    ```
 
    To refetch a loader after a successful mutation, pass
-   `invalidate={[serverLoaders.default]}` to `<Form>`.
+   `invalidate={{ clear: [serverLoaders.default] }}` to `<Form>`.
 
 ## Verify
 

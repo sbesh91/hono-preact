@@ -200,11 +200,28 @@ export default definePage(MoviesView);
 
 The `loading` arm carries no data. `success`, `revalidating`, and `error` each carry `data` narrowed to `Serialize<T>`. The `revalidating` status is the stale-while-revalidate state during a reload; the `error` arm keeps the last good value. Call `useReload()` for the imperative `reload()`.
 
-**Prop passthrough** (using the generic `P`):
+`match(state, handlers)` is the recommended way to consume that union inside a render function: it dispatches on `status` and hands each handler its fully narrowed member, so a handler for `success` reads `data` with no guard while a handler for `loading` cannot read `data` at all. A missing arm is a compile error:
+
+```tsx
+import { match } from 'hono-preact';
+
+const CountView = statsLoader.View((state) =>
+  match(state, {
+    loading: () => <p>Loading...</p>,
+    success: (s) => <p>{s.data.count} items</p>,
+    revalidating: (s) => <p>{s.data.count} items</p>,
+    error: (s) => <p>Failed to load.</p>,
+  })
+);
+```
+
+This is what makes a legitimately falsy value safe: a count of `0` rides the `success` arm and renders as `0 items`, never as the loading placeholder, because presence is carried by `status` rather than by testing `data` for truthiness. A direct `switch (state.status)` reads the same union and stays fully supported; `match` is a narrower, exhaustive-by-default way to write the same dispatch.
+
+**Prop passthrough** (using the generic `P`): the render function's second parameter is whatever props the component is mounted with. Nothing about that shape can collide with the loader state, since the two arrive as separate parameters:
 
 ```tsx
 const MovieCard = serverLoaders.default.View<{ highlight: boolean }>(
-  ({ data, highlight }) => {
+  ({ data }, { highlight }) => {
     if (!data) return <MovieSkeleton />;
     return (
       <article class={highlight ? 'highlight' : undefined}>
@@ -569,7 +586,7 @@ The RPC request always sends the full location to the server; `cacheKeyParams` o
 
 ## Cross-page invalidation
 
-When a mutation on one page should refresh data on another, import the other page's loader ref and pass it to `useAction({ invalidate: [...] })`. Invalidation is by reference, not by name:
+When a mutation on one page should refresh data on another, import the other page's loader ref and pass it to `useAction({ invalidate: { clear: [...] } })`. Invalidation is by reference, not by name:
 
 ```ts
 import { useAction } from 'hono-preact';
@@ -577,11 +594,11 @@ import { serverLoaders as moviesLoaders } from './movies.server.js';
 import { serverActions } from './reviews.server.js';
 
 const { mutate } = useAction(serverActions.addReview, {
-  invalidate: [moviesLoaders.default],
+  invalidate: { clear: [moviesLoaders.default] },
 });
 ```
 
-Pass `'auto'` to invalidate the current page's loader only. Use `loader.invalidate()` to clear the cache imperatively.
+Pass `{ refetchActive: true }` to invalidate the current page's loader only. Use `loader.invalidate()` to clear the cache imperatively.
 
 ## Caching navigation results
 

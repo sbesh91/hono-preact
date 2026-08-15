@@ -155,7 +155,7 @@ function Sidebar({
 }
 
 const ShellView = shellLoader.View<{ children: LayoutProps['children'] }>(
-  ({ data, children }) =>
+  ({ data }, { children }) =>
     data ? (
       <Sidebar data={data} children={children} />
     ) : (

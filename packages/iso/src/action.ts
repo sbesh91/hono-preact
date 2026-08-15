@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { Context } from 'hono';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { AnyLoaderRef } from './define-loader.js';
-import { useInvalidate } from './use-invalidate.js';
+import { useInvalidate, type InvalidateInput } from './use-invalidate.js';
 import type {
   ActionUse,
   ActionUseElements,
@@ -205,20 +204,19 @@ export function _defineRouteAction(
 
 type UseActionOptionsCommon<TPayload, TChunk = never> = {
   /**
-   * How to update loader caches after the action commits. Three modes:
+   * How to update loader caches after the action commits. Two orthogonal
+   * decisions:
    *
-   * - `'auto'`: re-RUN the active page's loader (the one wrapping this
-   *   `useAction` call). Triggers a real fetch through `/__loaders` — it
-   *   is NOT a no-op even when nothing observable changed. Equivalent to
-   *   calling `useReload().reload()` from `onSuccess`.
-   * - `false` (default): do nothing.
-   * - An array of `LoaderRef`s: call `.invalidate()` on each (clear cache
-   *   only; no immediate refetch). If the active page's loader is in the
-   *   array, ALSO re-run it.
+   * - `clear`: loader caches to clear. Each ref's `.invalidate()` is called
+   *   (cache cleared, no immediate refetch).
+   * - `refetchActive`: re-RUN the active page's loader, the one wrapping this
+   *   `useAction` call. Triggers a real fetch through `/__loaders`; it is NOT
+   *   a no-op even when nothing observable changed. Defaults to true when the
+   *   active loader appears in `clear`.
    *
-   * See `/docs/reloading` for the full mental model.
+   * Omit entirely to do nothing. See `/docs/reloading` for the full model.
    */
-  invalidate?: 'auto' | false | ReadonlyArray<AnyLoaderRef>;
+  invalidate?: InvalidateInput;
   // Chunks arrive over the wire as JSON, so the client sees `Serialize<TChunk>`.
   onChunk?: (chunk: Serialize<TChunk>) => void;
   /**

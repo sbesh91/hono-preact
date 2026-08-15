@@ -153,18 +153,18 @@ String values are passed as strings; coerce them in the action body if you need 
 `<Form>` accepts optional callbacks that fire after a submission resolves, plus
 declarative cache invalidation and form reset:
 
-| Prop         | Type                             | Notes                                                                                                                                             |
-| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `onSuccess`  | `(data, { reset }) => void`      | Fires on a successful action. `reset()` clears the form; `reset(names)` clears specific fields.                                                   |
-| `onError`    | `(err: Error) => void`           | Fires on an error, timeout, or unknown outcome. A `deny` is not an error; read it via `useActionResult`.                                          |
-| `invalidate` | `'auto' \| false \| LoaderRef[]` | Same semantics as `useAction`'s `invalidate`: `'auto'` re-runs the active loader; an array clears each (and re-runs the active loader if listed). |
-| `reset`      | `boolean`                        | Reset the form to its defaults after a successful submit.                                                                                         |
+| Prop         | Type                        | Notes                                                                                                                                                                                           |
+| ------------ | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onSuccess`  | `(data, { reset }) => void` | Fires on a successful action. `reset()` clears the form; `reset(names)` clears specific fields.                                                                                                 |
+| `onError`    | `(err: Error) => void`      | Fires on an error, timeout, or unknown outcome. A `deny` is not an error; read it via `useActionResult`.                                                                                        |
+| `invalidate` | `InvalidateInput`           | Same semantics as `useAction`'s `invalidate`: `{ refetchActive: true }` re-runs the active loader; `{ clear: [...] }` clears each ref (and re-runs the active loader if it appears in `clear`). |
+| `reset`      | `boolean`                   | Reset the form to its defaults after a successful submit.                                                                                                                                       |
 
 ```tsx
 <Form
   action={serverActions.createIssue}
   reset
-  invalidate="auto"
+  invalidate={{ refetchActive: true }}
   onSuccess={() => setShowForm(false)}
 >
   <input name="title" />
@@ -341,7 +341,7 @@ const moviesLoader = serverLoaders.default;
 const Movies = () => {
   const { data } = moviesLoader.useData().value;
   const { mutate, pending, error } = useAction(serverActions.addMovie, {
-    invalidate: 'auto',
+    invalidate: { refetchActive: true },
     onSuccess: (result) => console.log('added', result),
   });
 
@@ -362,13 +362,13 @@ const Movies = () => {
 
 ### Options
 
-| Option       | Type                                      | Description                                                                                                                                                                                                                                                       |
-| ------------ | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalidate` | `'auto' \| false \| LoaderRef<unknown>[]` | `'auto'` re-runs the current page's `serverLoader` (via the `/__loaders` RPC in the browser). An array of [`LoaderRef`](/docs/loaders)s invalidates each loader's cache; pass loaders imported from other pages to refresh data across the app. Default: `false`. |
-| `onMutate`   | `(payload) => unknown`                    | Called before the request fires on a dispatched mutation. Return value is passed to `onError` as `snapshot` for optimistic rollback. A client `schema` rejection short-circuits before dispatch, so it does not fire (see the note below the tables).             |
-| `onSuccess`  | `(data) => void`                          | Called with the action's return value on success.                                                                                                                                                                                                                 |
-| `onError`    | `(err, snapshot) => void`                 | Called with the error and the `onMutate` snapshot when a dispatched mutation fails: a server `deny`, error, or timeout. A client `schema` rejection does not fire it (see the note below the tables).                                                             |
-| `onChunk`    | `(chunk: string) => void`                 | Called for each chunk when the action returns a streaming response. See [Streaming responses](#streaming-responses).                                                                                                                                              |
+| Option       | Type                      | Description                                                                                                                                                                                                                                                                         |
+| ------------ | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalidate` | `InvalidateInput`         | `{ refetchActive: true }` re-runs the current page's `serverLoader` (via the `/__loaders` RPC in the browser). `{ clear: [...] }` invalidates each [`LoaderRef`](/docs/loaders)'s cache; pass loaders imported from other pages to refresh data across the app. Omit to do nothing. |
+| `onMutate`   | `(payload) => unknown`    | Called before the request fires on a dispatched mutation. Return value is passed to `onError` as `snapshot` for optimistic rollback. A client `schema` rejection short-circuits before dispatch, so it does not fire (see the note below the tables).                               |
+| `onSuccess`  | `(data) => void`          | Called with the action's return value on success.                                                                                                                                                                                                                                   |
+| `onError`    | `(err, snapshot) => void` | Called with the error and the `onMutate` snapshot when a dispatched mutation fails: a server `deny`, error, or timeout. A client `schema` rejection does not fire it (see the note below the tables).                                                                               |
+| `onChunk`    | `(chunk: string) => void` | Called for each chunk when the action returns a streaming response. See [Streaming responses](#streaming-responses).                                                                                                                                                                |
 
 ### Return value
 
@@ -602,7 +602,7 @@ See [Optimistic UI](/docs/optimistic-ui) for the higher-level `useOptimisticActi
 
 ## Cross-page cache invalidation
 
-When a mutation on one page should refresh data on another, import the other page's loader and pass it to `invalidate`. Invalidation is by reference; there are no cache names:
+When a mutation on one page should refresh data on another, import the other page's loader and pass it to `invalidate.clear`. Invalidation is by reference; there are no cache names:
 
 ```tsx
 // movies.tsx: an action that should also refresh the ratings sidebar
@@ -613,13 +613,13 @@ import { serverActions } from './movies.server.js';
 const ratingsLoader = ratingsLoaders.default;
 
 const { mutate } = useAction(serverActions.addMovie, {
-  invalidate: [ratingsLoader], // clears ratingsLoader's cache on success
+  invalidate: { clear: [ratingsLoader] }, // clears ratingsLoader's cache on success
 });
 ```
 
-`invalidate` accepts an array of `LoaderRef`s, so a single action can refresh multiple loaders in one shot: `invalidate: [moviesLoader, ratingsLoader]`.
+`clear` accepts an array of `LoaderRef`s, so a single action can refresh multiple loaders in one shot: `invalidate: { clear: [moviesLoader, ratingsLoader] }`.
 
-Use `'auto'` (instead of an array) to invalidate the current page's own loader after the action succeeds.
+Use `refetchActive: true` (instead of `clear`) to invalidate the current page's own loader after the action succeeds.
 
 ## Method form: `stub.useAction(opts)`
 
@@ -633,12 +633,12 @@ const moviesLoader = serverLoaders.default;
 
 // Method form:
 const { mutate, pending } = serverActions.addMovie.useAction({
-  invalidate: [moviesLoader],
+  invalidate: { clear: [moviesLoader] },
 });
 
 // Equivalent function form:
 const { mutate, pending } = useAction(serverActions.addMovie, {
-  invalidate: [moviesLoader],
+  invalidate: { clear: [moviesLoader] },
 });
 ```
 

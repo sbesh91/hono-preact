@@ -180,11 +180,11 @@ All other `defineLoader` options (`cacheKeyParams`, `cache`, `timeoutMs`, `use`)
 
 ### `loader.View(render, { initial, reduce })` (accumulating form)
 
-Passing `initial` and `reduce` selects the accumulating form of `.View`. The render function receives a `StreamState<Acc>` discriminated union; switch on `status` (`connecting | open | closed | error`). The `connecting` arm carries no data; the other arms carry the folded accumulator as `data`.
+Passing `initial` and `reduce` selects the accumulating form of `.View`. The render function receives a `StreamState<Acc>` discriminated union as its first argument and the component's own props as its second; switch on `status` (`connecting | open | closed | error`). The `connecting` arm carries no data; the other arms carry the folded accumulator as `data`.
 
 ```ts
-loader.View<Acc>(
-  render: (args: StreamState<Acc>) => ComponentChildren,
+loader.View<Acc, P>(
+  render: (state: StreamState<Acc>, props: P) => ComponentChildren,
   opts: {
     initial: Acc;
     reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
@@ -192,7 +192,7 @@ loader.View<Acc>(
       | ComponentChildren
       | ((err: Error, reset: () => void) => ComponentChildren);
   }
-): FunctionComponent
+): FunctionComponent<P>
 ```
 
 `chunk` is `Serialize<T>`: the JSON round-trip of the server-side chunk, the same wire shape `useData()` and the single-value `.View` surface (a `Date` field arrives as a string).

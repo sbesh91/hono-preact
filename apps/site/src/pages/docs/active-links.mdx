@@ -91,6 +91,23 @@ Use `exact={false}` for section links, and `match` when the link target differs 
 </NavLink>
 ```
 
+### Prefetching a link's data
+
+Pair `prefetch` with `prefetchLoaders` to warm a link's target route before the click, so the navigation that follows has no loading state at all:
+
+```tsx
+<NavLink href="/movies" prefetch="hover" prefetchLoaders={movieList}>
+  Movies
+</NavLink>
+```
+
+Two trigger strategies:
+
+- `'hover'`: warms on hover intent (a short debounce on `pointerenter`, cancelled if the pointer leaves before the delay elapses) and on `focus`, so keyboard navigation gets the same warming as a mouse.
+- `'visible'`: warms once the link scrolls into the viewport, then stops watching. Use it for links a user is likely to click without ever hovering, such as a card in a list.
+
+`prefetchLoaders` names the loaders to warm explicitly, either a single `LoaderRef` or an array of them; there is no auto-discovery from `href`. Both props are additive: they compose with `activeClass` / `inactiveClass`, `match`, and `exact` with no interaction between them. See [Link Prefetch](/docs/link-prefetch) for the underlying `usePrefetch` hook this wraps.
+
 ## Navigating programmatically
 
 `useNavigate()` returns a `navigate(path, options?)` function for navigating from
@@ -125,15 +142,17 @@ option has no effect.
 
 `<NavLink>` forwards any other `<a>` attribute (e.g. `target`, `rel`, `data-*`) to the underlying anchor and sets `aria-current="page"` while the link is active. A caller-supplied `aria-current` always wins, and `aria-current={undefined}` suppresses the computed value. Because active detection is path-only, links that differ only by query string need their `aria-current` managed explicitly.
 
-| Prop            | Type      | Default  | Description                                                     |
-| --------------- | --------- | -------- | --------------------------------------------------------------- |
-| `href`          | `string`  | required | Destination path.                                               |
-| `match`         | `string`  | `href`   | Pattern tested for the active state.                            |
-| `exact`         | `boolean` | `true`   | Match the full path; set `false` for prefix (section) matching. |
-| `class`         | `string`  | none     | Always applied.                                                 |
-| `activeClass`   | `string`  | none     | Merged in when the link is active.                              |
-| `inactiveClass` | `string`  | none     | Merged in when the link is not active.                          |
-| `transition`    | `boolean` | `true`   | Set `false` to navigate without a view transition.              |
+| Prop              | Type                                    | Default  | Description                                                                               |
+| ----------------- | --------------------------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `href`            | `string`                                | required | Destination path.                                                                         |
+| `match`           | `string`                                | `href`   | Pattern tested for the active state.                                                      |
+| `exact`           | `boolean`                               | `true`   | Match the full path; set `false` for prefix (section) matching.                           |
+| `class`           | `string`                                | none     | Always applied.                                                                           |
+| `activeClass`     | `string`                                | none     | Merged in when the link is active.                                                        |
+| `inactiveClass`   | `string`                                | none     | Merged in when the link is not active.                                                    |
+| `transition`      | `boolean`                               | `true`   | Set `false` to navigate without a view transition.                                        |
+| `prefetch`        | `'hover' \| 'visible' \| false`         | `false`  | Trigger for warming `prefetchLoaders`. No trigger means no prefetching.                   |
+| `prefetchLoaders` | `LoaderRef \| ReadonlyArray<LoaderRef>` | none     | Loaders to prefetch for this link's target route. Required for `prefetch` to do anything. |
 
 ## See also
 

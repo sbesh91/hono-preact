@@ -39,7 +39,7 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
             }
           : t
       ),
-    invalidate: [serverLoaders.default],
+    invalidate: { clear: [serverLoaders.default] },
   });
   // Deletes ride a STANDALONE optimistic layer over the patch-adjusted list:
   // the card disappears same-frame, settle keeps it gone once the server
@@ -51,10 +51,10 @@ const Board: FunctionComponent<Props> = ({ tasks, projectSlug, users }) => {
     { transition: true }
   );
   const del = useAction(serverActions.deleteTask, {
-    invalidate: [serverLoaders.default],
+    invalidate: { clear: [serverLoaders.default] },
   });
   const restore = useAction(serverActions.restoreTask, {
-    invalidate: [serverLoaders.default],
+    invalidate: { clear: [serverLoaders.default] },
   });
 
   const doPatch: PatchFn = (taskId, p) => patch.mutate({ taskId, ...p });
