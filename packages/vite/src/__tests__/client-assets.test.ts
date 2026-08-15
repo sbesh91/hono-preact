@@ -2,14 +2,31 @@ import { describe, it, expect } from 'vitest';
 import { contentTypeFor } from '../client-assets.js';
 
 describe('contentTypeFor', () => {
-  it('maps known extensions', () => {
+  it('maps the types this API is expected to emit', () => {
     expect(contentTypeFor('llms.txt')).toBe('text/plain; charset=utf-8');
     expect(contentTypeFor('sw.js')).toBe('text/javascript; charset=utf-8');
     expect(contentTypeFor('manifest.webmanifest')).toBe(
       'application/manifest+json'
     );
-    expect(contentTypeFor('data.json')).toBe('application/json; charset=utf-8');
-    expect(contentTypeFor('feed.xml')).toBe('application/xml; charset=utf-8');
+    expect(contentTypeFor('data.json')).toBe('application/json');
+    expect(contentTypeFor('feed.xml')).toBe('text/xml; charset=utf-8');
+  });
+
+  // `application/wasm` is REQUIRED, not cosmetic: WebAssembly.instantiateStreaming
+  // and compileStreaming reject with a TypeError on any other type, so an
+  // emitted module served as octet-stream fails to instantiate.
+  it('resolves wasm to application/wasm so streaming instantiation works', () => {
+    expect(contentTypeFor('mod.wasm')).toBe('application/wasm');
+  });
+
+  // Regression guard for the class of bug rather than the one instance: a
+  // hand-kept table silently mislabelled everything it omitted. All of these
+  // are plausible emitted assets and none were in that table.
+  it('resolves types a curated table would have missed', () => {
+    expect(contentTypeFor('icon.png')).toBe('image/png');
+    expect(contentTypeFor('font.woff2')).toBe('font/woff2');
+    expect(contentTypeFor('report.pdf')).toBe('application/pdf');
+    expect(contentTypeFor('data.csv')).toBe('text/csv; charset=utf-8');
   });
 
   it('falls back to octet-stream for unknown extensions', () => {
@@ -19,6 +36,14 @@ describe('contentTypeFor', () => {
 
   it('is case-insensitive on the extension', () => {
     expect(contentTypeFor('LLMS.TXT')).toBe('text/plain; charset=utf-8');
+  });
+
+  // charset qualifies text/* only. It is not a defined parameter for
+  // application/json (RFC 8259 fixes JSON at UTF-8) or for binary types.
+  it('appends charset only to text types', () => {
+    expect(contentTypeFor('a.css')).toBe('text/css; charset=utf-8');
+    expect(contentTypeFor('icon.svg')).toBe('image/svg+xml');
+    expect(contentTypeFor('mod.wasm')).not.toContain('charset');
   });
 });
 

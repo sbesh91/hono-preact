@@ -52,7 +52,8 @@
     "@babel/types": "^8.0.0",
     "@hono-preact/iso": "workspace:*",
     "lightningcss": "^1.32.0",
-    "magic-string": "^0.30.21"
+    "magic-string": "^0.30.21",
+    "mrmime": "^2.0.1"
   },
   "peerDependencies": {
     "@cloudflare/vite-plugin": "^1.37.1",

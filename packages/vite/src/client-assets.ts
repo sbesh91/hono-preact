@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite';
+import { lookup } from 'mrmime';
 
 /**
  * Produces the asset's bytes. Called EXACTLY ONCE during the build and PER
@@ -13,28 +14,25 @@ export type ClientAssetSource = () =>
 /** Output file name (relative to the client out dir) to its byte source. */
 export type ClientAssets = Record<string, ClientAssetSource>;
 
-const CONTENT_TYPES: Record<string, string> = {
-  txt: 'text/plain; charset=utf-8',
-  js: 'text/javascript; charset=utf-8',
-  mjs: 'text/javascript; charset=utf-8',
-  json: 'application/json; charset=utf-8',
-  webmanifest: 'application/manifest+json',
-  xml: 'application/xml; charset=utf-8',
-  css: 'text/css; charset=utf-8',
-  html: 'text/html; charset=utf-8',
-  svg: 'image/svg+xml',
-};
-
 /**
- * Content type from the file extension. Unknown extensions get
- * `application/octet-stream` rather than a guess: serving a wrong type is
- * worse than serving an opaque one.
+ * Content type from the file extension, resolved with `mrmime`: the same
+ * lookup Vite's own static middleware uses, so an asset declared here is served
+ * with the identical type it would get sitting in `public/`. A hand-kept table
+ * was wrong here rather than merely incomplete. `.wasm` has to resolve to
+ * `application/wasm` exactly, because `WebAssembly.instantiateStreaming` and
+ * `compileStreaming` reject with a TypeError on anything else, so a curated
+ * list that missed it did not mislabel the module, it broke it.
+ *
+ * An unknown extension still gets `application/octet-stream`: serving a wrong
+ * type is worse than serving an opaque one.
  */
 export function contentTypeFor(fileName: string): string {
-  const dot = fileName.lastIndexOf('.');
-  if (dot === -1) return 'application/octet-stream';
-  const ext = fileName.slice(dot + 1).toLowerCase();
-  return CONTENT_TYPES[ext] ?? 'application/octet-stream';
+  const mime = lookup(fileName);
+  if (!mime) return 'application/octet-stream';
+  // `charset` only qualifies `text/*`. It is not a defined parameter for
+  // `application/json` (RFC 8259 fixes JSON at UTF-8) nor for the binary and
+  // `+json` types, so appending it there would be noise at best.
+  return mime.startsWith('text/') ? `${mime}; charset=utf-8` : mime;
 }
 
 // Normalizes a request path to the asset key: strips the query and the leading
