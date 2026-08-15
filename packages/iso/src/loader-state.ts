@@ -245,6 +245,19 @@ type ExhaustiveHandlers<S extends { status: string }, R> = {
 };
 
 /**
+ * The exhaustive handler map, but only for a state whose `status` is a literal
+ * union. When `status` widens to `string` (an untyped or over-generalized
+ * value), `ExhaustiveHandlers` collapses into a bare index signature that a
+ * single-arm object satisfies, which would silently drop exhaustiveness. `never`
+ * rejects the exhaustive overload in that case, pushing such a caller onto the
+ * `_` overload where the catch-all is explicit.
+ */
+type LiteralExhaustiveHandlers<
+  S extends { status: string },
+  R,
+> = string extends S['status'] ? never : ExhaustiveHandlers<S, R>;
+
+/**
  * Status-first narrowing over a loader or stream state. The caller cannot reach
  * a `data` branch without the type system having narrowed `status` first, which
  * is what makes a legitimately falsy value (`0`, `''`, `[]`) impossible to
@@ -259,7 +272,7 @@ type ExhaustiveHandlers<S extends { status: string }, R> = {
  */
 export function match<S extends { status: string }, R>(
   state: S,
-  handlers: ExhaustiveHandlers<S, R>
+  handlers: LiteralExhaustiveHandlers<S, R>
 ): R;
 export function match<S extends { status: string }, R>(
   state: S,
@@ -271,9 +284,10 @@ export function match<S extends { status: string }, R>(
 ): R {
   const handler = handlers[state.status as S['status']];
   if (handler) return (handler as (s: S) => R)(state);
-  // Unreachable through either public overload: the exhaustive form requires
-  // every arm and the partial form requires `_`. Kept as a real throw rather
-  // than a cast so a JS caller gets a legible failure instead of `undefined`.
+  // Defense for JavaScript callers, who have no types at all: both public
+  // overloads keep a TypeScript caller covered (the exhaustive form requires
+  // every arm, the partial form requires `_`). A real throw rather than a cast
+  // so an unhandled status is a legible failure instead of `undefined`.
   const fallback = handlers._;
   if (fallback) return fallback(state);
   throw new Error(

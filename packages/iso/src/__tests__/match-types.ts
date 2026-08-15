@@ -49,3 +49,19 @@ const d: string = match(stream, {
   _: (s) => s.status,
 });
 void d;
+
+// A widened `status` (plain `string`, not a literal union) cannot use the
+// exhaustive overload: there is no finite arm set to be exhaustive over, so a
+// one-arm map would otherwise satisfy a bare index signature and the runtime
+// would throw on any other status.
+declare const widened: { status: string; data?: unknown };
+// @ts-expect-error a non-literal `status` has no exhaustive form
+const e: string = match(widened, { success: () => 'ok' });
+void e;
+
+// The same value is fine once `_` supplies the catch-all.
+const f: string = match(widened, {
+  success: () => 'ok',
+  _: (s) => s.status,
+});
+void f;
