@@ -50,7 +50,7 @@ export function nodeAdapter(
       // literal. That is also why no identifier validation is needed here,
       // unlike adapter-cloudflare's realtimeClass, which is emitted verbatim
       // as a class declaration name.
-      const assetNames = ctx.assetNames ?? [];
+      const assetNames = ctx.assetNames;
       const assetMount =
         assetNames.length === 0
           ? ''

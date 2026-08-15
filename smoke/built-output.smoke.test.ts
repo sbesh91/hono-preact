@@ -42,6 +42,12 @@ type BuiltTarget = {
    * unit test can reproduce it.
    */
   foreignCwdServe?: (port: number) => { cmd: string; args: string[] };
+  /**
+   * A `honoPreact({ assets })` output name declared by this app, if any. Fetched
+   * from the real built server and asserted to be non-HTML, proving the
+   * asset serves rather than falling through to the SSR not-found page.
+   */
+  assetProbe?: string;
 };
 
 const TARGETS: BuiltTarget[] = [
@@ -68,7 +74,11 @@ const TARGETS: BuiltTarget[] = [
       args: ['exec', 'wrangler', 'dev', '--port', String(port)],
     }),
     // `/demo/login` is the regression this file exists for. Keep it.
-    routes: ['/', '/demo', '/demo/login', '/docs'],
+    // `/llms.txt` is a declared `honoPreact({ assets })` output (see
+    // apps/site/vite.config.ts); it must come back as the generated text, not
+    // the SSR not-found page.
+    routes: ['/', '/demo', '/demo/login', '/docs', '/llms.txt'],
+    assetProbe: '/llms.txt',
   },
 ];
 
@@ -143,7 +153,7 @@ function freePort(): Promise<number> {
 
 describe.each(TARGETS)(
   'built output smoke: $name',
-  ({ root, distProbe, serve, routes, foreignCwdServe }) => {
+  ({ root, distProbe, serve, routes, foreignCwdServe, assetProbe }) => {
     let port: number;
     let child: ChildProcess;
 
@@ -177,6 +187,21 @@ describe.each(TARGETS)(
         `${path} -> ${res.status}\n${body.slice(0, 800)}`
       ).toBeLessThan(400);
     });
+
+    it.skipIf(!assetProbe)(
+      'serves a declared asset from the real built server, not the SSR page',
+      async () => {
+        const res = await fetch(`http://localhost:${port}${assetProbe}`);
+        const contentType = res.headers.get('content-type') ?? '';
+        // The SSR not-found page (the silent-failure mode this guards
+        // against) always comes back as text/html; the declared asset thunk
+        // never does.
+        expect(
+          contentType,
+          `${assetProbe} -> content-type ${contentType}, looks like the SSR page`
+        ).not.toMatch(/text\/html/);
+      }
+    );
 
     it.skipIf(!foreignCwdServe)(
       'serves client assets when started from a foreign cwd',

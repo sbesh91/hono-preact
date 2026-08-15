@@ -125,6 +125,64 @@ describe('emitClientAsset dev half', () => {
   });
 });
 
+describe('emitClientAsset key validation', () => {
+  it('accepts a plain root-level name', () => {
+    expect(() => emitClientAsset({ 'llms.txt': () => 'x' })).not.toThrow();
+  });
+
+  it('accepts a name with a legitimate subdirectory', () => {
+    expect(() =>
+      emitClientAsset({ '.well-known/security.txt': () => 'x' })
+    ).not.toThrow();
+  });
+
+  it('rejects an empty key', () => {
+    expect(() => emitClientAsset({ '': () => 'x' })).toThrow(/empty/);
+  });
+
+  it('rejects a leading slash, naming the offending key', () => {
+    expect(() => emitClientAsset({ '/llms.txt': () => 'x' })).toThrow(
+      /\/llms\.txt/
+    );
+  });
+
+  it('rejects a leading ./', () => {
+    expect(() => emitClientAsset({ './llms.txt': () => 'x' })).toThrow(
+      /\.\/llms\.txt/
+    );
+  });
+
+  it('rejects a leading ../', () => {
+    expect(() => emitClientAsset({ '../llms.txt': () => 'x' })).toThrow(
+      /\.\.\/llms\.txt/
+    );
+  });
+
+  it('rejects a `..` path segment, naming the offending key', () => {
+    expect(() => emitClientAsset({ 'a/../b.txt': () => 'x' })).toThrow(
+      /a\/\.\.\/b\.txt/
+    );
+  });
+
+  it('rejects a `:` character, naming the offending key', () => {
+    expect(() => emitClientAsset({ 'foo:bar.txt': () => 'x' })).toThrow(
+      /foo:bar\.txt/
+    );
+  });
+
+  it('rejects a `*` character, naming the offending key', () => {
+    expect(() => emitClientAsset({ 'foo*.txt': () => 'x' })).toThrow(
+      /foo\*\.txt/
+    );
+  });
+
+  it('rejects a `?` character, naming the offending key', () => {
+    expect(() => emitClientAsset({ 'foo?.txt': () => 'x' })).toThrow(
+      /foo\?\.txt/
+    );
+  });
+});
+
 describe('emitClientAsset build half', () => {
   function runGenerateBundle(plugin: Plugin, envName: string) {
     const emitted: Array<{ fileName: string; source: unknown }> = [];

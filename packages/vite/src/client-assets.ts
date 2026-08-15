@@ -44,12 +44,62 @@ function assetKeyFromUrl(url: string): string {
   return path.startsWith('/') ? path.slice(1) : path;
 }
 
+// Hono route-pattern characters. A name containing one of these registers a
+// PARAMETERIZED route under the Node adapter's `app.get('/' + name, ...)`
+// mount rather than a literal path, which is a different silent surprise
+// than the one this validation is chiefly guarding against.
+const HONO_PATTERN_CHARS = /[:*?]/;
+
+/**
+ * Validates a declared asset key against the contract documented on
+ * `ClientAssets`: a path relative to the client out dir, with no leading
+ * slash and no traversal. A key that violates it fails silently in three
+ * different ways depending on where it is read (dev falls through to the SSR
+ * catch-all, the Node adapter registers an unreachable route, and the build
+ * emits a file at a literal path like `/llms.txt`), so this throws eagerly at
+ * plugin-construction time instead.
+ */
+function assertValidAssetKey(key: string): void {
+  if (key === '') {
+    throw new Error(
+      'hono-preact: honoPreact({ assets }) keys must not be empty; ' +
+        'use a path relative to the client out dir, e.g. `llms.txt`.'
+    );
+  }
+  if (key.startsWith('/') || key.startsWith('./') || key.startsWith('../')) {
+    throw new Error(
+      `hono-preact: honoPreact({ assets }) key ${JSON.stringify(key)} must ` +
+        'not start with `/`, `./`, or `../`; it is a path relative to the ' +
+        `client out dir, not a URL. Use ${JSON.stringify(key.replace(/^(\.\.\/|\.\/|\/)+/, ''))} ` +
+        `instead, which serves at /${key.replace(/^(\.\.\/|\.\/|\/)+/, '')}.`
+    );
+  }
+  if (key.split('/').includes('..')) {
+    throw new Error(
+      `hono-preact: honoPreact({ assets }) key ${JSON.stringify(key)} must ` +
+        'not contain a `..` path segment; it must stay inside the client ' +
+        'out dir.'
+    );
+  }
+  if (HONO_PATTERN_CHARS.test(key)) {
+    throw new Error(
+      `hono-preact: honoPreact({ assets }) key ${JSON.stringify(key)} must ` +
+        'not contain `:`, `*`, or `?`; those are Hono route-pattern ' +
+        'characters and would register a parameterized route under the ' +
+        'Node adapter instead of the literal file name intended.'
+    );
+  }
+}
+
 /**
  * Registers both halves of a build-emitted, dev-served asset from one
  * declaration, so the two cannot drift.
  */
 export function emitClientAsset(assets: ClientAssets): Plugin {
   const entries = Object.entries(assets);
+  for (const [key] of entries) {
+    assertValidAssetKey(key);
+  }
   return {
     name: 'hono-preact:client-assets',
 
