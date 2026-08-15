@@ -5,9 +5,11 @@ import { LocationProvider } from 'preact-iso';
 import { NavLink } from '../nav-link.js';
 import type { AnyLoaderRef } from '../define-loader.js';
 
+// Records the href it was constructed with each time the returned callback
+// fires, so a test can tell which target a given prefetch call was for.
 const prefetchSpy = vi.fn();
 vi.mock('../use-prefetch.js', () => ({
-  usePrefetch: (_href: string, _refs: unknown) => prefetchSpy,
+  usePrefetch: (href: string, _refs: unknown) => () => prefetchSpy(href),
 }));
 
 const ref = { __id: Symbol('r') } as unknown as AnyLoaderRef;
@@ -99,6 +101,50 @@ describe('NavLink prefetch', () => {
     const a = getByText('A') as HTMLAnchorElement;
     expect(a.getAttribute('prefetch')).toBeNull();
     expect(a.getAttribute('prefetchLoaders')).toBeNull();
+  });
+
+  it('fire-once still holds when hovering the same href repeatedly', () => {
+    const { getByText } = render(
+      <LocationProvider>
+        <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
+          A
+        </NavLink>
+      </LocationProvider>
+    );
+    const a = getByText('A');
+    fireEvent.pointerEnter(a);
+    vi.advanceTimersByTime(150);
+    expect(prefetchSpy).toHaveBeenCalledTimes(1);
+    fireEvent.pointerLeave(a);
+    fireEvent.pointerEnter(a);
+    vi.advanceTimersByTime(150);
+    expect(prefetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('a changed href on the same instance becomes prefetchable again', () => {
+    const { getByText, rerender } = render(
+      <LocationProvider>
+        <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
+          A
+        </NavLink>
+      </LocationProvider>
+    );
+    fireEvent.focus(getByText('A'));
+    expect(prefetchSpy).toHaveBeenCalledTimes(1);
+    expect(prefetchSpy).toHaveBeenLastCalledWith('/a');
+
+    // Same component position, different href: simulates a reorderable list
+    // or "recently viewed" rail reusing the instance at this slot.
+    rerender(
+      <LocationProvider>
+        <NavLink href="/b" prefetch="hover" prefetchLoaders={ref}>
+          A
+        </NavLink>
+      </LocationProvider>
+    );
+    fireEvent.focus(getByText('A'));
+    expect(prefetchSpy).toHaveBeenCalledTimes(2);
+    expect(prefetchSpy).toHaveBeenLastCalledWith('/b');
   });
 
   it('preserves active-state behavior alongside prefetch', () => {

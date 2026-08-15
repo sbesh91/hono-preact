@@ -104,9 +104,17 @@ export function NavLink(props: NavLinkProps): VNode {
   const prefetchEnabled = prefetch === 'hover' || prefetch === 'visible';
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const anchorRef = useRef<HTMLAnchorElement | null>(null);
-  // Fires at most once per mount: a warm loader cache already makes repeat
+  // Fires at most once per href: a warm loader cache already makes repeat
   // `runPrefetch()` calls a no-op, but this also skips the redundant call.
+  // Preact can reuse a component instance across a re-render with a different
+  // href (a reorderable list, a "recently viewed" rail at a stable position),
+  // so the guard is reset below whenever href changes, rather than only once
+  // per mount.
   const fired = useRef(false);
+
+  useEffect(() => {
+    fired.current = false;
+  }, [href]);
 
   const firePrefetch = useCallback(() => {
     if (!prefetchEnabled || fired.current) return;
