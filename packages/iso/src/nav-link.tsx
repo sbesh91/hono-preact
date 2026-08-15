@@ -114,6 +114,15 @@ export function NavLink(props: NavLinkProps): VNode {
 
   useEffect(() => {
     fired.current = false;
+    // A hover debounce started for the PREVIOUS href is stale: the pointer
+    // never left (no `pointerLeave` fires when the list reorders under a
+    // stationary cursor), so without this the pending timer would fire the
+    // captured callback and burn the freshly reset guard on the old target,
+    // leaving the new href permanently unprefetchable.
+    if (hoverTimer.current !== null) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
   }, [href]);
 
   const firePrefetch = useCallback(() => {
