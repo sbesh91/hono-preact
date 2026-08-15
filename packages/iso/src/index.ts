@@ -56,6 +56,9 @@ export type {
 export { serverRoute, liveStream } from './server-route.js';
 export type { RouteBinder } from './server-route.js';
 
+// Status-first narrowing over a LoaderState/StreamState.
+export { match } from './loader-state.js';
+
 // Server-side caller (HTTP-free loader/action composition + testing).
 export { createCaller } from './server-caller.js';
 export type {

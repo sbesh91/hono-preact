@@ -234,3 +234,49 @@ export function toStreamState<T>(
     }
   }
 }
+
+/**
+ * Handlers for every arm of a `status`-discriminated state, each receiving the
+ * fully narrowed member. `Extract` is what makes the `success` handler read
+ * `data` with no guard while the `loading` handler cannot read it at all.
+ */
+type ExhaustiveHandlers<S extends { status: string }, R> = {
+  [K in S['status']]: (state: Extract<S, { status: K }>) => R;
+};
+
+/**
+ * Status-first narrowing over a loader or stream state. The caller cannot reach
+ * a `data` branch without the type system having narrowed `status` first, which
+ * is what makes a legitimately falsy value (`0`, `''`, `[]`) impossible to
+ * misread as "still loading".
+ *
+ * One implementation serves both `LoaderState` and `StreamState`: both
+ * discriminate on the same `status` key, so the streaming arms come along free.
+ *
+ * Exhaustive by default (a missing arm is a compile error). Supplying `_` as a
+ * catch-all allows a partial map instead; that is the escape hatch, not the
+ * habit.
+ */
+export function match<S extends { status: string }, R>(
+  state: S,
+  handlers: ExhaustiveHandlers<S, R>
+): R;
+export function match<S extends { status: string }, R>(
+  state: S,
+  handlers: Partial<ExhaustiveHandlers<S, R>> & { _: (state: S) => R }
+): R;
+export function match<S extends { status: string }, R>(
+  state: S,
+  handlers: Partial<ExhaustiveHandlers<S, R>> & { _?: (state: S) => R }
+): R {
+  const handler = handlers[state.status as S['status']];
+  if (handler) return (handler as (s: S) => R)(state);
+  // Unreachable through either public overload: the exhaustive form requires
+  // every arm and the partial form requires `_`. Kept as a real throw rather
+  // than a cast so a JS caller gets a legible failure instead of `undefined`.
+  const fallback = handlers._;
+  if (fallback) return fallback(state);
+  throw new Error(
+    `hono-preact: match() has no handler for status ${JSON.stringify(state.status)} and no \`_\` fallback.`
+  );
+}
