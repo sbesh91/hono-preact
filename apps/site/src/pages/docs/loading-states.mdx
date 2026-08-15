@@ -137,7 +137,7 @@ The render function receives a `LoaderState<T>` discriminated union. Match on `s
 | `'revalidating'` | `data: Serialize<T>`                 | A background refresh is in flight; `data` is the previous value (stale-while-revalidate). |
 | `'error'`        | `error: Error`, `data: Serialize<T>` | The loader rejected; `data` is the last good value.                                       |
 
-In the `success`, `revalidating`, and `error` arms `data` is narrowed to `Serialize<T>`, so there is no `undefined` to guard. Because the `loading` arm declares `data?: never`, `data` is readable on the un-narrowed union as `Serialize<T> | undefined` (`undefined` only while `loading`), so a render that reads `data` directly does not need to narrow on `status` first. The render function also receives any props declared by the generic `P` (see [prop passthrough in loaders](/docs/loaders)). The imperative `reload()` callback is read from `useReload()`, not passed as a render arg (see [Reloading](/docs/reloading)).
+In the `success`, `revalidating`, and `error` arms `data` is narrowed to `Serialize<T>`, so there is no `undefined` to guard. Because the `loading` arm declares `data?: never`, `data` is readable on the un-narrowed union as `Serialize<T> | undefined` (`undefined` only while `loading`), so a render that reads `data` directly does not need to narrow on `status` first. The render function's second parameter is whatever props the generic `P` declares (see [prop passthrough in loaders](/docs/loaders)). The imperative `reload()` callback is read from `useReload()`, not passed as a render arg (see [Reloading](/docs/reloading)).
 
 ## Page-level error fallback
 
