@@ -74,14 +74,22 @@ export const FEATURE_MODULES = {
   // Client routing surface below core: the NavLink component, active-route and
   // navigation/params hooks, typed path builder, and content-route helper. Each
   // is small, but together ~1 KB that shipped attributed to no bucket.
-  // OVER-STATED here by design: `nav-link.js` statically imports `use-prefetch.js`
-  // (its prefetch props need the hook called unconditionally), but the hook loads
-  // `prefetch.js` and its loader-runner graph through a dynamic `import()`. Per the
-  // header note this probe force-includes and concatenates those bytes, so this row
-  // reads as if a NavLink-only app shipped the whole prefetch machinery eagerly. It
-  // does not; a real app build splits it into its own chunk fetched on first
-  // prefetch. Same effect as the `actions` bucket. Measure the real number with an
-  // app build, not this row.
+  // OVER-STATED here by design, by roughly 3.5x. `nav-link.js` reaches the
+  // prefetch machinery (`prefetch-for.js` -> `prefetch.js` -> loader-runner)
+  // only through a dynamic `import()`, behind its `prefetch`-prop guard, so a
+  // link without that prop never even requests the chunk. Per the header note
+  // this probe force-includes every module and CONCATENATES every emitted
+  // chunk, which folds that deferred chunk straight back in, so this row reads
+  // as if a NavLink-only app shipped the whole prefetch machinery eagerly.
+  //
+  // Measured with a Vite production build of these modules, gzip, entry chunk
+  // plus its static-import closure only (peers external):
+  //   this row (all chunks concatenated) ~7.9 KB
+  //   what a NavLink app actually downloads  ~2.5 KB
+  //   the deferred prefetch chunk            ~6.0 KB
+  // Same effect as the `actions` bucket. Measure the real number with an app
+  // build, not this row. A dynamic import cannot move this number, so do not
+  // read a flat row here as a failed optimization.
   routing: [
     'nav-link.js',
     'route-active.js',
