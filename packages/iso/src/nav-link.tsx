@@ -1,8 +1,26 @@
-import type { VNode, JSX, TargetedMouseEvent } from 'preact';
+import type {
+  VNode,
+  JSX,
+  TargetedMouseEvent,
+  TargetedPointerEvent,
+  TargetedFocusEvent,
+} from 'preact';
+import { useCallback, useEffect, useRef } from 'preact/hooks';
 import type { DistributiveOmit } from './internal/element-props.js';
 import { useRouteActive } from './route-active.js';
 import type { RoutePattern } from './internal/typed-routes.js';
 import { skipNextNavTransition } from './internal/route-change.js';
+import type { AnyLoaderRef } from './define-loader.js';
+import { usePrefetch } from './use-prefetch.js';
+
+// Hoisted so its identity is stable across renders: usePrefetch's internal
+// useCallback depends on `refs`, and a fresh `[]` literal on every render
+// would defeat that memo for every NavLink that doesn't pass prefetchLoaders.
+const EMPTY_LOADER_REFS: ReadonlyArray<AnyLoaderRef> = [];
+
+// Debounce before a hover counts as intent to navigate, so a cursor merely
+// passing over the link on its way elsewhere doesn't trigger a fetch.
+const HOVER_INTENT_MS = 150;
 
 // Anchor-specific, not the generic element attributes: `target`, `rel`,
 // `download`, `ping`, and `referrerpolicy` are anchor-only, and
@@ -28,6 +46,15 @@ export type NavLinkProps = DistributiveOmit<
   inactiveClass?: string;
   /** Set false to navigate without a view transition. Default: animate. */
   transition?: boolean;
+  /**
+   * Prefetch `prefetchLoaders` for this link's target route. `'hover'` warms on
+   * hover intent (and immediately on focus, so keyboard users get the same
+   * warming); `'visible'` warms once the link enters the viewport. Default: no
+   * prefetching.
+   */
+  prefetch?: 'hover' | 'visible' | false;
+  /** Loaders to prefetch. Required for `prefetch` to do anything. */
+  prefetchLoaders?: AnyLoaderRef | ReadonlyArray<AnyLoaderRef>;
 };
 
 // Whether a plain left-click on this link will trigger a preact-iso client
@@ -60,13 +87,32 @@ export function NavLink(props: NavLinkProps): VNode {
     activeClass,
     inactiveClass,
     transition,
+    prefetch,
+    prefetchLoaders,
     onClick: onClickProp,
+    onPointerEnter: onPointerEnterProp,
+    onPointerLeave: onPointerLeaveProp,
+    onFocus: onFocusProp,
     'aria-current': ariaCurrentProp,
     children,
     ...rest
   } = props;
 
   const active = useRouteActive(match ?? href, { exact });
+
+  const runPrefetch = usePrefetch(href, prefetchLoaders ?? EMPTY_LOADER_REFS);
+  const prefetchEnabled = prefetch === 'hover' || prefetch === 'visible';
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const anchorRef = useRef<HTMLAnchorElement | null>(null);
+  // Fires at most once per mount: a warm loader cache already makes repeat
+  // `runPrefetch()` calls a no-op, but this also skips the redundant call.
+  const fired = useRef(false);
+
+  const firePrefetch = useCallback(() => {
+    if (!prefetchEnabled || fired.current) return;
+    fired.current = true;
+    runPrefetch();
+  }, [prefetchEnabled, runPrefetch]);
 
   const className =
     [baseClass, active ? activeClass : inactiveClass]
@@ -90,13 +136,65 @@ export function NavLink(props: NavLinkProps): VNode {
     onClickProp?.(e);
   };
 
+  const handlePointerEnter = (e: TargetedPointerEvent<HTMLAnchorElement>) => {
+    if (prefetch === 'hover') {
+      hoverTimer.current = setTimeout(firePrefetch, HOVER_INTENT_MS);
+    }
+    onPointerEnterProp?.(e);
+  };
+
+  const handlePointerLeave = (e: TargetedPointerEvent<HTMLAnchorElement>) => {
+    if (hoverTimer.current !== null) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+    onPointerLeaveProp?.(e);
+  };
+
+  const handleFocus = (e: TargetedFocusEvent<HTMLAnchorElement>) => {
+    // No debounce on focus: focus is already an explicit intent signal, and a
+    // keyboard user tabbing through gets the same warming a pointer user gets.
+    if (prefetch === 'hover') firePrefetch();
+    onFocusProp?.(e);
+  };
+
+  useEffect(() => {
+    if (prefetch !== 'visible') return;
+    const el = anchorRef.current;
+    // Guard for SSR and older runtimes: fail open (no prefetch) rather than
+    // throw when IntersectionObserver isn't available.
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          firePrefetch();
+          io.disconnect();
+          return;
+        }
+      }
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [prefetch, firePrefetch]);
+
+  useEffect(
+    () => () => {
+      if (hoverTimer.current !== null) clearTimeout(hoverTimer.current);
+    },
+    []
+  );
+
   return (
     <a
       {...rest}
+      ref={anchorRef}
       href={href}
       class={className}
       aria-current={ariaCurrent}
       onClick={handleClick}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onFocus={handleFocus}
     >
       {children}
     </a>
