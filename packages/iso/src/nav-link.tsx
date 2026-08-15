@@ -5,17 +5,17 @@ import type {
   TargetedPointerEvent,
   TargetedFocusEvent,
 } from 'preact';
-import { useCallback, useEffect, useRef } from 'preact/hooks';
+import { useCallback, useContext, useEffect, useRef } from 'preact/hooks';
 import type { DistributiveOmit } from './internal/element-props.js';
 import { useRouteActive } from './route-active.js';
 import type { RoutePattern } from './internal/typed-routes.js';
 import { skipNextNavTransition } from './internal/route-change.js';
 import type { AnyLoaderRef } from './define-loader.js';
-import { usePrefetch } from './use-prefetch.js';
+import { RouteManifestContext } from './internal/route-manifest.js';
 
-// Hoisted so its identity is stable across renders: usePrefetch's internal
-// useCallback depends on `refs`, and a fresh `[]` literal on every render
-// would defeat that memo for every NavLink that doesn't pass prefetchLoaders.
+// Hoisted so its identity is stable across renders: `firePrefetch`'s useCallback
+// depends on the refs, and a fresh `[]` literal on every render would defeat
+// that memo for every NavLink that doesn't pass prefetchLoaders.
 const EMPTY_LOADER_REFS: ReadonlyArray<AnyLoaderRef> = [];
 
 // Debounce before a hover counts as intent to navigate, so a cursor merely
@@ -100,7 +100,10 @@ export function NavLink(props: NavLinkProps): VNode {
 
   const active = useRouteActive(match ?? href, { exact });
 
-  const runPrefetch = usePrefetch(href, prefetchLoaders ?? EMPTY_LOADER_REFS);
+  // Read at render time and captured by the callback below: a hook cannot run
+  // inside the async prefetch path, and this context is cheap (a plain
+  // createContext value, no prefetch code reachable from it).
+  const routes = useContext(RouteManifestContext);
   const prefetchEnabled = prefetch === 'hover' || prefetch === 'visible';
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const anchorRef = useRef<HTMLAnchorElement | null>(null);
@@ -128,8 +131,18 @@ export function NavLink(props: NavLinkProps): VNode {
   const firePrefetch = useCallback(() => {
     if (!prefetchEnabled || fired.current) return;
     fired.current = true;
-    runPrefetch();
-  }, [prefetchEnabled, runPrefetch]);
+    // Loaded lazily, and it must stay that way. `prefetch-for.js` statically
+    // imports prefetch.js and its loader-runner graph; pulling that in through
+    // a top-level import here would put those bytes in the always-shipped
+    // routing bundle of every app that renders a NavLink, including one that
+    // never passes the `prefetch` prop. It measured ~4.8 KB gzip when static.
+    // The specifier is a plain literal so Vite can analyze it and emit a real
+    // separate chunk, and the guard above means a NavLink without the prop
+    // never reaches this line, so the chunk is never even requested.
+    void import('./prefetch-for.js').then(({ prefetchFor }) => {
+      prefetchFor(href, prefetchLoaders ?? EMPTY_LOADER_REFS, routes);
+    });
+  }, [prefetchEnabled, href, prefetchLoaders, routes]);
 
   const className =
     [baseClass, active ? activeClass : inactiveClass]

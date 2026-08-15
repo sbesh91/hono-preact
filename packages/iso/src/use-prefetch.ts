@@ -1,37 +1,7 @@
 import { useCallback, useContext } from 'preact/hooks';
-import type { RouteHook } from 'preact-iso';
 import type { AnyLoaderRef } from './define-loader.js';
-import { matchPath } from './route-active.js';
 import { RouteManifestContext } from './internal/route-manifest.js';
-
-function parseHref(href: string): {
-  path: string;
-  searchParams: Record<string, string>;
-} {
-  const parsed = new URL(href, 'http://_');
-  let path = parsed.pathname;
-  if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
-  const searchParams: Record<string, string> = {};
-  parsed.searchParams.forEach((value, key) => {
-    searchParams[key] = value;
-  });
-  return { path, searchParams };
-}
-
-// Specificity for picking among overlapping matches (a `:param`/`*` catch-all
-// can match the same href as a literal leaf). Literal segments rank highest,
-// then `:param`, then `*`; the most specific server route is the one the
-// router lands on, so its params are the ones the target loader reads.
-function specificity(pattern: string): number {
-  let score = 0;
-  for (const seg of pattern.split('/')) {
-    if (seg === '') continue;
-    if (seg.includes('*')) score += 1;
-    else if (seg.startsWith(':')) score += 2;
-    else score += 3;
-  }
-  return score;
-}
+import { prefetchFor } from './prefetch-for.js';
 
 /**
  * Returns a callback that prefetches `refs` for the route `href` points at.
@@ -39,39 +9,20 @@ function specificity(pattern: string): number {
  * IntersectionObserver). The route's params are resolved from the manifest, so
  * callers do not repeat the route pattern. A warm cache makes repeat calls a
  * no-op (see `prefetch`).
+ *
+ * Statically imports the prefetch machinery, which is correct here: reaching
+ * for this hook IS opting into prefetching, so its cost belongs to the app that
+ * called it. `<NavLink>`'s `prefetch` prop cannot use this hook (a component
+ * that renders without the prop must not pay those bytes), so it calls
+ * `prefetchFor` through a dynamic import instead.
  */
 export function usePrefetch(
   href: string,
   refs: AnyLoaderRef | ReadonlyArray<AnyLoaderRef>
 ): () => void {
   const routes = useContext(RouteManifestContext);
-  return useCallback(() => {
-    const { path, searchParams } = parseHref(href);
-    let bestParams: Record<string, string> | null = null;
-    let bestScore = -1;
-    for (const route of routes) {
-      const params = matchPath(path, route.path, true);
-      if (!params) continue;
-      const score = specificity(route.path);
-      if (score > bestScore) {
-        bestScore = score;
-        bestParams = params;
-      }
-    }
-    if (!bestParams) return; // off-manifest or outside Routes: best-effort no-op
-    const location: RouteHook = { path, pathParams: bestParams, searchParams };
-    const list = Array.isArray(refs) ? refs : [refs];
-    // `prefetch.js` is loaded lazily, and must stay that way. `<NavLink>` calls
-    // this hook unconditionally (rules of hooks), so a static import would put
-    // prefetch.js and its graph (loader-runner, cache-key) into the
-    // always-shipped routing bundle of every app that renders a NavLink, even
-    // one that never opts into prefetching. Measured at ~4.8 KB gzip when it
-    // was static. The specifier is a plain literal so Vite can statically
-    // analyze it and emit a real separate chunk. The work is already
-    // fire-and-forget, so deferring it by a microtask changes nothing a caller
-    // can observe: this callback still returns void, synchronously.
-    void import('./prefetch.js').then(({ prefetch }) => {
-      for (const ref of list) void prefetch(ref, { location });
-    });
-  }, [href, refs, routes]);
+  return useCallback(
+    () => prefetchFor(href, refs, routes),
+    [href, refs, routes]
+  );
 }

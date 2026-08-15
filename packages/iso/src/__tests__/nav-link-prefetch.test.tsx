@@ -5,19 +5,44 @@ import { LocationProvider } from 'preact-iso';
 import { NavLink } from '../nav-link.js';
 import type { AnyLoaderRef } from '../define-loader.js';
 
-// Records the href it was constructed with each time the returned callback
-// fires, so a test can tell which target a given prefetch call was for.
+// Records the href of each prefetch, so a test can tell which target a given
+// call was for.
 const prefetchSpy = vi.fn();
-// Records the ARGUMENTS the hook itself was constructed with, so a test can
-// assert the caller's loader refs actually reach `usePrefetch` rather than
-// only that some prefetch happened.
-const usePrefetchSpy = vi.fn();
-vi.mock('../use-prefetch.js', () => ({
-  usePrefetch: (href: string, refs: unknown) => {
-    usePrefetchSpy(href, refs);
-    return () => prefetchSpy(href);
+// Records the full (href, refs) a prefetch was issued with, so a test can
+// assert the caller's loader refs actually reach the prefetch machinery rather
+// than only that some prefetch happened. Dropping `prefetchLoaders` on the way
+// through must fail a test.
+const prefetchArgsSpy = vi.fn();
+// NavLink reaches the prefetch machinery through a dynamic `import()` of
+// `prefetch-for.js`, so that module is what a test mocks. NavLink deliberately
+// does NOT import `usePrefetch`: a static edge would put the prefetch graph in
+// every app that renders a link. Mocking the hook here would therefore assert
+// nothing about NavLink.
+vi.mock('../prefetch-for.js', () => ({
+  prefetchFor: (href: string, refs: unknown, _routes: unknown) => {
+    prefetchArgsSpy(href, refs);
+    prefetchSpy(href);
   },
 }));
+
+// REAL timers, deliberately. NavLink reaches the prefetch machinery through a
+// dynamic `import()`, and vitest resolves a dynamic import through its async
+// module runner, which needs a real MACROTASK to settle -- microtask draining
+// and `advanceTimersByTimeAsync` both leave it pending, and it stays pending
+// even when the module is already cached. Fake timers therefore cannot drive
+// this component at all, so these tests wait on real elapsed time instead. The
+// waits are bounded by HOVER_INTENT_MS (150 ms) and cost ~1s for the suite.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Yield a real macrotask so a pending dynamic import can settle. Assertions
+// that a prefetch did NOT happen settle too, so they prove "never" rather than
+// "not yet".
+const flush = () => sleep(0);
+
+// Comfortably past the 150 ms hover-intent debounce.
+const PAST_INTENT_MS = 220;
+// Comfortably short of it.
+const BEFORE_INTENT_MS = 40;
 
 const ref = { __id: Symbol('r') } as unknown as AnyLoaderRef;
 const ref2 = { __id: Symbol('r2') } as unknown as AnyLoaderRef;
@@ -64,29 +89,28 @@ class TestIntersectionObserver {
 describe('NavLink prefetch', () => {
   beforeEach(() => {
     prefetchSpy.mockClear();
-    usePrefetchSpy.mockClear();
+    prefetchArgsSpy.mockClear();
     observers = [];
     vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
-    vi.useFakeTimers();
   });
   afterEach(() => {
     cleanup();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it('does not prefetch when the prop is absent', () => {
+  it('does not prefetch when the prop is absent', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a">A</NavLink>
       </LocationProvider>
     );
     fireEvent.pointerEnter(getByText('A'));
-    vi.advanceTimersByTime(500);
+    await sleep(PAST_INTENT_MS);
+    await flush();
     expect(prefetchSpy).not.toHaveBeenCalled();
   });
 
-  it('hover fires once after the intent delay', () => {
+  it('hover fires once after the intent delay', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
@@ -95,12 +119,14 @@ describe('NavLink prefetch', () => {
       </LocationProvider>
     );
     fireEvent.pointerEnter(getByText('A'));
+    await flush();
     expect(prefetchSpy).not.toHaveBeenCalled(); // debounced, not immediate
-    vi.advanceTimersByTime(150);
+    await sleep(PAST_INTENT_MS);
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('leaving before the delay cancels the prefetch', () => {
+  it('leaving before the delay cancels the prefetch', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
@@ -110,13 +136,14 @@ describe('NavLink prefetch', () => {
     );
     const a = getByText('A');
     fireEvent.pointerEnter(a);
-    vi.advanceTimersByTime(50);
+    await sleep(BEFORE_INTENT_MS);
     fireEvent.pointerLeave(a);
-    vi.advanceTimersByTime(500);
+    await sleep(PAST_INTENT_MS);
+    await flush();
     expect(prefetchSpy).not.toHaveBeenCalled();
   });
 
-  it('focus prefetches immediately for keyboard users', () => {
+  it('focus prefetches immediately for keyboard users', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
@@ -125,10 +152,11 @@ describe('NavLink prefetch', () => {
       </LocationProvider>
     );
     fireEvent.focus(getByText('A'));
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('prefetch={false} disables it', () => {
+  it('prefetch={false} disables it', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch={false} prefetchLoaders={ref}>
@@ -137,11 +165,12 @@ describe('NavLink prefetch', () => {
       </LocationProvider>
     );
     fireEvent.pointerEnter(getByText('A'));
-    vi.advanceTimersByTime(500);
+    await sleep(PAST_INTENT_MS);
+    await flush();
     expect(prefetchSpy).not.toHaveBeenCalled();
   });
 
-  it('does not leak the new props onto the anchor element', () => {
+  it('does not leak the new props onto the anchor element', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
@@ -154,7 +183,7 @@ describe('NavLink prefetch', () => {
     expect(a.getAttribute('prefetchLoaders')).toBeNull();
   });
 
-  it('fire-once still holds when hovering the same href repeatedly', () => {
+  it('fire-once still holds when hovering the same href repeatedly', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
@@ -164,11 +193,13 @@ describe('NavLink prefetch', () => {
     );
     const a = getByText('A');
     fireEvent.pointerEnter(a);
-    vi.advanceTimersByTime(150);
+    await sleep(PAST_INTENT_MS);
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
     fireEvent.pointerLeave(a);
     fireEvent.pointerEnter(a);
-    vi.advanceTimersByTime(150);
+    await sleep(PAST_INTENT_MS);
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -177,7 +208,7 @@ describe('NavLink prefetch', () => {
   // re-fire across descendants -- that is `pointerover`). This covers the
   // dispatched-event case, where an un-cleared first timer would be orphaned
   // beyond `handlePointerLeave`'s reach and fire after the cursor left.
-  it('a synthetic repeated pointerEnter leaves no orphaned timer', () => {
+  it('a synthetic repeated pointerEnter leaves no orphaned timer', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
@@ -187,15 +218,16 @@ describe('NavLink prefetch', () => {
     );
     const a = getByText('A');
     fireEvent.pointerEnter(a);
-    vi.advanceTimersByTime(50);
+    await sleep(BEFORE_INTENT_MS);
     fireEvent.pointerEnter(a);
-    vi.advanceTimersByTime(50);
+    await sleep(BEFORE_INTENT_MS);
     fireEvent.pointerLeave(a);
-    vi.advanceTimersByTime(500);
+    await sleep(PAST_INTENT_MS);
+    await flush();
     expect(prefetchSpy).not.toHaveBeenCalled();
   });
 
-  it('a changed href on the same instance becomes prefetchable again', () => {
+  it('a changed href on the same instance becomes prefetchable again', async () => {
     const { getByText, rerender } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
@@ -204,7 +236,9 @@ describe('NavLink prefetch', () => {
       </LocationProvider>
     );
     fireEvent.focus(getByText('A'));
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
+    await flush();
     expect(prefetchSpy).toHaveBeenLastCalledWith('/a');
 
     // Same component position, different href: simulates a reorderable list
@@ -217,11 +251,13 @@ describe('NavLink prefetch', () => {
       </LocationProvider>
     );
     fireEvent.focus(getByText('A'));
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(2);
+    await flush();
     expect(prefetchSpy).toHaveBeenLastCalledWith('/b');
   });
 
-  it('preserves active-state behavior alongside prefetch', () => {
+  it('preserves active-state behavior alongside prefetch', async () => {
     const { getByText } = render(
       <LocationProvider>
         <NavLink
@@ -238,30 +274,34 @@ describe('NavLink prefetch', () => {
     expect((getByText('A') as HTMLAnchorElement).className).toContain('base');
   });
 
-  it('passes a single prefetchLoaders ref through to usePrefetch', () => {
-    render(
+  it('passes a single prefetchLoaders ref through to the prefetch call', async () => {
+    const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
           A
         </NavLink>
       </LocationProvider>
     );
-    expect(usePrefetchSpy).toHaveBeenLastCalledWith('/a', ref);
+    fireEvent.focus(getByText('A'));
+    await flush();
+    expect(prefetchArgsSpy).toHaveBeenLastCalledWith('/a', ref);
   });
 
-  it('passes an array of prefetchLoaders refs through to usePrefetch', () => {
+  it('passes an array of prefetchLoaders refs through to the prefetch call', async () => {
     const refs = [ref, ref2];
-    render(
+    const { getByText } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={refs}>
           A
         </NavLink>
       </LocationProvider>
     );
-    expect(usePrefetchSpy).toHaveBeenLastCalledWith('/a', refs);
+    fireEvent.focus(getByText('A'));
+    await flush();
+    expect(prefetchArgsSpy).toHaveBeenLastCalledWith('/a', refs);
   });
 
-  it('visible prefetches once the link intersects the viewport', () => {
+  it('visible prefetches once the link intersects the viewport', async () => {
     render(
       <LocationProvider>
         <NavLink href="/a" prefetch="visible" prefetchLoaders={ref}>
@@ -270,13 +310,16 @@ describe('NavLink prefetch', () => {
       </LocationProvider>
     );
     expect(observers).toHaveLength(1);
+    await flush();
     expect(prefetchSpy).not.toHaveBeenCalled();
     observers[0].trigger(true);
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
+    await flush();
     expect(prefetchSpy).toHaveBeenLastCalledWith('/a');
   });
 
-  it('visible does not prefetch while the link is off screen', () => {
+  it('visible does not prefetch while the link is off screen', async () => {
     render(
       <LocationProvider>
         <NavLink href="/a" prefetch="visible" prefetchLoaders={ref}>
@@ -286,11 +329,12 @@ describe('NavLink prefetch', () => {
     );
     observers[0].trigger(false);
     observers[0].trigger(false);
+    await flush();
     expect(prefetchSpy).not.toHaveBeenCalled();
     expect(observers[0].disconnected).toBe(0);
   });
 
-  it('visible disconnects the observer after firing', () => {
+  it('visible disconnects the observer after firing', async () => {
     render(
       <LocationProvider>
         <NavLink href="/a" prefetch="visible" prefetchLoaders={ref}>
@@ -302,10 +346,11 @@ describe('NavLink prefetch', () => {
     expect(observers[0].disconnected).toBeGreaterThanOrEqual(1);
     // A second intersection after disconnect must not re-fire.
     observers[0].trigger(true);
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('visible observes the anchor and disconnects on unmount', () => {
+  it('visible observes the anchor and disconnects on unmount', async () => {
     const { getByText, unmount } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="visible" prefetchLoaders={ref}>
@@ -319,7 +364,7 @@ describe('NavLink prefetch', () => {
     expect(observers[0].disconnected).toBeGreaterThanOrEqual(1);
   });
 
-  it('an href change mid-debounce leaves the new href prefetchable', () => {
+  it('an href change mid-debounce leaves the new href prefetchable', async () => {
     const { getByText, rerender } = render(
       <LocationProvider>
         <NavLink href="/a" prefetch="hover" prefetchLoaders={ref}>
@@ -330,7 +375,7 @@ describe('NavLink prefetch', () => {
     // Pointer enters /a, then the list reorders under a stationary cursor
     // before the intent delay elapses: no pointerLeave fires.
     fireEvent.pointerEnter(getByText('A'));
-    vi.advanceTimersByTime(50);
+    await sleep(BEFORE_INTENT_MS);
     rerender(
       <LocationProvider>
         <NavLink href="/b" prefetch="hover" prefetchLoaders={ref}>
@@ -338,12 +383,15 @@ describe('NavLink prefetch', () => {
         </NavLink>
       </LocationProvider>
     );
-    vi.advanceTimersByTime(500);
+    await sleep(PAST_INTENT_MS);
     // The stale timer must not have fired for /a and burned the guard.
+    await flush();
     expect(prefetchSpy).not.toHaveBeenCalled();
 
     fireEvent.focus(getByText('A'));
+    await flush();
     expect(prefetchSpy).toHaveBeenCalledTimes(1);
+    await flush();
     expect(prefetchSpy).toHaveBeenLastCalledWith('/b');
   });
 });
