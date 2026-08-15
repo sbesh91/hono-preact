@@ -101,6 +101,7 @@ export { buildPath } from './build-path.js';
 
 // Forms.
 export { Form } from './form.js';
+export type { InvalidateInput } from './use-invalidate.js';
 export { useActionResult, type ActionResult } from './use-action-result.js';
 export { getValidationIssues } from './get-validation-issues.js';
 export type { ValidationIssue } from './validate.js';

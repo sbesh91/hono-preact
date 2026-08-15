@@ -33,6 +33,8 @@
     "HonoPreactAdapter.name",
     "HonoPreactAdapter.vitePlugins",
     "HonoPreactAdapter.wrapEntry",
+    "InvalidateInput.clear",
+    "InvalidateInput.refetchActive",
     "LayoutProps.children",
     "LoaderCache.get",
     "LoaderCache.has",
