@@ -20,7 +20,10 @@ afterEach(() => {
 // so these assert both arrive unmerged.
 function renderViewRenderer(
   state: LoaderState<unknown> | StreamState<unknown>,
-  renderFn: (state: ViewState, props: Record<string, unknown>) => ComponentChildren,
+  renderFn: (
+    state: ViewState,
+    props: Record<string, unknown>
+  ) => ComponentChildren,
   props: Record<string, unknown> = {}
 ) {
   render(

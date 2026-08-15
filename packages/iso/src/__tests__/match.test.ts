@@ -7,8 +7,10 @@ describe('match', () => {
     const handlers = {
       loading: () => 'loading',
       success: (s: { status: 'success'; data: number }) => `ok:${s.data}`,
-      revalidating: (s: { status: 'revalidating'; data: number }) => `re:${s.data}`,
-      error: (s: { status: 'error'; error: Error; data: number }) => `err:${s.error.message}`,
+      revalidating: (s: { status: 'revalidating'; data: number }) =>
+        `re:${s.data}`,
+      error: (s: { status: 'error'; error: Error; data: number }) =>
+        `err:${s.error.message}`,
     };
     const loading: LoaderState<number> = { status: 'loading' };
     const success: LoaderState<number> = { status: 'success', data: 7 };
