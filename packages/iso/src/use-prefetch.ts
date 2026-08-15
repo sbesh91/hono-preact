@@ -1,7 +1,6 @@
 import { useCallback, useContext } from 'preact/hooks';
 import type { RouteHook } from 'preact-iso';
 import type { AnyLoaderRef } from './define-loader.js';
-import { prefetch } from './prefetch.js';
 import { matchPath } from './route-active.js';
 import { RouteManifestContext } from './internal/route-manifest.js';
 
@@ -62,6 +61,17 @@ export function usePrefetch(
     if (!bestParams) return; // off-manifest or outside Routes: best-effort no-op
     const location: RouteHook = { path, pathParams: bestParams, searchParams };
     const list = Array.isArray(refs) ? refs : [refs];
-    for (const ref of list) void prefetch(ref, { location });
+    // `prefetch.js` is loaded lazily, and must stay that way. `<NavLink>` calls
+    // this hook unconditionally (rules of hooks), so a static import would put
+    // prefetch.js and its graph (loader-runner, cache-key) into the
+    // always-shipped routing bundle of every app that renders a NavLink, even
+    // one that never opts into prefetching. Measured at ~4.8 KB gzip when it
+    // was static. The specifier is a plain literal so Vite can statically
+    // analyze it and emit a real separate chunk. The work is already
+    // fire-and-forget, so deferring it by a microtask changes nothing a caller
+    // can observe: this callback still returns void, synchronously.
+    void import('./prefetch.js').then(({ prefetch }) => {
+      for (const ref of list) void prefetch(ref, { location });
+    });
   }, [href, refs, routes]);
 }

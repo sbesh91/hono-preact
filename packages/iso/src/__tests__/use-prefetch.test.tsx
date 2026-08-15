@@ -56,10 +56,16 @@ function renderIn(href: string, refs: AnyLoaderRef) {
   );
 }
 
+// The hook loads `prefetch.js` through a dynamic `import()` (it is deferred so
+// a NavLink that never prefetches does not ship it), so the call lands a
+// microtask after the click rather than synchronously inside the handler.
+const flushDynamicImport = () => new Promise((r) => setTimeout(r, 0));
+
 describe('usePrefetch', () => {
-  it('resolves nested-leaf params from the manifest and prefetches the loader', () => {
+  it('resolves nested-leaf params from the manifest and prefetches the loader', async () => {
     const { getByRole } = renderIn('/demo/projects/p1/issues/i1', ref);
     fireEvent.click(getByRole('button'));
+    await flushDynamicImport();
     expect(prefetchSpy).toHaveBeenCalledWith(ref, {
       location: {
         path: '/demo/projects/p1/issues/i1',
@@ -69,9 +75,10 @@ describe('usePrefetch', () => {
     });
   });
 
-  it('is a no-op when no manifest route matches', () => {
+  it('is a no-op when no manifest route matches', async () => {
     const { getByRole } = renderIn('/nope', ref);
     fireEvent.click(getByRole('button'));
+    await flushDynamicImport();
     expect(prefetchSpy).not.toHaveBeenCalled();
   });
 });

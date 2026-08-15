@@ -74,6 +74,14 @@ export const FEATURE_MODULES = {
   // Client routing surface below core: the NavLink component, active-route and
   // navigation/params hooks, typed path builder, and content-route helper. Each
   // is small, but together ~1 KB that shipped attributed to no bucket.
+  // OVER-STATED here by design: `nav-link.js` statically imports `use-prefetch.js`
+  // (its prefetch props need the hook called unconditionally), but the hook loads
+  // `prefetch.js` and its loader-runner graph through a dynamic `import()`. Per the
+  // header note this probe force-includes and concatenates those bytes, so this row
+  // reads as if a NavLink-only app shipped the whole prefetch machinery eagerly. It
+  // does not; a real app build splits it into its own chunk fetched on first
+  // prefetch. Same effect as the `actions` bucket. Measure the real number with an
+  // app build, not this row.
   routing: [
     'nav-link.js',
     'route-active.js',
