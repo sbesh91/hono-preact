@@ -180,10 +180,27 @@ Consumers: the `invalidate` option on `useAction`
 
 ### `MutateResult` interaction
 
-The `navigated` arm invalidates declared loaders through the existing tri-mode
-call. That path must be re-expressed in the new shape and must cover the same
-cases; a test asserting the `navigated` arm still invalidates its declared
-loaders is a required part of this change, not an optional extra.
+#372 states that "declared loaders are invalidated on that arm today via the
+existing tri-mode call". **That premise is false and was verified against
+source.** In `packages/iso/src/action.ts`, the `navigated` branch returns
+`{ ok: true, kind: 'navigated' }` at line 765, *before* the
+`applyInvalidate(currentOptions?.invalidate)` call at line 770. The arm is
+therefore unreachable from any invalidation path, and the omission is
+deliberate, with a documented rationale: `assignSafeRedirect` drives the
+redirect through `window.location.assign`, a full document load, so the
+destination gets a fresh SSR payload and fresh in-memory loader caches. A
+client-side invalidation there would be useless and would race the document
+teardown.
+
+Consequences for this change:
+
+- There is no `navigated` invalidation behaviour to port. The new shape must
+  simply preserve the existing early return.
+- The required test is the inverse of what the issue implies: assert that the
+  `navigated` arm does **not** invalidate declared loaders, so the new shape
+  cannot accidentally move `applyInvalidate` above the early return. This is a
+  characterization test protecting existing intent, and it must be
+  mutation-checked by moving the call above the return and observing a failure.
 
 ### Out of scope
 
@@ -424,8 +441,9 @@ every regression test is mutation-checked.
   both `LoaderState` and `StreamState`, and that the `_` overload catches
   unlisted arms.
 - `invalidate`: behavioural parity tests for all three replacement spellings
-  through `useAction` and `<Form>`, plus the `MutateResult` `navigated` arm
-  invalidating its declared loaders.
+  through `useAction` and `<Form>`, plus a characterization test that the
+  `MutateResult` `navigated` arm does **not** invalidate declared loaders (see
+  the correction above).
 - `View` signature: type tests that a caller prop named `data` or `status` no
   longer collides, using the exact two reproductions above as regression cases,
   written as plain checked `.ts` (not `.test-d.ts`, per the exclusion noted
