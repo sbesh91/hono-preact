@@ -319,7 +319,7 @@ CommentsSection.displayName = 'CommentsSection';
 // `connecting` phase (data is undefined); once `open`, even an empty list
 // renders the empty state via CommentsSection.
 const CommentsView = commentsLoader.View<CommentData[], { taskId: string }>(
-  ({ data, taskId }) =>
+  ({ data }, { taskId }) =>
     data ? (
       <CommentsSection comments={data} taskId={taskId} />
     ) : (

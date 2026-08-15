@@ -145,12 +145,13 @@ export type Loader<
   | ((ctx: LoaderCtx<TParams, TSearch>) => Promise<ReadableStream<T>>);
 
 // The accumulating (streaming) `.View` form: streaming loaders only. The render fn
-// receives the `StreamState<Acc>` discriminated union (pattern-match on
-// `status`); the folded accumulator rides the data-carrying arms. The chunk
-// handed to `reduce` is the JSON-round-tripped wire shape (`Serialize<T>`). The
-// explicit reload callback is read via `useReload()`, not handed in.
+// receives the discriminated union as its first argument and the caller's own
+// props as its second: `StreamState<Acc>` (pattern-match on `status`), with the
+// folded accumulator riding the data-carrying arms. The chunk handed to
+// `reduce` is the JSON-round-tripped wire shape (`Serialize<T>`). The explicit
+// reload callback is read via `useReload()`, not handed in.
 type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
-  render: (args: StreamState<Acc> & P) => ComponentChildren,
+  render: (state: StreamState<Acc>, props: P) => ComponentChildren,
   opts: {
     initial: Acc;
     reduce: (acc: Acc, chunk: Serialize<T>) => Acc;
@@ -160,13 +161,14 @@ type AccumulatingView<T> = <Acc, P extends Record<string, unknown> = {}>(
   }
 ) => FunctionComponent<P>;
 
-// The single-value `.View` form: non-streaming loaders. The render fn receives the
-// `LoaderState<Serialize<T>>` discriminated union (pattern-match on `status`);
-// the loader value (the JSON round-trip the client receives) rides the
+// The single-value `.View` form: non-streaming loaders. The render fn receives
+// the discriminated union as its first argument and the caller's own props as
+// its second: `LoaderState<Serialize<T>>` (pattern-match on `status`), with the
+// loader value (the JSON round-trip the client receives) riding the
 // data-carrying arms. The explicit reload callback is read via `useReload()`,
 // not handed in.
 type SingleValueView<T> = <P extends Record<string, unknown> = {}>(
-  render: (args: LoaderState<Serialize<T>> & P) => ComponentChildren,
+  render: (state: LoaderState<Serialize<T>>, props: P) => ComponentChildren,
   opts?: {
     errorFallback?:
       | ComponentChildren
@@ -827,12 +829,12 @@ function makeLoaderRef(
         children: props.children,
       });
     },
-    // `render: (args: any)` (not `any`) keeps the call shape while satisfying
+    // `render: (state: any, props: any)` keeps the call shape while satisfying
     // both public overloads; `any` survives only on `reduce` (the unavoidable
     // variance seam between the two opts shapes). The public contract is the
     // two `View` overloads above; this implementation signature is internal.
     View: (
-      render: (args: any) => ComponentChildren,
+      render: (state: any, props: any) => ComponentChildren,
       viewOpts?: {
         initial?: unknown;
         reduce?: (acc: any, chunk: any) => any;
