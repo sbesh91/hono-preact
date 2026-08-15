@@ -255,7 +255,7 @@ describe('useAction', () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error), 'snapshot-value');
   });
 
-  it('calls reload when invalidate is "auto"', async () => {
+  it('calls reload when invalidate is { refetchActive: true }', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -270,7 +270,9 @@ describe('useAction', () => {
     const reload = vi.fn();
 
     function TestComponent() {
-      const { mutate } = useAction(stub, { invalidate: 'auto' });
+      const { mutate } = useAction(stub, {
+        invalidate: { refetchActive: true },
+      });
       return <button onClick={() => mutate({ title: 'Dune' })}>go</button>;
     }
 
@@ -286,7 +288,7 @@ describe('useAction', () => {
     await waitFor(() => expect(reload).toHaveBeenCalledOnce());
   });
 
-  it('does not call reload when invalidate is false', async () => {
+  it('does not call reload when invalidate is omitted', async () => {
     vi.stubGlobal(
       'fetch',
       vi
@@ -301,7 +303,7 @@ describe('useAction', () => {
     const reload = vi.fn();
 
     function TestComponent() {
-      const { mutate } = useAction(stub, { invalidate: false });
+      const { mutate } = useAction(stub);
       return <button onClick={() => mutate({ title: 'Dune' })}>go</button>;
     }
 
@@ -345,7 +347,9 @@ describe('useAction', () => {
     } as unknown as ActionRef<Record<string, never>, { ok: true }>;
 
     function TestComponent() {
-      const { mutate } = useAction(refStub, { invalidate: [active, other] });
+      const { mutate } = useAction(refStub, {
+        invalidate: { clear: [active, other] },
+      });
       return <button onClick={() => mutate({})}>go</button>;
     }
 
@@ -391,7 +395,7 @@ describe('useAction', () => {
     } as unknown as ActionRef<Record<string, never>, { ok: true }>;
 
     function TestComponent() {
-      const { mutate } = useAction(refStub, { invalidate: [other] });
+      const { mutate } = useAction(refStub, { invalidate: { clear: [other] } });
       return <button onClick={() => mutate({})}>go</button>;
     }
 
@@ -438,7 +442,7 @@ describe('useAction', () => {
     );
 
     function TestComponent() {
-      const { mutate } = useAction(refStub, { invalidate: [a, b] });
+      const { mutate } = useAction(refStub, { invalidate: { clear: [a, b] } });
       return <button onClick={() => mutate({})}>go</button>;
     }
 
@@ -854,7 +858,7 @@ describe('useAction — outcome envelope decoding', () => {
     } as unknown as ActionRef<Record<string, never>, { ok: true }>;
 
     const { result } = renderHook(() =>
-      useAction(refStub, { invalidate: [loader] })
+      useAction(refStub, { invalidate: { clear: [loader] } })
     );
     await act(async () => {
       await result.current.mutate({});

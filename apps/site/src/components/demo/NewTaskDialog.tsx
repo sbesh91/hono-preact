@@ -70,7 +70,7 @@ const NewTaskDialog: FunctionComponent<Props> = ({ projectId, users }) => {
         <Form
           action={serverActions.createTask}
           schema={NewTaskSchema}
-          invalidate={[serverLoaders.default]}
+          invalidate={{ clear: [serverLoaders.default] }}
           onSuccess={() => setOpen(false)}
           class="space-y-2.5"
         >

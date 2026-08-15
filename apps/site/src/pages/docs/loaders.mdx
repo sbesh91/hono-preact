@@ -569,7 +569,7 @@ The RPC request always sends the full location to the server; `cacheKeyParams` o
 
 ## Cross-page invalidation
 
-When a mutation on one page should refresh data on another, import the other page's loader ref and pass it to `useAction({ invalidate: [...] })`. Invalidation is by reference, not by name:
+When a mutation on one page should refresh data on another, import the other page's loader ref and pass it to `useAction({ invalidate: { clear: [...] } })`. Invalidation is by reference, not by name:
 
 ```ts
 import { useAction } from 'hono-preact';
@@ -577,11 +577,11 @@ import { serverLoaders as moviesLoaders } from './movies.server.js';
 import { serverActions } from './reviews.server.js';
 
 const { mutate } = useAction(serverActions.addReview, {
-  invalidate: [moviesLoaders.default],
+  invalidate: { clear: [moviesLoaders.default] },
 });
 ```
 
-Pass `'auto'` to invalidate the current page's loader only. Use `loader.invalidate()` to clear the cache imperatively.
+Pass `{ refetchActive: true }` to invalidate the current page's loader only. Use `loader.invalidate()` to clear the cache imperatively.
 
 ## Caching navigation results
 

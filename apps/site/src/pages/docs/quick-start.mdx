@@ -209,7 +209,7 @@ MoviesView.displayName = 'Movies';
 export default definePage(MoviesView);
 ```
 
-The route entry in `routes.ts` doesn't change; actions ride along with the same `server` import. Submit a title in the form. The action runs on the server and the list updates. To automatically re-fetch the loader after the action, pass `invalidate: 'auto'` via `useAction` (see [Server Actions](/docs/actions) for the programmatic form).
+The route entry in `routes.ts` doesn't change; actions ride along with the same `server` import. Submit a title in the form. The action runs on the server and the list updates. To automatically re-fetch the loader after the action, pass `invalidate: { refetchActive: true }` via `useAction` (see [Server Actions](/docs/actions) for the programmatic form).
 
 ## What's next
 

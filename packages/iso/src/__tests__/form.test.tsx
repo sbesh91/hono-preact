@@ -220,7 +220,7 @@ describe('<Form>', () => {
     });
 
     const { container } = render(
-      <Form action={makeStub()} invalidate={[loader]}>
+      <Form action={makeStub()} invalidate={{ clear: [loader] }}>
         <input name="text" defaultValue="hi" />
         <button type="submit">go</button>
       </Form>
