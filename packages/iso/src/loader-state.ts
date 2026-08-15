@@ -234,3 +234,63 @@ export function toStreamState<T>(
     }
   }
 }
+
+/**
+ * Handlers for every arm of a `status`-discriminated state, each receiving the
+ * fully narrowed member. `Extract` is what makes the `success` handler read
+ * `data` with no guard while the `loading` handler cannot read it at all.
+ */
+type ExhaustiveHandlers<S extends { status: string }, R> = {
+  [K in S['status']]: (state: Extract<S, { status: K }>) => R;
+};
+
+/**
+ * The exhaustive handler map, but only for a state whose `status` is a literal
+ * union. When `status` widens to `string` (an untyped or over-generalized
+ * value), `ExhaustiveHandlers` collapses into a bare index signature that a
+ * single-arm object satisfies, which would silently drop exhaustiveness. `never`
+ * rejects the exhaustive overload in that case, pushing such a caller onto the
+ * `_` overload where the catch-all is explicit.
+ */
+type LiteralExhaustiveHandlers<
+  S extends { status: string },
+  R,
+> = string extends S['status'] ? never : ExhaustiveHandlers<S, R>;
+
+/**
+ * Status-first narrowing over a loader or stream state. The caller cannot reach
+ * a `data` branch without the type system having narrowed `status` first, which
+ * is what makes a legitimately falsy value (`0`, `''`, `[]`) impossible to
+ * misread as "still loading".
+ *
+ * One implementation serves both `LoaderState` and `StreamState`: both
+ * discriminate on the same `status` key, so the streaming arms come along free.
+ *
+ * Exhaustive by default (a missing arm is a compile error). Supplying `_` as a
+ * catch-all allows a partial map instead; that is the escape hatch, not the
+ * habit.
+ */
+export function match<S extends { status: string }, R>(
+  state: S,
+  handlers: LiteralExhaustiveHandlers<S, R>
+): R;
+export function match<S extends { status: string }, R>(
+  state: S,
+  handlers: Partial<ExhaustiveHandlers<S, R>> & { _: (state: S) => R }
+): R;
+export function match<S extends { status: string }, R>(
+  state: S,
+  handlers: Partial<ExhaustiveHandlers<S, R>> & { _?: (state: S) => R }
+): R {
+  const handler = handlers[state.status as S['status']];
+  if (handler) return (handler as (s: S) => R)(state);
+  // Defense for JavaScript callers, who have no types at all: both public
+  // overloads keep a TypeScript caller covered (the exhaustive form requires
+  // every arm, the partial form requires `_`). A real throw rather than a cast
+  // so an unhandled status is a legible failure instead of `undefined`.
+  const fallback = handlers._;
+  if (fallback) return fallback(state);
+  throw new Error(
+    `hono-preact: match() has no handler for status ${JSON.stringify(state.status)} and no \`_\` fallback.`
+  );
+}

@@ -1,6 +1,8 @@
 import { useState } from 'preact/hooks';
 import { ChevronUp, ChevronDown } from 'lucide-preact';
+import { match } from 'hono-preact';
 import type { StreamState, StreamStatus } from 'hono-preact';
+import type { VNode } from 'preact';
 import type { ActivityEvent } from '../../demo/activity-stream.js';
 import type { TaskStatus } from '../../demo/data.js';
 import { serverLoaders } from '../../pages/demo/projects-shell.server.js';
@@ -152,19 +154,26 @@ function Feed({
 // last-good `data`, so it falls through to Feed (the muted status dot reflects
 // the disconnect). Feed therefore only ever sees a real accumulated
 // `ActivityEvent[]` (open/closed/error-with-data arms).
-export function renderActivityBar(s: StreamState<ActivityEvent[]>) {
-  if (s.status === 'open' || s.status === 'closed')
-    return <Feed events={s.data} status={s.status} />;
-  // A POST-chunk error keeps the last-good feed visible (the muted status dot
-  // reflects the disconnect); a COLD error carries no `data`, so show the error
-  // bar instead of handing Feed an `undefined` events array.
-  if (s.status === 'error')
-    return s.data !== undefined ? (
-      <Feed events={s.data} status={s.status} />
-    ) : (
-      <ErrorBar />
-    );
-  return <ConnectingBar />;
+//
+// `match` narrows each arm before `data` is readable at all, so the
+// connecting/cold-error arms cannot accidentally read `data` off a state that
+// doesn't carry it.
+export function renderActivityBar(s: StreamState<ActivityEvent[]>): VNode {
+  return match(s, {
+    open: (state) => <Feed events={state.data} status={state.status} />,
+    closed: (state) => <Feed events={state.data} status={state.status} />,
+    // A POST-chunk error keeps the last-good feed visible (the muted status
+    // dot reflects the disconnect); a COLD error carries no `data`, so show
+    // the error bar instead of handing Feed an `undefined` events array.
+    error: (state) =>
+      state.data !== undefined ? (
+        <Feed events={state.data} status={state.status} />
+      ) : (
+        <ErrorBar />
+      ),
+    connecting: () => <ConnectingBar />,
+    reconnecting: () => <ConnectingBar />,
+  });
 }
 
 export const ActivityBar = activityLoader.View<ActivityEvent[]>(

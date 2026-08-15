@@ -56,6 +56,9 @@ export type {
 export { serverRoute, liveStream } from './server-route.js';
 export type { RouteBinder } from './server-route.js';
 
+// Status-first narrowing over a LoaderState/StreamState.
+export { match } from './loader-state.js';
+
 // Server-side caller (HTTP-free loader/action composition + testing).
 export { createCaller } from './server-caller.js';
 export type {
@@ -98,6 +101,7 @@ export { buildPath } from './build-path.js';
 
 // Forms.
 export { Form } from './form.js';
+export type { InvalidateInput } from './use-invalidate.js';
 export { useActionResult, type ActionResult } from './use-action-result.js';
 export { getValidationIssues } from './get-validation-issues.js';
 export type { ValidationIssue } from './validate.js';

@@ -28,7 +28,7 @@ const WHY: { lead: string; body: string }[] = [
 ];
 
 const SNIPPET = `const { mutate, pending } = useAction(serverActions.addTask, {
-  invalidate: 'auto',
+  invalidate: { refetchActive: true },
   onMutate: (t) => addOptimistic(t),
   onError: (_e, h) => h.revert(),
 });

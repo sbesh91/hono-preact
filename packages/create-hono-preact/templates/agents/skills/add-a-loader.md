@@ -11,7 +11,8 @@
   client-safe data handle, so secrets and server-only helpers must stay inside the loader
   body, never at module top level where they would be inlined into the client bundle.
 - The component reads the data through `<loader>.View(render)`, whose render function
-  receives the `LoaderState` union directly. A descendant inside that view can read the
+  receives the `LoaderState` union as its first argument and the component's own props
+  as its second. A descendant inside that view can read the
   same data with `<loader>.useData()`, which returns a `ReadonlySignal` -- read `.value`.
   There is no `useLoaderData` hook.
 
@@ -40,7 +41,8 @@
 
 3. Read the data in `src/pages/<name>.tsx`. Import `serverLoaders` from the sibling
    `.server.js` and render through `.View(render)`; the render function receives the
-   `LoaderState` union. `data` reads straight off the union (it is absent only in the
+   `LoaderState` union as its first argument and the component's own props as its
+   second. `data` reads straight off the union (it is absent only in the
    cold `loading` arm, so a truthy check doubles as the loading guard); reach for
    `status` when you need to tell `revalidating` or `error` apart. Descendants that
    need the same data inside the view can call `.useData()`, which hands back a

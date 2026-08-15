@@ -19,7 +19,7 @@ const Movies = ({ loaderData }) => {
   const addMovie = useOptimisticAction(serverActions.create, {
     base: loaderData.movies,
     apply: (current, payload) => [...current, payload],
-    invalidate: 'auto',
+    invalidate: { refetchActive: true },
     onSuccess: (data) => console.log('created', data),
     onError: (err) => console.error(err),
   });
@@ -40,7 +40,7 @@ const Movies = ({ loaderData }) => {
 };
 ```
 
-`value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `addMovie.value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: 'auto'`), `addMovie.value` reflects real server data with no visual gap.
+`value` is the projection: `base` with all in-flight payloads applied via `apply`. While the mutation is in flight, `addMovie.value` includes the optimistic entry; after the server responds and the loader refetches (`invalidate: { refetchActive: true }`), `addMovie.value` reflects real server data with no visual gap.
 
 The returned object is stub-compatible: pass it to `<Form action={addMovie}>` for declarative form submission, or call `addMovie.mutate(payload)` for programmatic invocation. Both paths participate in the optimistic queue. Access `addMovie.pending`, `addMovie.error`, and `addMovie.data` to read the mutation status and result, and `addMovie.valueSignal` when you want the update to land in a child instead of here (see below).
 
@@ -63,7 +63,7 @@ const Movies = ({ loaderData }) => {
   const addMovie = useOptimisticAction(serverActions.create, {
     base: loaderData.movies,
     apply: (current, payload) => [...current, payload],
-    invalidate: 'auto',
+    invalidate: { refetchActive: true },
   });
 
   return (
@@ -85,19 +85,19 @@ Now a dispatch re-renders `MovieList` and nothing else. `Movies` never reads `.v
 
 ### Options
 
-| Option       | Type                             | Description                                                                                       |
-| ------------ | -------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `base`       | `TBase`                          | The base value (typically loader data) the projection layers over.                                |
-| `apply`      | `(current, payload) => TBase`    | Reducer that produces the next projection                                                         |
-| `invalidate` | `'auto' \| LoaderRef<unknown>[]` | Refetch trigger after mutation succeeds. `false` is intentionally not allowed (see below).        |
-| `onSuccess`  | `(data) => void`                 | Called after a successful mutation. Snapshot is internal; not exposed here.                       |
-| `onError`    | `(err) => void`                  | Called after a failed mutation. The optimistic entry is reverted automatically before this fires. |
+| Option       | Type                          | Description                                                                                         |
+| ------------ | ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| `base`       | `TBase`                       | The base value (typically loader data) the projection layers over.                                  |
+| `apply`      | `(current, payload) => TBase` | Reducer that produces the next projection                                                           |
+| `invalidate` | `InvalidateInput`             | Refetch trigger after mutation succeeds. Omitting it leaves the optimistic entry stuck (see below). |
+| `onSuccess`  | `(data) => void`              | Called after a successful mutation. Snapshot is internal; not exposed here.                         |
+| `onError`    | `(err) => void`               | Called after a failed mutation. The optimistic entry is reverted automatically before this fires.   |
 
 Other `useAction` options (`onChunk`) pass through.
 
 `base` is compared by contents, not by reference, so you can build it inline. An `?? []` for a missing loader field, an inline `.filter(...)`, or a spread all hand the hook a fresh value every render, and none of them re-derive the projection unless the entries actually changed. The comparison is one level deep: a change nested inside an entry counts as a change, so you get an extra render rather than a stale one.
 
-### Why no `invalidate: false`?
+### Why does `invalidate` need to actually refetch?
 
 The optimistic entry settles into `'ready'` state on success and waits for the base to update before evicting. Without an invalidation that refetches, the base never changes, the entry lingers, and the UI gets stuck. Use `useOptimistic` directly if you have a use case where base updates by another path.
 
@@ -113,7 +113,7 @@ const Movies = ({ loaderData }) => {
   );
 
   const { mutate } = useAction(serverActions.create, {
-    invalidate: 'auto',
+    invalidate: { refetchActive: true },
     onMutate: (payload) => addOptimistic(payload),
     onSuccess: (_data, handle) => handle.settle(),
     onError: (_err, handle) => handle.revert(),
@@ -165,7 +165,7 @@ const NotesForm = ({ defaultNotes }) => {
   const notesAction = useOptimisticAction(serverActions.setNotes, {
     base: defaultNotes,
     apply: (_current, payload) => payload.notes,
-    invalidate: 'auto',
+    invalidate: { refetchActive: true },
   });
 
   return (

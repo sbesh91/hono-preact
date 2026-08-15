@@ -27,17 +27,17 @@ function _streamEventProbe() {
     expectTypeOf(ev.error).toEqualTypeOf<{ message: string; name: string }>();
 }
 
-// ViewState is the discriminated value handed to every loader render function:
-// a LoaderState or StreamState (data erased to unknown at this internal seam)
-// plus the consumer's spread props index signature.
+// ViewState is the discriminated value handed to every loader render
+// function's first argument: a LoaderState or StreamState (data erased to
+// unknown at this internal seam). The consumer's own props are a separate,
+// second argument (see view-render-collision.ts), no longer merged into this
+// type, so a caller prop can never alias a state field.
 function _viewStateProbe() {
-  expectTypeOf<ViewState>().toExtend<
+  expectTypeOf<ViewState>().toEqualTypeOf<
     LoaderState<unknown> | StreamState<unknown>
   >();
-  // The index signature carries arbitrary spread props.
+  // The discriminant is directly readable.
   const state = {} as ViewState;
-  expectTypeOf(state['anyProp']).toEqualTypeOf<unknown>();
-  // The discriminant survives the intersection (status is still readable).
   expectTypeOf(state.status).not.toBeNever();
 }
 

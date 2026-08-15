@@ -40,7 +40,7 @@ describe('useOptimisticAction', () => {
       const { mutate, value } = useOptimisticAction(stub, {
         base,
         apply: (current, payload) => [...current, payload.title],
-        invalidate: 'auto',
+        invalidate: { refetchActive: true },
       });
       return (
         <div>
@@ -93,7 +93,7 @@ describe('useOptimisticAction', () => {
       const { mutate, value, error } = useOptimisticAction(stub, {
         base: ['Alien'],
         apply: (current, payload) => [...current, payload.title],
-        invalidate: 'auto',
+        invalidate: { refetchActive: true },
       });
       return (
         <div>
@@ -137,7 +137,7 @@ describe('useOptimisticAction', () => {
       const { mutate } = useOptimisticAction(stub, {
         base: ['Alien'],
         apply: (current, payload) => [...current, payload.title],
-        invalidate: 'auto',
+        invalidate: { refetchActive: true },
         onSuccess,
       });
       return <button onClick={() => mutate({ title: 'Dune' })}>go</button>;
@@ -239,7 +239,7 @@ describe('useOptimisticAction', () => {
       const { mutate } = useOptimisticAction(stub, {
         base: ['Alien'],
         apply: (current, payload) => [...current, payload.title],
-        invalidate: 'auto',
+        invalidate: { refetchActive: true },
         onError,
       });
       return <button onClick={() => mutate({ title: 'Dune' })}>go</button>;
@@ -271,7 +271,7 @@ describe('useOptimisticAction', () => {
       const { mutate, value } = useOptimisticAction(stub, {
         base,
         apply: (current, payload) => [...current, payload.title],
-        invalidate: 'auto',
+        invalidate: { refetchActive: true },
       });
       return (
         <div>

@@ -23,9 +23,8 @@ import {
 } from './internal/action-result-store.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
 import { applyDecodedOutcome } from './internal/decoded-outcome.js';
-import type { AnyLoaderRef } from './define-loader.js';
 import type { Serialize } from './internal/serialize.js';
-import { useInvalidate } from './use-invalidate.js';
+import { useInvalidate, type InvalidateInput } from './use-invalidate.js';
 import {
   validateWithSchema,
   mapIssuesToFields,
@@ -70,7 +69,7 @@ export type FormProps<TPayload, TResult> = DistributiveOmit<
     helpers: { reset: (fields?: string[]) => void }
   ) => void;
   onError?: (err: Error) => void;
-  invalidate?: 'auto' | false | ReadonlyArray<AnyLoaderRef>;
+  invalidate?: InvalidateInput;
   reset?: boolean;
   /**
    * Opt-in client-side pre-validation. Pass the SAME Standard Schema the action
