@@ -358,22 +358,34 @@ Create `packages/vite/src/__tests__/hono-preact-assets.test.ts`:
 import { describe, it, expect } from 'vitest';
 import { honoPreact } from '../hono-preact.js';
 
+// `adapter` is REQUIRED: honoPreact({}) throws (see the existing
+// hono-preact.test.ts assertion `expect(() => honoPreact({})).toThrow(/adapter/i)`).
+// Reuse whichever stub the existing vite tests already use: css-config.test.ts
+// has `stubAdapter` and hono-preact.test.ts has `fakeAdapter()`. Do NOT invent a
+// third one, and do NOT call honoPreact with no adapter.
+import { fakeAdapter } from './hono-preact.test.js'; // or re-create the same stub locally
+
 describe('honoPreact({ assets })', () => {
   it('registers the client-assets plugin when assets are declared', () => {
-    const plugins = honoPreact({ assets: { 'llms.txt': () => 'x' } });
+    const plugins = honoPreact({
+      adapter: fakeAdapter(),
+      assets: { 'llms.txt': () => 'x' },
+    });
     const names = plugins.map((p) => p && (p as { name?: string }).name);
     expect(names).toContain('hono-preact:client-assets');
   });
 
   it('registers no client-assets plugin when assets are omitted', () => {
-    const plugins = honoPreact({});
+    const plugins = honoPreact({ adapter: fakeAdapter() });
     const names = plugins.map((p) => p && (p as { name?: string }).name);
     expect(names).not.toContain('hono-preact:client-assets');
   });
 });
 ```
 
-If `honoPreact` returns a nested or async plugin structure, flatten it in the test to match the real shape rather than changing the production return type.
+`honoPreact` returns a flat `Plugin[]` (see the `return [...]` block at the end of
+`packages/vite/src/hono-preact.ts`), so no flattening is needed. Add the new entry
+to that array; it already uses the `...(cond ? [x] : [])` spread idiom elsewhere.
 
 - [ ] **Step 3: Run it to verify it fails**
 
