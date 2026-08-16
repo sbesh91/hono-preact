@@ -101,10 +101,9 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
   let cachedSocketRegistryPromise: ReturnType<
     typeof buildSocketRegistry
   > | null = null;
+  const socketsModule = () => import('./sockets-handler.js');
   const buildSockets = () =>
-    import('./sockets-handler.js').then((m) =>
-      m.buildSocketRegistry(serverModules)
-    );
+    socketsModule().then((m) => m.buildSocketRegistry(serverModules));
   const socketRegistryPromise = () =>
     dev ? buildSockets() : (cachedSocketRegistryPromise ??= buildSockets());
 
@@ -294,7 +293,7 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
         rooms,
         routePathResolver,
       ] = await Promise.all([
-        import('./sockets-handler.js'),
+        socketsModule(),
         socketRegistryPromise(),
         roomRegistryPromise(),
         socketRoutePathResolverPromise(),

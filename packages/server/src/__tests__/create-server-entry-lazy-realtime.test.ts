@@ -45,9 +45,12 @@ function staticRelativeImports(source: string): string[] {
   return specifiers;
 }
 
-/** Resolve a `./x.js` specifier from srcDir to its `.ts`/`.tsx` source file. */
-function toSourceFile(specifier: string): string {
-  const base = path.resolve(srcDir, specifier.replace(/\.js$/, ''));
+/** Resolve a relative specifier from its importer's dir to `.ts`/`.tsx`. */
+function toSourceFile(fromFile: string, specifier: string): string {
+  const base = path.resolve(
+    path.dirname(fromFile),
+    specifier.replace(/\.js$/, '')
+  );
   for (const ext of ['.ts', '.tsx']) {
     try {
       readFileSync(base + ext);
@@ -68,7 +71,7 @@ function walkEagerGraph(entry: string): Set<string> {
     visited.add(file);
     const source = readFileSync(file, 'utf8');
     for (const spec of staticRelativeImports(source)) {
-      queue.push(toSourceFile(spec));
+      queue.push(toSourceFile(file, spec));
     }
   }
   return visited;
