@@ -30,12 +30,11 @@ import {
   type ColocatedSocketParamAdvisoryInfo,
 } from './route-binding-guard.js';
 import { makePageActionResolvers } from './page-action-resolvers.js';
-import {
-  buildSocketRegistry,
-  socketsHandler,
-  assertNoSocketRoomCollision,
-} from './sockets-handler.js';
-import { buildRoomRegistry } from './rooms-handler.js';
+// Type-only: the realtime modules must not be static runtime edges of this
+// module. Every value use goes through the dynamic imports below, so an app
+// that defines no rooms or sockets never evaluates the registry graph (#381).
+import type { buildSocketRegistry } from './sockets-handler.js';
+import type { buildRoomRegistry } from './rooms-handler.js';
 
 export interface CreateServerEntryOptions {
   /** The manifest produced by defineRoutes(...) in the user's routes file. */
@@ -96,24 +95,29 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
 
   // Build socket registry from the same server imports that build the loaders
   // map. Cached as a promise so the async glob walk runs once per boot (or per
-  // request when dev: true for hot-reload parity with loadersHandler).
+  // request when dev: true for hot-reload parity with loadersHandler). The
+  // registry module itself loads lazily (see the type-only imports above);
+  // the runtime caches the module record, so only the first call pays the load.
   let cachedSocketRegistryPromise: ReturnType<
     typeof buildSocketRegistry
   > | null = null;
+  const socketsModule = () => import('./sockets-handler.js');
+  const buildSockets = () =>
+    socketsModule().then((m) => m.buildSocketRegistry(serverModules));
   const socketRegistryPromise = () =>
-    dev
-      ? buildSocketRegistry(serverModules)
-      : (cachedSocketRegistryPromise ??= buildSocketRegistry(serverModules));
+    dev ? buildSockets() : (cachedSocketRegistryPromise ??= buildSockets());
 
   // Room registry, built from the `serverRooms` export (a distinct named export
   // from `serverSockets`). Same caching policy as the socket registry: one
   // async walk at boot; per-request in dev for hot-reload parity.
   let cachedRoomRegistryPromise: ReturnType<typeof buildRoomRegistry> | null =
     null;
+  const buildRooms = () =>
+    import('./rooms-handler.js').then((m) =>
+      m.buildRoomRegistry(serverModules)
+    );
   const roomRegistryPromise = () =>
-    dev
-      ? buildRoomRegistry(serverModules)
-      : (cachedRoomRegistryPromise ??= buildRoomRegistry(serverModules));
+    dev ? buildRooms() : (cachedRoomRegistryPromise ??= buildRooms());
 
   // Build the moduleKey -> route path resolver for sockets. Cached for the
   // same reasons as the socket registry (one async walk at boot; per-request
@@ -283,7 +287,13 @@ export function createServerEntry(opts: CreateServerEntryOptions): Hono {
           500
         );
       }
-      const [registry, rooms, routePathResolver] = await Promise.all([
+      const [
+        { socketsHandler, assertNoSocketRoomCollision },
+        registry,
+        rooms,
+        routePathResolver,
+      ] = await Promise.all([
+        socketsModule(),
         socketRegistryPromise(),
         roomRegistryPromise(),
         socketRoutePathResolverPromise(),
