@@ -592,25 +592,35 @@ function deriveLayoutLocation(
     .filter(Boolean)
     .join('/');
   const finalPath = '/' + path;
-  // Keep exactly the params the layout's OWN pattern declares, mirroring how
-  // the path above is reconstructed from that same pattern. This drops the
-  // catch-all capture (a bare `*` segment is not a `:param`, so it is never a
-  // declared slot) and any inner-leaf param, without having to GUESS the
-  // wildcard's name: matching on the conventional names `rest`/`0` also
-  // deleted a param a route legitimately declared as `:rest`, leaving a layout
-  // `use` guard reading `undefined` for a value the URL really bound.
+  // Drop the child-subtree catch-all capture, which preact-iso binds under one
+  // of two conventional names (`rest` for the named form, `0` for a bare
+  // positional `*`). Neither name is reserved, so the drop is suppressed when
+  // the layout's OWN pattern declares a param by that name: a route spelling
+  // `/docs/:rest` binds a value the layout legitimately owns, and deleting it
+  // left a layout `use` guard reading `undefined` for a param the URL really
+  // bound -- a fail-open shape.
   //
-  // `guardReadableParamSlots`, not `declaredParamSlots`: the allowlist has to
-  // agree with what preact-iso's matcher can actually BIND, which is wider
-  // than this framework's `:param` grammar (e.g. `:board-id`). Filtering on the
-  // narrower grammar would re-introduce the same silent drop for those names.
+  // Deliberately NOT an allowlist built from `layoutPathPattern`. That pattern
+  // is RELATIVE to the enclosing layout group (walkRouteTree restarts
+  // `parentPath` for each inner Router, which is what the inner Router needs),
+  // so it cannot see ancestor params: a nested layout under `/org/:orgId` would
+  // have `orgId` silently stripped, recreating the same fail-open shape one
+  // level up. The params a layout may read are ancestors + its own, and only
+  // the wildcard capture is not its own.
+  //
+  // `guardReadableParamSlots`, not `declaredParamSlots`: the suppression must
+  // agree with what preact-iso's matcher can actually BIND, which is wider than
+  // this framework's `:param` grammar (e.g. `:board-id`).
+  //
   // The `v !== undefined` guard also omits the `undefined` the matcher can
   // store for an unmatched optional/rest param (the static `string` type does
   // not reflect that).
   const layoutOwnSlots = new Set(guardReadableParamSlots(layoutPathPattern));
+  const isCatchAllCapture = (k: string): boolean =>
+    (k === 'rest' || k === '0') && !layoutOwnSlots.has(k);
   const filteredParams: Record<string, string> = {};
   for (const [k, v] of Object.entries(params)) {
-    if (layoutOwnSlots.has(k) && v !== undefined) filteredParams[k] = v;
+    if (!isCatchAllCapture(k) && v !== undefined) filteredParams[k] = v;
   }
   return {
     ...active,

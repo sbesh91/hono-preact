@@ -347,4 +347,57 @@ describe('defineRoutes: layout-level server plumbing', () => {
     );
     expect(params).toEqual({ orgId: 'acme' });
   });
+  it("a NESTED layout still sees its ancestor layout's params", async () => {
+    // The load-bearing case for how the catch-all is identified. A layout's own
+    // `layoutPathPattern` is RELATIVE to the enclosing layout group, because
+    // walkRouteTree restarts `parentPath` for each inner Router. So the inner
+    // layout's pattern here is `team/:teamId`, which knows nothing about
+    // `:orgId`. Filtering the inner layout's params against that pattern would
+    // strip `orgId` and leave an inner-layout `use` guard reading `undefined`
+    // for a param the URL really bound: the same fail-open shape this filter
+    // exists to avoid, one level up.
+    let observed: any = null;
+    const Probe = () => {
+      observed = useContext(RouteLocationsContext);
+      return null;
+    };
+    const L = ({ children }: any) => h('main', null, children);
+
+    const manifest = defineRoutes([
+      {
+        path: '/org/:orgId',
+        layout: () => Promise.resolve({ default: L as any }),
+        server: () => Promise.resolve({ __moduleKey: 'outer' }),
+        children: [
+          {
+            path: 'team/:teamId',
+            layout: () => Promise.resolve({ default: L as any }),
+            server: () => Promise.resolve({ __moduleKey: 'inner' }),
+            children: [
+              {
+                path: ':taskId',
+                view: () => Promise.resolve({ default: Probe }),
+                server: () => Promise.resolve({ __moduleKey: 'leaf' }),
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    history.replaceState(null, '', '/org/acme/team/t9/task1');
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })));
+    await waitFor(() => expect(observed?.get('leaf')).toBeDefined());
+
+    expect(observed.get('outer').pathParams).toEqual({ orgId: 'acme' });
+    expect(observed.get('inner').pathParams).toEqual({
+      orgId: 'acme',
+      teamId: 't9',
+    });
+    expect(observed.get('leaf').pathParams).toEqual({
+      orgId: 'acme',
+      teamId: 't9',
+      taskId: 'task1',
+    });
+  });
 });
