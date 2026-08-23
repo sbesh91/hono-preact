@@ -1,5 +1,5 @@
 // Module manifests that define each measured unit. measure-framework-size.mjs
-// bundles each entry in isolation (esbuild, peers external) and gzips it, so a
+// bundles each entry in isolation (Vite production build, peers external) and gzips it, so a
 // row reflects only the framework's own code on top of a runtime the consumer
 // already ships.
 //
