@@ -1,5 +1,5 @@
 // Module manifests that define each measured unit. measure-framework-size.mjs
-// bundles each entry in isolation (esbuild, peers external) and gzips it, so a
+// bundles each entry in isolation (Vite production build, peers external) and gzips it, so a
 // row reflects only the framework's own code on top of a runtime the consumer
 // already ships.
 //
@@ -8,11 +8,10 @@
 //    `core` and its whole transitive graph, so two features that share an
 //    internal module both count those shared bytes. Summing rows over-states a
 //    real page (see the `ui-core` note below for the same effect on components).
-//  - It cannot see the app build's dynamic `import()` splits. The probe
-//    force-includes every module (measure script uses `export * as`), so a
-//    feature that lazy-loads part of itself in a real app (e.g. `actions`
-//    dynamically imports sse-decoder + validate) is reported here as if it
-//    shipped that code eagerly. Real per-route bytes are a separate measurement.
+//  - A row's eager and deferred halves are likewise not additive with each
+//    other: a bucket's `Size` is the gzip of its entry chunk plus static-import
+//    closure, `Deferred` the gzip of the dynamic-import chunks beyond it, and
+//    gzip of the two concatenated is a different (smaller) number than the sum.
 
 // Framework base: what every route ships regardless of features used. `outcomes`
 // lives here (not under `actions`) because it ships on every route via
@@ -74,22 +73,10 @@ export const FEATURE_MODULES = {
   // Client routing surface below core: the NavLink component, active-route and
   // navigation/params hooks, typed path builder, and content-route helper. Each
   // is small, but together ~1 KB that shipped attributed to no bucket.
-  // OVER-STATED here by design, by roughly 3.5x. `nav-link.js` reaches the
-  // prefetch machinery (`prefetch-for.js` -> `prefetch.js` -> loader-runner)
-  // only through a dynamic `import()`, behind its `prefetch`-prop guard, so a
-  // link without that prop never even requests the chunk. Per the header note
-  // this probe force-includes every module and CONCATENATES every emitted
-  // chunk, which folds that deferred chunk straight back in, so this row reads
-  // as if a NavLink-only app shipped the whole prefetch machinery eagerly.
-  //
-  // Measured with a Vite production build of these modules, gzip, entry chunk
-  // plus its static-import closure only (peers external):
-  //   this row (all chunks concatenated) ~7.9 KB
-  //   what a NavLink app actually downloads  ~2.5 KB
-  //   the deferred prefetch chunk            ~6.0 KB
-  // Same effect as the `actions` bucket. Measure the real number with an app
-  // build, not this row. A dynamic import cannot move this number, so do not
-  // read a flat row here as a failed optimization.
+  // `nav-link.js` reaches the prefetch machinery (`prefetch-for.js` ->
+  // `prefetch.js` -> loader-runner) only through a dynamic `import()`, behind
+  // its `prefetch`-prop guard, so most of this bucket's bytes report as
+  // Deferred rather than Size.
   routing: [
     'nav-link.js',
     'route-active.js',

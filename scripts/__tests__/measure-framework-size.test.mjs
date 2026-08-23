@@ -24,13 +24,35 @@ const UI = resolve('packages/ui/dist');
 vi.setConfig({ testTimeout: 120_000 });
 
 describe('bundleSize', () => {
-  it('returns positive gzip for a real iso module', async () => {
+  it('returns positive eager gzip for a real iso module', async () => {
     const entry = `export * as m from '${resolve('packages/iso/dist/is-browser.js')}';`;
-    expect(await bundleSize(entry, process.cwd())).toBeGreaterThan(0);
+    const size = await bundleSize(entry, process.cwd());
+    expect(size.eager).toBeGreaterThan(0);
+    expect(size.deferred).toBe(0);
   });
 
   it('excludes peers (external) so a preact-only entry is a tiny shim', async () => {
-    expect(await bundleSize(`export * as h from 'preact';`, process.cwd())).toBeLessThan(200);
+    const size = await bundleSize(`export * as h from 'preact';`, process.cwd());
+    expect(size.eager).toBeLessThan(200);
+  });
+});
+
+describe('bundleSize separates dynamic-import chunks (#383)', () => {
+  // The situation the old concatenate-everything probe could not see (PR #380):
+  // code moved behind a dynamic `import()` is fetched only on demand, so it
+  // must land in `deferred`, not in the eager number the size comment reports.
+  // The static variant is the mutation check: the same target imported
+  // statically must fold entirely into `eager` with nothing deferred.
+  const target = resolve('packages/iso/dist/cache.js');
+  const dynamicEntry = `export const load = () => import('${target}');`;
+  const staticEntry = `import * as m from '${target}';\nexport const load = () => m;`;
+
+  it('reports a dynamically imported module as deferred, not eager', async () => {
+    const dyn = await bundleSize(dynamicEntry, process.cwd());
+    const stat = await bundleSize(staticEntry, process.cwd());
+    expect(dyn.deferred).toBeGreaterThan(0);
+    expect(dyn.eager).toBeLessThan(stat.eager);
+    expect(stat.deferred).toBe(0);
   });
 });
 
@@ -42,7 +64,14 @@ describe('measureSectionA', () => {
     for (const bucket of Object.keys(FEATURE_MODULES)) {
       expect(a[bucket].total).toBeGreaterThan(0);
       expect(a[bucket].marginal).toBeGreaterThanOrEqual(0);
+      expect(a[bucket].deferred).toBeGreaterThanOrEqual(0);
     }
+    // No core module uses a dynamic import; if this starts failing, the
+    // always-loaded floor budgets in core-size-floor.test.mjs need a re-look.
+    expect(a.core.deferred).toBe(0);
+    // nav-link.js reaches the prefetch machinery only via dynamic import, so
+    // the routing bucket is the row that must show a deferred half.
+    expect(a.routing.deferred).toBeGreaterThan(0);
   });
 });
 
@@ -52,6 +81,8 @@ describe('measureSectionC', () => {
     expect(c['ui-core'].total).toBeGreaterThan(0);
     expect(c.dialog.total).toBeGreaterThan(0);
     expect(c.dialog.marginal).toBeGreaterThanOrEqual(0);
+    // No UI component uses a dynamic import today.
+    expect(c.dialog.deferred).toBe(0);
   });
 
   it('returns {} when the ui dist is absent', async () => {
@@ -126,6 +157,6 @@ describe('the probe folds Vite\'s full `import.meta.env` gate (#338)', () => {
     // Not an equality assertion: the two sources differ slightly even folded.
     // The point is that the prose is gone, not that the bytes match exactly.
     expect(PROSE.length).toBeGreaterThan(600);
-    expect(withGate - withoutGate).toBeLessThan(40);
+    expect(withGate.eager - withoutGate.eager).toBeLessThan(40);
   });
 });

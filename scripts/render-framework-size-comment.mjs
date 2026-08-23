@@ -40,16 +40,28 @@ function freshnessFooter(meta) {
   return parts.length ? `<sub>Measured ${parts.join(' · ')}</sub>` : undefined;
 }
 
+// The Deferred column keeps a feature's dynamic-import half visible: `Size` is
+// eager bytes only, so without this column a feature could quietly grow the
+// code it lazy-loads with nothing in the comment moving. A dash means zero (or
+// a report predating the eager/deferred split).
+function fmtDeferred(entry) {
+  return entry?.deferred ? fmtBytes(entry.deferred) : '—';
+}
+
+function sectionRow(name, freshEntry, baseEntry, baseName) {
+  const fresh = shown(name, freshEntry, baseName);
+  if (fresh === undefined) return `| ${name} | (removed) | | |`;
+  return `| ${name} | ${fmtBytes(fresh)} | ${fmtDeferred(freshEntry)} | ${fmtDelta(fresh, shown(name, baseEntry, baseName))} |`;
+}
+
 function section(lines, title, sub, columnLabel, freshObj, baseObj, baseName) {
   lines.push(`### ${title}`);
   lines.push(`<sub>${sub}</sub>`);
-  lines.push(`| ${columnLabel} | Size | Δ vs base |`);
-  lines.push('|---|---|---|');
+  lines.push(`| ${columnLabel} | Size | Deferred | Δ vs base |`);
+  lines.push('|---|---|---|---|');
   const names = new Set([...Object.keys(freshObj), ...Object.keys(baseObj)]);
   for (const name of names) {
-    lines.push(
-      row(name, shown(name, freshObj[name], baseName), shown(name, baseObj[name], baseName))
-    );
+    lines.push(sectionRow(name, freshObj[name], baseObj[name], baseName));
   }
   lines.push('');
 }
@@ -107,7 +119,7 @@ export function renderComment(fresh, base, meta, site) {
   section(
     lines,
     'Framework runtime (gzip)',
-    '`core` is the always-on base; each row is the marginal gzip it adds on top. `core` and `runtime` ship on every route; the rest are opt-in features.',
+    '`core` is the always-on base; each row is the marginal gzip it adds on top. `core` and `runtime` ship on every route; the rest are opt-in features. Size counts only eager bytes (the entry plus its static-import closure); Deferred is code behind a dynamic `import()`, fetched on demand or never.',
     'Feature',
     fresh.sectionA,
     base.sectionA,

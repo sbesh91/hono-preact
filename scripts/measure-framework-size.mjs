@@ -28,7 +28,13 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * Bundle an entry source string in isolation and return its gzip size in bytes.
+ * Bundle an entry source string in isolation and return `{ eager, deferred }`
+ * gzip sizes in bytes. `eager` is the entry chunk plus its transitive
+ * STATIC-import closure: what a consumer downloads before any interaction.
+ * `deferred` is the chunks that closure does not reach, i.e. code behind a
+ * dynamic `import()`, fetched only when (if) that code path runs. Note
+ * `eager + deferred` does not equal gzip of all chunks together, because gzip
+ * is not additive; each number is only meaningful on its own.
  * `external` defaults to the peers a consumer already ships. A caller passes a
  * narrower list when it wants a dependency's bytes COUNTED rather than assumed
  * (the core-size-floor test does this for @preact/signals).
@@ -89,13 +95,27 @@ export async function bundleSize(
         rollupOptions: { external: (id) => isExternal(id, external) },
       },
     });
-    // A lib build emits one chunk here, but concatenating is correct for any
-    // split the bundler decides to make and matches what a consumer downloads.
-    const code = result[0].output
-      .filter((o) => o.type === 'chunk')
-      .map((o) => o.code)
-      .join('');
-    return gzipSync(Buffer.from(code)).length;
+    // Walk static edges only (`imports`, not `dynamicImports`) from the entry
+    // chunk: a dynamically imported chunk is fetched on demand and often never,
+    // so folding it into one concatenated total would make a dynamic-import
+    // split invisible to the size comment (#383, the PR #380 no-op report).
+    const chunks = result[0].output.filter((o) => o.type === 'chunk');
+    const byFileName = new Map(chunks.map((c) => [c.fileName, c]));
+    const eagerNames = new Set();
+    const queue = chunks.filter((c) => c.isEntry).map((c) => c.fileName);
+    while (queue.length > 0) {
+      const name = queue.pop();
+      if (eagerNames.has(name) || !byFileName.has(name)) continue;
+      eagerNames.add(name);
+      queue.push(...byFileName.get(name).imports);
+    }
+    const gzip = (list) =>
+      gzipSync(Buffer.from(list.map((c) => c.code).join(''))).length;
+    const deferredChunks = chunks.filter((c) => !eagerNames.has(c.fileName));
+    return {
+      eager: gzip(chunks.filter((c) => eagerNames.has(c.fileName))),
+      deferred: deferredChunks.length === 0 ? 0 : gzip(deferredChunks),
+    };
   } finally {
     if (priorNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = priorNodeEnv;
@@ -139,17 +159,26 @@ export function entryFor(modules, distBase) {
 }
 
 // Section A: core total, then each feature's total (isolated) and marginal cost
-// over core (= gzip(core+feature) - gzip(core), clamped at 0).
+// over core (= gzip(core+feature) - gzip(core), clamped at 0). All eager bytes;
+// each row also carries the feature's `deferred` half (dynamic-import chunks of
+// the combined bundle beyond core's own, which is zero today) so a feature
+// quietly growing its lazy-loaded code stays visible in the comment.
 export async function measureSectionA(isoDist) {
   const core = await bundleSize(entryFor(CORE_MODULES, isoDist), ROOT);
-  const sectionA = { core: { total: core, marginal: core } };
+  const sectionA = {
+    core: { total: core.eager, marginal: core.eager, deferred: core.deferred },
+  };
   for (const [bucket, modules] of Object.entries(FEATURE_MODULES)) {
     const total = await bundleSize(entryFor(modules, isoDist), ROOT);
     const combined = await bundleSize(
       entryFor([...CORE_MODULES, ...modules], isoDist),
       ROOT
     );
-    sectionA[bucket] = { total, marginal: Math.max(0, combined - core) };
+    sectionA[bucket] = {
+      total: total.eager,
+      marginal: Math.max(0, combined.eager - core.eager),
+      deferred: Math.max(0, combined.deferred - core.deferred),
+    };
   }
   return sectionA;
 }
@@ -159,14 +188,24 @@ export async function measureSectionA(isoDist) {
 export async function measureSectionC(uiDist) {
   if (!existsSync(uiDist)) return {};
   const uiCore = await bundleSize(entryFor(UI_CORE_MODULES, uiDist), ROOT);
-  const sectionC = { 'ui-core': { total: uiCore, marginal: uiCore } };
+  const sectionC = {
+    'ui-core': {
+      total: uiCore.eager,
+      marginal: uiCore.eager,
+      deferred: uiCore.deferred,
+    },
+  };
   for (const [name, modules] of Object.entries(COMPONENT_MODULES)) {
     const total = await bundleSize(entryFor(modules, uiDist), ROOT);
     const combined = await bundleSize(
       entryFor([...UI_CORE_MODULES, ...modules], uiDist),
       ROOT
     );
-    sectionC[name] = { total, marginal: Math.max(0, combined - uiCore) };
+    sectionC[name] = {
+      total: total.eager,
+      marginal: Math.max(0, combined.eager - uiCore.eager),
+      deferred: Math.max(0, combined.deferred - uiCore.deferred),
+    };
   }
   return sectionC;
 }
