@@ -47,6 +47,15 @@ describe('hono-preact-ui exports', () => {
     expect(typeof ui.Select.Value).toBe('function');
   });
 
+  it('exposes the Listbox namespace', () => {
+    expect(typeof ui.Listbox.Root).toBe('function');
+    expect(typeof ui.Listbox.Input).toBe('function');
+    expect(typeof ui.Listbox.List).toBe('function');
+    expect(typeof ui.Listbox.Option).toBe('function');
+    expect(typeof ui.Listbox.Status).toBe('function');
+    expect(typeof ui.Listbox.Empty).toBe('function');
+  });
+
   it('exposes the promoted composition hooks', () => {
     expect(typeof ui.usePositioner).toBe('function');
     expect(typeof ui.useListboxSelection).toBe('function');

@@ -95,7 +95,11 @@ describe('CommandPalette', () => {
     fireEvent.click(getByRole('button', { name: /search/i }));
     const input = getByLabelText('Search documentation') as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'zzzzz' } });
-    expect(await findByText('No results')).toBeTruthy();
+    // 'No results' also appears in the polite Listbox.Status live region, so
+    // scope the query to the visible empty part.
+    expect(
+      await findByText('No results', { selector: '[role="presentation"]' })
+    ).toBeTruthy();
     expect(dialogState()).toBe('open');
   });
 });

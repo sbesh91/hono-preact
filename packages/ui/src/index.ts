@@ -187,6 +187,21 @@ export {
 } from './combobox/index.js';
 export { matchSubstring } from './combobox/autocomplete.js';
 export {
+  Listbox,
+  ListboxRoot,
+  ListboxInput,
+  ListboxList,
+  ListboxOption,
+  ListboxStatus,
+  ListboxEmpty,
+  type ListboxRootProps,
+  type ListboxInputProps,
+  type ListboxListProps,
+  type ListboxOptionProps,
+  type ListboxStatusProps,
+  type ListboxEmptyProps,
+} from './listbox/index.js';
+export {
   useListboxSelection,
   normalizeSelectionProps,
   type UseListboxSelectionOptions,

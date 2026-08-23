@@ -135,6 +135,7 @@ export const nav: NavArea[] = [
           { title: 'Context Menu', route: '/docs/components/context-menu' },
           { title: 'Select', route: '/docs/components/select' },
           { title: 'Combobox', route: '/docs/components/combobox' },
+          { title: 'Listbox', route: '/docs/components/listbox' },
           { title: 'Toast', route: '/docs/components/toast' },
         ],
       },

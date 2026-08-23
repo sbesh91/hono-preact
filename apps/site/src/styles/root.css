@@ -4251,6 +4251,17 @@ html:active-view-transition-type(docs-within)::view-transition-new(
   opacity: 0;
   transform: translateY(-4px);
 }
+/* Listbox demo: a static in-page list rather than a floating popup, so drop
+   the popup shadow; the result line is quiet, muted feedback. */
+.docs-listbox {
+  margin-top: 0.5rem;
+  box-shadow: none;
+}
+.docs-listbox-ran {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
 .docs-cb__option {
   display: flex;
   align-items: center;
