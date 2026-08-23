@@ -65,12 +65,15 @@ describe('always-loaded core size floor', () => {
   });
 
   it('keeps core under budget with @preact/signals counted', async () => {
+    // `.eager` is the right number for a floor: the floor is defined as what
+    // every route ships up front. No core module uses a dynamic import today,
+    // so eager equals the old concatenated total and the budget is unchanged.
     const core = await bundleSize(
       entryFor(CORE_MODULES, ISO_DIST),
       RESOLVE_DIR,
       EXTERNAL_COUNTING_SIGNALS
     );
-    expect(core).toBeLessThanOrEqual(CORE_BUDGET_BYTES);
+    expect(core.eager).toBeLessThanOrEqual(CORE_BUDGET_BYTES);
   });
 
   it('keeps the runtime bucket under budget too', async () => {
@@ -83,7 +86,7 @@ describe('always-loaded core size floor', () => {
       RESOLVE_DIR,
       EXTERNAL_COUNTING_SIGNALS
     );
-    expect(floor).toBeLessThanOrEqual(FLOOR_BUDGET_BYTES);
+    expect(floor.eager).toBeLessThanOrEqual(FLOOR_BUDGET_BYTES);
   });
 
   it('would fail if @preact/signals reached the runtime bucket', async () => {
@@ -92,7 +95,7 @@ describe('always-loaded core size floor', () => {
       RESOLVE_DIR,
       EXTERNAL_COUNTING_SIGNALS
     );
-    expect(floorWithSignals).toBeGreaterThan(FLOOR_BUDGET_BYTES);
+    expect(floorWithSignals.eager).toBeGreaterThan(FLOOR_BUDGET_BYTES);
   });
 
   it('would fail if @preact/signals reached core', async () => {
@@ -105,6 +108,6 @@ describe('always-loaded core size floor', () => {
       RESOLVE_DIR,
       EXTERNAL_COUNTING_SIGNALS
     );
-    expect(coreWithSignals).toBeGreaterThan(CORE_BUDGET_BYTES);
+    expect(coreWithSignals.eager).toBeGreaterThan(CORE_BUDGET_BYTES);
   });
 });

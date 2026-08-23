@@ -18,11 +18,25 @@ describe('renderComment', () => {
     expect(md).toContain('<!-- framework-size -->');
     expect(md).toContain('## Framework JS size');
     expect(md).toContain('### Framework runtime (gzip)');
-    expect(md).toContain('| core | 4.0 KB | — |');
-    expect(md).toContain('| loaders | 1.0 KB | — |');
+    expect(md).toContain('| core | 4.0 KB | — | — |');
+    expect(md).toContain('| loaders | 1.0 KB | — | — |');
     expect(md).toContain('### Components (gzip)');
-    expect(md).toContain('| ui-core | 1.4 KB | — |');
-    expect(md).toContain('| dialog | 600 B | — |');
+    expect(md).toContain('| ui-core | 1.4 KB | — | — |');
+    expect(md).toContain('| dialog | 600 B | — | — |');
+  });
+
+  it('renders a feature\'s deferred (dynamic-import) bytes, dash when zero', () => {
+    const fresh = {
+      sectionA: {
+        core: { total: 4000, marginal: 4000, deferred: 0 },
+        routing: { total: 2500, marginal: 500, deferred: 6000 },
+      },
+      sectionC: {},
+    };
+    const md = renderComment(fresh, { sectionA: {}, sectionC: {} });
+    expect(md).toContain('| Feature | Size | Deferred | Δ vs base |');
+    expect(md).toContain('| routing | 500 B | 6.0 KB | (new) |');
+    expect(md).toContain('| core | 4.0 KB | — | (new) |');
   });
 
   it('frames the runtime section so always-on rows are not read as opt-in', () => {
@@ -41,7 +55,7 @@ describe('renderComment', () => {
     // the feature table.
     expect(md).toMatch(/always-on/i);
     expect(md).toContain('every route');
-    expect(md).toContain('| runtime | 2.4 KB | (new) |');
+    expect(md).toContain('| runtime | 2.4 KB | — | (new) |');
   });
 
   it('renders the docs-site baseline section from real-build site data', () => {
@@ -97,9 +111,9 @@ describe('renderComment', () => {
       sectionC: { 'ui-core': { total: 1300, marginal: 1300 } },
     };
     const md = renderComment(fresh, base);
-    expect(md).toContain('| loaders | 1.2 KB | +200 B |');
-    expect(md).toContain('| actions | 300 B | (new) |');
-    expect(md).toContain('| ui-core | 1.3 KB | -100 B |');
-    expect(md).toContain('| dialog | (removed) | |');
+    expect(md).toContain('| loaders | 1.2 KB | — | +200 B |');
+    expect(md).toContain('| actions | 300 B | — | (new) |');
+    expect(md).toContain('| ui-core | 1.3 KB | — | -100 B |');
+    expect(md).toContain('| dialog | (removed) | | |');
   });
 });
