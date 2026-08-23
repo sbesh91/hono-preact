@@ -1,0 +1,197 @@
+import { Example } from '../../../components/docs/Example.js';
+import { ListboxDemo } from '../../../components/docs/ListboxDemo.js';
+import listboxCode from '../../../components/docs/ListboxDemo.tsx?highlighted';
+
+# Listbox
+
+The mid-level part set for command palettes and custom listboxes: a text input
+driving a static option list, wired as the APG combobox pattern with
+`aria-activedescendant`. You own the option set (querying, filtering,
+ordering); the parts own ids, ARIA wiring, keyboard navigation, the highlight,
+commit, and screen-reader announcements. It ships unstyled: style it through
+the `data-highlighted`, `data-selected`, `data-disabled`, and `data-empty`
+contract.
+
+Use Listbox when you are building the list yourself, a command palette, a
+search dialog, a custom picker, and only need the interaction layer.
+[Select](/docs/components/select) and [Combobox](/docs/components/combobox)
+remain the full pickers: they own the value, float the popup, and filter for
+you. Listbox holds no value and does not float; the list renders where you put
+it.
+
+## Demo
+
+Focus the input and use the arrow keys: the highlight moves while focus stays
+on the input, and Enter commits the highlighted option. The first result is
+highlighted whenever the set changes, so Enter always runs the top match.
+
+<Example code={listboxCode}>
+  <ListboxDemo />
+</Example>
+
+## Command palette
+
+A palette is the same structure inside a
+[Dialog](/docs/components/dialog): the dialog owns open state, focus, and
+Escape; pass its open state to `enabled` so navigation and announcements sleep
+while closed. This is exactly how this site's own ⌘K palette is built.
+
+```tsx
+<Dialog.Root open={open} onOpenChange={setOpen}>
+  <Dialog.Popup aria-label="Command palette">
+    <Listbox.Root enabled={open} onCommit={run}>
+      <Listbox.Input
+        aria-label="Search commands"
+        value={query}
+        onInput={(e) => setQuery(e.currentTarget.value)}
+      />
+      <Listbox.Status />
+      <Listbox.List aria-label="Commands">
+        {results.map((r) => (
+          <Listbox.Option key={r.id} value={r.id}>
+            {r.title}
+          </Listbox.Option>
+        ))}
+        <Listbox.Empty>No results</Listbox.Empty>
+      </Listbox.List>
+    </Listbox.Root>
+  </Dialog.Popup>
+</Dialog.Root>
+```
+
+`enabled={open}` also keeps the opening announcement honest: `Listbox.Status`
+renders an empty string while disabled, so opening the palette is a real text
+change (`'' -> '5 results available'`) that screen readers read out.
+
+## Keyboard
+
+| Key                     | Context               | Action                                                           |
+| ----------------------- | --------------------- | ---------------------------------------------------------------- |
+| `ArrowDown` / `ArrowUp` | Input focused         | Move the highlight (wraps by default); focus stays on the input. |
+| `Enter`                 | An option highlighted | Commit the highlighted option (`onCommit`).                      |
+| `Enter`                 | No options            | Not consumed; native form behavior proceeds.                     |
+| Printable characters    | Input focused         | Never consumed: typing always reaches the input.                 |
+| `Home` / `End`          | Input focused         | Not consumed: they move the caret, not the list.                 |
+
+Typeahead is off by design: the input is the text field, so printable keys
+must type, not jump the list.
+
+## Accessibility
+
+The parts implement the APG combobox pattern with a listbox popup, using
+`aria-activedescendant` so DOM focus never leaves the input:
+
+- `Listbox.Input` is `role="combobox"` with `aria-expanded`, `aria-controls`
+  pointing at the list, and `aria-activedescendant` tracking the highlight
+  while enabled.
+- `Listbox.List` is `role="listbox"`; each `Listbox.Option` is
+  `role="option"` with `aria-selected` and `aria-disabled`.
+- `Listbox.Status` is a polite, atomic live region announcing the result
+  count after each change.
+
+When the listbox has no real selection (a command palette), `aria-selected`
+follows the highlight, which is the convention palettes use so screen readers
+announce the pointed-at result. When you do track a selection, pass
+`selected` explicitly and the highlight stays visual-only
+(`data-highlighted`).
+
+## API reference
+
+Every part accepts a `render` prop for composition (see
+[renderElement](/docs/components/render-element)) and forwards unknown props
+to the element it renders. `Listbox.Option` passes
+`{ selected, disabled, highlighted }` to a render function; `Listbox.Input`
+passes `{ enabled }`; `Listbox.Status` passes `{ count, enabled }`.
+
+### Listbox.Root
+
+Provides the highlight state, ids, refs, option registry, and the commit
+callback to the parts. Generic over the option value type
+(`Listbox.Root<Value>`); defaults to `string`. Renders no element of its own.
+
+| Prop       | Type                     | Default | Description                                                                                                             |
+| ---------- | ------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `onCommit` | `(value: Value) => void` | -       | Called when an option is committed (Enter on the highlight, or a click).                                                |
+| `enabled`  | `boolean`                | `true`  | Keyboard navigation, auto-highlight, and announcements are live while `true`. Pass a dialog's open state for a palette. |
+| `loop`     | `boolean`                | `true`  | Wrap the highlight from last to first and back.                                                                         |
+| `children` | `ComponentChildren`      | -       | The other parts.                                                                                                        |
+
+The Root holds no selected value. Consumers that need one keep it themselves
+and mark options with `selected`.
+
+### Listbox.Input
+
+The text field driving the list. Owns keyboard navigation while enabled;
+focus stays on it and `aria-activedescendant` tracks the highlight. Default
+element `<input type="text">` with `role="combobox"`.
+
+| Prop       | Type                                   | Default | Description                                                                                                    |
+| ---------- | -------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `render`   | `RenderProp<{ enabled: boolean }>`     | -       | Compose or replace the element.                                                                                |
+| `...props` | `JSX.HTMLAttributes<HTMLInputElement>` | -       | Forwarded to the element; a passed `onKeyDown` runs before navigation and can `preventDefault` to suppress it. |
+
+Sets `role="combobox"`, `autocomplete="off"`, `aria-expanded`,
+`aria-controls`, and `aria-activedescendant` (while enabled).
+
+### Listbox.List
+
+The option container, rendered in place (it does not float). Default element
+`<div>` with `role="listbox"`.
+
+| Prop         | Type                                 | Default | Description                          |
+| ------------ | ------------------------------------ | ------- | ------------------------------------ |
+| `render`     | `RenderProp`                         | -       | Compose or replace the element.      |
+| `aria-label` | `string`                             | -       | Accessible name for the list.        |
+| `children`   | `ComponentChildren`                  | -       | The options (and an optional Empty). |
+| `...props`   | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.            |
+
+Sets `role="listbox"`, the id `Listbox.Input` points at, and `data-empty`
+while no options are registered.
+
+### Listbox.Option
+
+One committable row. Default element `<div>` with `role="option"`. Generic
+over the root's value type (`Listbox.Option<Value>`).
+
+| Prop       | Type                                                       | Default | Description                                                                                  |
+| ---------- | ---------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------- |
+| `value`    | `Value`                                                    | -       | Passed to `onCommit` when this option is committed.                                          |
+| `selected` | `boolean`                                                  | -       | `aria-selected`. Defaults to the highlight when omitted (the command-palette convention).    |
+| `disabled` | `boolean`                                                  | `false` | Skipped by navigation; does not commit on click.                                             |
+| `render`   | `RenderProp<{ selected, disabled, highlighted: boolean }>` | -       | Compose or replace the element.                                                              |
+| `children` | `ComponentChildren`                                        | -       | The row content.                                                                             |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                       | -       | Forwarded to the element; passed `onClick` / `onPointerEnter` run before commit / highlight. |
+
+Sets `role="option"`, `aria-selected`, `aria-disabled` (when disabled), and
+`data-highlighted` / `data-disabled` while each state holds. `data-selected`
+appears only when you pass `selected` explicitly: the highlight already has
+its own attribute, so selection styles (a checkmark, say) never fire on a
+merely-highlighted row even though `aria-selected` defaults to the highlight.
+Hovering highlights; clicking commits.
+
+### Listbox.Status
+
+A visually-hidden polite live region announcing the result count: `'No
+results'`, or `'N results available'`. Empty while disabled, so enabling (a
+palette opening) is a real text change that screen readers announce. Default
+element `<div>`.
+
+| Prop       | Type                                              | Default | Description                                                              |
+| ---------- | ------------------------------------------------- | ------- | ------------------------------------------------------------------------ |
+| `render`   | `RenderProp<{ count: number; enabled: boolean }>` | -       | Replace the message (e.g. to announce loading) while keeping the region. |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>`              | -       | Forwarded (excluding `children`); merged with the visually-hidden style. |
+
+Sets `role="status"`, `aria-live="polite"`, `aria-atomic="true"`, and
+visually-hidden styles.
+
+### Listbox.Empty
+
+Rendered only while enabled with zero options registered; put the "no
+results" row in it. Default element `<div>` with `role="presentation"` (the
+live announcement comes from `Listbox.Status`, not this element).
+
+| Prop       | Type                                 | Default | Description                     |
+| ---------- | ------------------------------------ | ------- | ------------------------------- |
+| `render`   | `RenderProp`                         | -       | Compose or replace the element. |
+| `children` | `ComponentChildren`                  | -       | The empty-state content.        |
+| `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element.       |
