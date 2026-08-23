@@ -1,5 +1,4 @@
-import { Combobox, matchSubstring } from 'hono-preact-ui';
-import { useState } from 'preact/hooks';
+import { Combobox } from 'hono-preact-ui';
 
 const CITIES = [
   'Amsterdam',
@@ -17,10 +16,8 @@ const CITIES = [
 // Tab accepts it; Backspace or ArrowLeft dismisses it and keeps the query.
 // Minimal form: just an Input.
 export function ComboboxInlineDemo() {
-  const [query, setQuery] = useState('');
-  const filtered = CITIES.filter((c) => matchSubstring(c, query));
   return (
-    <Combobox.Root autocomplete="both" onInputChange={setQuery}>
+    <Combobox.Root autocomplete="both">
       <Combobox.Input
         class="docs-cb-input"
         placeholder="Type a city…"
@@ -29,7 +26,7 @@ export function ComboboxInlineDemo() {
       <Combobox.Status />
       <Combobox.Positioner class="docs-cb-positioner">
         <Combobox.Popup class="docs-cb" aria-label="City">
-          {filtered.map((c) => (
+          {CITIES.map((c) => (
             <Combobox.Option class="docs-cb__option" key={c} value={c}>
               {c}
             </Combobox.Option>

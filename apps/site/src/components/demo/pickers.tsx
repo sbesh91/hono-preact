@@ -1,4 +1,4 @@
-import { Select, Combobox, matchSubstring } from 'hono-preact-ui';
+import { Select, Combobox } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 import {
   STATUSES,
@@ -104,9 +104,9 @@ export function PrioritySelect({
   );
 }
 
-// AssigneeCombobox dogfoods Combobox with consumer-side filtering.
-// The consumer holds the typed query in state, passes it as inputValue, and
-// renders only matching options. Combobox itself never filters. The domain
+// AssigneeCombobox dogfoods Combobox with the built-in filter. The consumer
+// holds the typed query in state only to seed the input with the selected
+// user's name; the component filters the options against it. The domain
 // value is `string | null`: null flows in as the controlled-empty value and
 // flows out when Combobox.Clear (Unassign) fires.
 export function AssigneeCombobox({
@@ -122,7 +122,6 @@ export function AssigneeCombobox({
   const selected = options.find((o) => o.id === value);
 
   const [query, setQuery] = useState(selected?.name ?? '');
-  const filtered = options.filter((o) => matchSubstring(o.name, query));
 
   return (
     <Combobox.Root<string>
@@ -148,7 +147,7 @@ export function AssigneeCombobox({
       <Combobox.Status />
       <Combobox.Positioner>
         <Combobox.Popup class={popupCls} aria-label="Assignee">
-          {filtered.map((o) => (
+          {options.map((o) => (
             <Combobox.Option key={o.id} value={o.id} class={optionCls}>
               {o.name}
             </Combobox.Option>

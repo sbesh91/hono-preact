@@ -12,8 +12,8 @@ import comboboxInlineCode from '../../../components/docs/ComboboxInlineDemo.tsx?
 # Combobox
 
 An editable text input combined with a popup listbox. The user types a query,
-the consumer filters and renders matching options, and the component handles
-navigation, ARIA wiring, and selection commit. It ships unstyled: style it
+the component filters the rendered options against it and handles navigation,
+ARIA wiring, and selection commit. It ships unstyled: style it
 through the `data-state`, `data-highlighted`, `data-selected`, `data-disabled`,
 `data-side`, `data-align`, and `data-empty` contract.
 
@@ -21,21 +21,25 @@ Use a Combobox when the user needs to search or filter before picking. Use
 [Select](/docs/components/select) when the list is short and always fully
 visible without filtering.
 
-**The consumer owns filtering.** The component never filters its children.
-Read `inputValue` (the typed query) and render only the matching
-`<Combobox.Option>` elements. A `matchSubstring` helper is exported for the
-common in-memory case.
+**Filtering is built in.** Each `<Combobox.Option>` matches its label against
+the typed query with the `filter` prop, which defaults to the exported
+`matchSubstring` helper; non-matching options unmount. Pass a custom
+`(label, query) => boolean` to change the match, or `filter={null}` to disable
+filtering entirely, the escape hatch when you filter server-side (or in an
+effect) and render only the matching options yourself. Options with non-string
+children need `itemToString` so the filter has a label to match. `create`
+options always stay visible.
 
 **`inputValue` is always the typed query.** In `autocomplete="both"` mode the
 DOM input may show a longer inline completion, but the public `inputValue`
-(and `onInputChange`) is always the prefix the user typed, so consumer
-filtering is identical across all three autocomplete modes.
+(and `onInputChange`) is always the prefix the user typed, so filtering is
+identical across all three autocomplete modes.
 
 ## Demo
 
 The minimal form is a single `Combobox.Input`. Focus it (or click it) to open,
-type to filter; the consumer renders the matching options while the component
-handles navigation and selection. A single select commits and closes on pick.
+type to filter; the component narrows the options and handles navigation and
+selection. A single select commits and closes on pick.
 
 <Example code={comboboxCode}>
   <ComboboxDemo />
@@ -119,11 +123,12 @@ handler persists the new option and selects it:
 
 **Inline autocomplete.** Set `autocomplete="both"` to complete the input to the
 first match (Enter or Tab accepts; Backspace dismisses). `autocomplete="none"`
-turns off auto-highlight for a static, non-filtering suggestion list.
+turns off auto-highlight; pair it with `filter={null}` for a static,
+non-filtering suggestion list.
 
-**Async options.** Fetch and filter in an effect and render the results;
-override `Combobox.Status` with a render prop to announce loading instead of the
-result count.
+**Async options.** Set `filter={null}`, fetch and filter in an effect, and
+render the results; override `Combobox.Status` with a render prop to announce
+loading instead of the result count.
 
 ### Form reset
 
@@ -348,32 +353,33 @@ positioning to the parts. Generic over the value type (`Combobox.Root<Value>`);
 defaults to `string`. Renders children and the hidden form field(s) when `name`
 is set.
 
-| Prop                | Type                                                                         | Default     | Description                                                                                                                                        |
-| ------------------- | ---------------------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `value`             | `Value \| null` single, `readonly Value[]` multiple                          | -           | Controlled selection. Pair with `onValueChange`. `null` (single) or `[]` (multiple) is controlled-and-empty; omit for uncontrolled.                |
-| `defaultValue`      | `Value \| null` single, `readonly Value[]` multiple                          | -           | Initial selection when uncontrolled.                                                                                                               |
-| `onValueChange`     | `(value: Value \| null) => void` single, `(value: Value[]) => void` multiple | -           | Called when the selection changes, including clears (not called for `create` options).                                                             |
-| `multiple`          | `true \| false`                                                              | `false`     | Discriminates the value shape: omitted or `false` is scalar, `true` is array; popup stays open on pick. Use a literal so TypeScript pins the mode. |
-| `open`              | `boolean`                                                                    | -           | Controlled open state. Pair with `onOpenChange`.                                                                                                   |
-| `defaultOpen`       | `boolean`                                                                    | `false`     | Initial open state when uncontrolled.                                                                                                              |
-| `onOpenChange`      | `(open: boolean) => void`                                                    | -           | Called when the popup requests an open or close.                                                                                                   |
-| `inputValue`        | `string`                                                                     | -           | Controlled typed query. Pair with `onInputChange`.                                                                                                 |
-| `defaultInputValue` | `string`                                                                     | `''`        | Initial query when uncontrolled.                                                                                                                   |
-| `onInputChange`     | `(value: string) => void`                                                    | -           | Called when the user edits the input (always the typed query, not completion).                                                                     |
-| `autocomplete`      | `'none' \| 'list' \| 'both'`                                                 | `'list'`    | Sets `aria-autocomplete` and governs auto-highlight and inline completion.                                                                         |
-| `onCreate`          | `(inputValue: string) => void`                                               | -           | Called when a `create` option is selected; if absent, `create` falls back to normal selection.                                                     |
-| `itemToString`      | `(value: Value) => string`                                                   | -           | Resolve a label for a value whose option is not currently rendered (SSR, filter).                                                                  |
-| `name`              | `string`                                                                     | -           | Submit the value as a hidden field (one per value in multiple mode).                                                                               |
-| `disabled`          | `boolean`                                                                    | `false`     | Disable the input and skip the hidden field.                                                                                                       |
-| `required`          | `boolean`                                                                    | `false`     | Mark the input `aria-required`.                                                                                                                    |
-| `isValueEqual`      | `(a: Value, b: Value) => boolean`                                            | `Object.is` | Compare values for selection matching (use for object values).                                                                                     |
-| `serializeValue`    | `(value: Value) => string`                                                   | `String`    | Stringify a value for the hidden form field.                                                                                                       |
-| `side`              | `'top'\|'right'\|'bottom'\|'left'`                                           | `'bottom'`  | Preferred side of the input to place the popup.                                                                                                    |
-| `align`             | `'start'\|'center'\|'end'`                                                   | `'start'`   | Alignment along that side.                                                                                                                         |
-| `offset`            | `number`                                                                     | `8`         | Gap in pixels between the input and the popup.                                                                                                     |
-| `loop`              | `boolean`                                                                    | `true`      | Wrap arrow navigation at the first / last option.                                                                                                  |
-| `openOnFocus`       | `boolean`                                                                    | `true`      | Open the popup when the input gains focus (or is clicked while closed). Set `false` to opt out.                                                    |
-| `children`          | `ComponentChildren`                                                          | -           | The input, trigger, positioner, and status parts.                                                                                                  |
+| Prop                | Type                                                                         | Default          | Description                                                                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`             | `Value \| null` single, `readonly Value[]` multiple                          | -                | Controlled selection. Pair with `onValueChange`. `null` (single) or `[]` (multiple) is controlled-and-empty; omit for uncontrolled.                |
+| `defaultValue`      | `Value \| null` single, `readonly Value[]` multiple                          | -                | Initial selection when uncontrolled.                                                                                                               |
+| `onValueChange`     | `(value: Value \| null) => void` single, `(value: Value[]) => void` multiple | -                | Called when the selection changes, including clears (not called for `create` options).                                                             |
+| `multiple`          | `true \| false`                                                              | `false`          | Discriminates the value shape: omitted or `false` is scalar, `true` is array; popup stays open on pick. Use a literal so TypeScript pins the mode. |
+| `open`              | `boolean`                                                                    | -                | Controlled open state. Pair with `onOpenChange`.                                                                                                   |
+| `defaultOpen`       | `boolean`                                                                    | `false`          | Initial open state when uncontrolled.                                                                                                              |
+| `onOpenChange`      | `(open: boolean) => void`                                                    | -                | Called when the popup requests an open or close.                                                                                                   |
+| `inputValue`        | `string`                                                                     | -                | Controlled typed query. Pair with `onInputChange`.                                                                                                 |
+| `defaultInputValue` | `string`                                                                     | `''`             | Initial query when uncontrolled.                                                                                                                   |
+| `onInputChange`     | `(value: string) => void`                                                    | -                | Called when the user edits the input (always the typed query, not completion).                                                                     |
+| `autocomplete`      | `'none' \| 'list' \| 'both'`                                                 | `'list'`         | Sets `aria-autocomplete` and governs auto-highlight and inline completion.                                                                         |
+| `filter`            | `((label: string, query: string) => boolean) \| null`                        | `matchSubstring` | Match an option's label against the typed query; failing options unmount. `null` disables filtering (server-side filtering escape hatch).          |
+| `onCreate`          | `(inputValue: string) => void`                                               | -                | Called when a `create` option is selected; if absent, `create` falls back to normal selection.                                                     |
+| `itemToString`      | `(value: Value) => string`                                                   | -                | Resolve a label for a value whose option is not currently rendered (SSR, filter).                                                                  |
+| `name`              | `string`                                                                     | -                | Submit the value as a hidden field (one per value in multiple mode).                                                                               |
+| `disabled`          | `boolean`                                                                    | `false`          | Disable the input and skip the hidden field.                                                                                                       |
+| `required`          | `boolean`                                                                    | `false`          | Mark the input `aria-required`.                                                                                                                    |
+| `isValueEqual`      | `(a: Value, b: Value) => boolean`                                            | `Object.is`      | Compare values for selection matching (use for object values).                                                                                     |
+| `serializeValue`    | `(value: Value) => string`                                                   | `String`         | Stringify a value for the hidden form field.                                                                                                       |
+| `side`              | `'top'\|'right'\|'bottom'\|'left'`                                           | `'bottom'`       | Preferred side of the input to place the popup.                                                                                                    |
+| `align`             | `'start'\|'center'\|'end'`                                                   | `'start'`        | Alignment along that side.                                                                                                                         |
+| `offset`            | `number`                                                                     | `8`              | Gap in pixels between the input and the popup.                                                                                                     |
+| `loop`              | `boolean`                                                                    | `true`           | Wrap arrow navigation at the first / last option.                                                                                                  |
+| `openOnFocus`       | `boolean`                                                                    | `true`           | Open the popup when the input gains focus (or is clicked while closed). Set `false` to opt out.                                                    |
+| `children`          | `ComponentChildren`                                                          | -                | The input, trigger, positioner, and status parts.                                                                                                  |
 
 ### Combobox.Input
 
@@ -573,9 +579,9 @@ your own components. Several have their own page with examples:
 [useControllableState](/docs/components/use-controllable-state), and
 [mergeRefs](/docs/components/merge-refs).
 
-The `matchSubstring` helper is also exported from `hono-preact-ui` for the
-common in-memory filter case:
-`matchSubstring(label: string, query: string): boolean`.
+The default filter, `matchSubstring(label: string, query: string): boolean`, a
+case-insensitive substring match, is also exported from `hono-preact-ui` for
+composing your own filter around it.
 
 ## Accessibility
 

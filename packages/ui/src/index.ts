@@ -169,6 +169,7 @@ export {
   ComboboxStatus,
   ComboboxValue,
   type ComboboxRootProps,
+  type ComboboxFilter,
   type ComboboxInputProps,
   type ComboboxTriggerProps,
   type ComboboxClearProps,

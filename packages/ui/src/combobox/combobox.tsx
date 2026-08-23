@@ -46,7 +46,15 @@ import {
   useComboboxContext,
   type AutocompleteMode,
 } from './context.js';
-import { computeInlineCompletion, isForwardEdit } from './autocomplete.js';
+import {
+  computeInlineCompletion,
+  isForwardEdit,
+  matchSubstring,
+} from './autocomplete.js';
+
+// The option filter run against the typed query. `null` disables filtering
+// entirely (the escape hatch for consumers that filter server-side).
+export type ComboboxFilter = ((label: string, query: string) => boolean) | null;
 
 export interface ComboboxRootOwnProps extends PositioningProps {
   open?: boolean;
@@ -56,6 +64,7 @@ export interface ComboboxRootOwnProps extends PositioningProps {
   defaultInputValue?: string;
   onInputChange?: (value: string) => void;
   autocomplete?: AutocompleteMode; // default 'list'
+  filter?: ComboboxFilter; // default matchSubstring; null disables filtering
   onCreate?: (inputValue: string) => void;
   name?: string;
   disabled?: boolean;
@@ -88,6 +97,7 @@ export function ComboboxRoot<Value extends {} = string>(
     defaultInputValue,
     onInputChange,
     autocomplete = 'list',
+    filter = matchSubstring,
     onCreate,
     itemToString,
     name,
@@ -200,6 +210,21 @@ export function ComboboxRoot<Value extends {} = string>(
     setInputValue(norm.multiple ? '' : (items[0]?.label ?? ''));
   }, [sel.selectedItems, norm.multiple, setInputValue]);
 
+  // Whether an option passes the filter against the typed query. The label is
+  // the option's string children when present; otherwise itemToString(value),
+  // then String(value) (object values without itemToString need one to filter).
+  const filterOption = useCallback(
+    (optionValue: unknown, stringLabel: string | undefined) => {
+      if (filter == null) return true;
+      const label =
+        stringLabel ??
+        (itemToString ? itemToString(optionValue as Value) : undefined) ??
+        String(optionValue);
+      return filter(label, inputValue);
+    },
+    [filter, itemToString, inputValue]
+  );
+
   const ctx = useMemo(
     () => ({
       open,
@@ -208,6 +233,7 @@ export function ComboboxRoot<Value extends {} = string>(
       inputValue,
       setInputValue,
       autocomplete,
+      filterOption,
       isSelected: sel.isSelected,
       selectOption,
       createOption,
@@ -243,6 +269,7 @@ export function ComboboxRoot<Value extends {} = string>(
       inputValue,
       setInputValue,
       autocomplete,
+      filterOption,
       sel.isSelected,
       selectOption,
       createOption,
@@ -389,7 +416,7 @@ export type ComboboxOptionProps<Value = string> = {
 
 export function ComboboxOption<Value = string>(
   props: ComboboxOptionProps<Value>
-): VNode {
+): VNode | null {
   const {
     value,
     create = false,
@@ -410,7 +437,13 @@ export function ComboboxOption<Value = string>(
   // re-registers; for non-string children the label is read once from the DOM
   // (changing their text without changing `value` won't update the registration).
   const stringLabel = typeof children === 'string' ? children : undefined;
-  useRegisterOption(ctx.registerOption, id, value, stringLabel);
+  // A create option always shows (its whole point is matching nothing); other
+  // options unmount while filtered out, so they deregister and drop out of
+  // optionCount, keyboard navigation, and the Status/Empty parts.
+  const visible = create || ctx.filterOption(value, stringLabel);
+  useRegisterOption(ctx.registerOption, id, value, stringLabel, visible);
+
+  if (!visible) return null;
 
   const commit = () => {
     if (create) {
