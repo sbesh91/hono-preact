@@ -12,20 +12,12 @@
 // unknown route all degrade to today's no-hint behavior.
 
 import { findBestPattern } from './route-pattern.js';
+import type { RoutePreloadMap } from '@hono-preact/iso/internal/contract';
 
-/**
- * Build-generated map from route pattern to the client chunk URLs that route
- * needs, in discovery order (outer layout chunks first, leaf view last).
- * Emitted into the client build artifact by the vite preload plugin and read at
- * runtime via the adapter's manifest reader.
- *
- * Keys are route patterns (`/`, `/docs/:slug`, `/docs/quick-start`), matched
- * against the request path with `findBestPattern`. Values are absolute,
- * root-relative hrefs (`/static/home-CB6FkG2E.js`). A flat list, not a priority
- * split: like the entry closure, every route chunk is hydration-only and is
- * hinted at `fetchpriority="low"` so it yields to render-critical CSS/fonts.
- */
-export type RoutePreloadMap = Record<string, string[]>;
+// Single-sourced in the shared iso contract module so the build writer and this
+// reader cannot drift (#324). Re-exported because this module's matching
+// signatures are the runtime side of that contract.
+export type { RoutePreloadMap };
 
 /**
  * The chunk hrefs for the route best matching `urlPath`, or `undefined` when

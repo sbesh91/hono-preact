@@ -26,6 +26,8 @@ export function useRouteMatch<R extends RoutePattern>(
   options?: RouteMatchOptions
 ): RouteParams<R> | null {
   const { path } = useLocation();
+  // The structural read off Record<string, string> is a sanctioned cast
+  // boundary: the runtime value lacks the literals that `route` names.
   return matchPath(
     path,
     route,

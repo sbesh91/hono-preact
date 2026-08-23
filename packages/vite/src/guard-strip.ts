@@ -1,7 +1,7 @@
 import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import type { NodePath } from '@babel/traverse';
-import type { CallExpression, File, ImportDeclaration } from '@babel/types';
+import type { CallExpression, File } from '@babel/types';
 import MagicString from 'magic-string';
 import type { Plugin } from 'vite';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
@@ -62,7 +62,7 @@ function collectLocalBindings(
   const namespaces = new Set<string>();
   for (const node of ast.program.body) {
     if (node.type !== 'ImportDeclaration') continue;
-    const imp = node as ImportDeclaration;
+    const imp = node;
     if (!ISO_PACKAGE_SOURCES.has(imp.source.value)) continue;
     for (const spec of imp.specifiers) {
       if (spec.type === 'ImportNamespaceSpecifier') {

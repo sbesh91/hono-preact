@@ -482,7 +482,7 @@ function getOrCreateLazyView(
             return wrapWithRouteLocations(
               serverMod,
               fullLocation,
-              h(View as ComponentType<ViewProps>, location)
+              h(asViewComponent(View), location)
             );
           };
           return { default: Wrapped };

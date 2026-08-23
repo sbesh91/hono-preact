@@ -86,21 +86,16 @@ export async function runLoaderServer<T>(
   // ctx shape they see on the RPC path. `c` proxies through the lazy
   // getter so test paths (no request scope) keep working when no consumer
   // reads it.
-  const serverCtx: ServerLoaderCtx = Object.defineProperties(
-    {
-      scope: 'loader' as const,
-      signal,
-      location,
-      module: loaderRef.__moduleKey ?? '<unkeyed>',
-      loader: loaderName,
-    } as Omit<ServerLoaderCtx, 'c'>,
-    {
-      c: {
-        get: () => ctx.c,
-        enumerable: true,
-      },
-    }
-  ) as ServerLoaderCtx;
+  const serverCtx: ServerLoaderCtx = {
+    scope: 'loader',
+    signal,
+    location,
+    module: loaderRef.__moduleKey ?? '<unkeyed>',
+    loader: loaderName,
+    get c(): Context {
+      return ctx.c;
+    },
+  };
 
   /**
    * Wrap a generator that has already yielded its first chunk so that

@@ -10,6 +10,7 @@
 // parse, and promotable to 103 Early Hints by the CDN/adapter).
 
 import type { RoutePreloadMap } from './route-preload-match.js';
+import type { PreloadArtifact } from '@hono-preact/iso/internal/contract';
 
 /**
  * The build artifact the adapter reader returns, once resolved and normalized:
@@ -17,14 +18,7 @@ import type { RoutePreloadMap } from './route-preload-match.js';
  * `routes` maps each route pattern to the chunks its matched layout/view need,
  * `routeCss` maps each route pattern to its render-critical stylesheet URLs.
  */
-export interface PreloadManifest {
-  closure: string[];
-  routes: RoutePreloadMap;
-  /** Per-route render-critical stylesheet URLs (same shape/matching as routes). */
-  routeCss: RoutePreloadMap;
-  /** Residual global stylesheet URLs, injected render-blocking before route CSS. */
-  globalCss: string[];
-}
+export type PreloadManifest = PreloadArtifact;
 
 /**
  * A platform-provided source of the build artifact. Installed by the adapter's
