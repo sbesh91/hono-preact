@@ -1,4 +1,4 @@
-import { Combobox, matchSubstring } from 'hono-preact-ui';
+import { Combobox } from 'hono-preact-ui';
 import { useState } from 'preact/hooks';
 
 // Creatable: when the query matches no existing option, a `create` option is
@@ -9,7 +9,6 @@ export function ComboboxCreatableDemo() {
   const [options, setOptions] = useState(['Apple', 'Banana', 'Cherry']);
   const [value, setValue] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const filtered = options.filter((o) => matchSubstring(o, query));
   const showCreate =
     query !== '' &&
     !options.some((o) => o.toLowerCase() === query.toLowerCase());
@@ -31,7 +30,7 @@ export function ComboboxCreatableDemo() {
       <Combobox.Status />
       <Combobox.Positioner class="docs-cb-positioner">
         <Combobox.Popup class="docs-cb" aria-label="Tag">
-          {filtered.map((o) => (
+          {options.map((o) => (
             <Combobox.Option class="docs-cb__option" key={o} value={o}>
               {o}
             </Combobox.Option>

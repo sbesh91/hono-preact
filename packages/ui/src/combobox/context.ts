@@ -24,6 +24,10 @@ export interface ComboboxContextValue {
   registerOption: (id: string, value: unknown, label: string) => () => void;
   selectedItems: () => OptionEntry[];
   labelFor: (value: unknown) => string;
+  // Whether an option passes the Root's filter against the typed query.
+  // stringLabel is the option's string children when it has them; otherwise
+  // the label falls back to itemToString(value), then String(value).
+  filterOption: (value: unknown, stringLabel: string | undefined) => boolean;
   optionCount: number;
   clear: () => void; // reset value + input
   // revert the input text to the committed value's label (or '' for multiple);

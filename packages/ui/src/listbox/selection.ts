@@ -199,24 +199,28 @@ export function useListboxSelection<Value = string>(
   // consuming Root's context memo (keyed on those callbacks) would never
   // recompute, leaving a stale auto-label after an add/remove/text change.
   const [version, force] = useState(0);
+
+  // value-to-label cache, keyed by serialized value. Written on every
+  // registration so a label survives its option being filtered out of the DOM,
+  // including labels of values that were selected via value/defaultValue and
+  // never toggled (which the selection-time snapshot alone would miss).
+  const labelCache = useRef<Map<string, string>>(new Map());
+
   const registerOption = useCallback(
     (id: string, optionValue: unknown, label: string) => {
       registry.current = [
         ...registry.current,
         { id, value: optionValue, label },
       ];
+      labelCache.current.set(serialize(optionValue), label);
       force((n) => n + 1);
       return () => {
         registry.current = registry.current.filter((e) => e.id !== id);
         force((n) => n + 1);
       };
     },
-    []
+    [serialize]
   );
-
-  // value-to-label cache, keyed by serialized value. Snapshotted at selection
-  // time so a label survives its option being filtered out of the DOM.
-  const labelCache = useRef<Map<string, string>>(new Map());
 
   const registryLabelFor = useCallback(
     (v: unknown): string | undefined =>
@@ -318,10 +322,12 @@ export function useRegisterOption(
   register: (id: string, value: unknown, label: string) => () => void,
   id: string,
   value: unknown,
-  stringLabel: string | undefined
+  stringLabel: string | undefined,
+  enabled = true
 ): void {
   useLayoutEffect(() => {
+    if (!enabled) return;
     const label = stringLabel ?? document.getElementById(id)?.textContent ?? '';
     return register(id, value, label);
-  }, [id, value, stringLabel, register]);
+  }, [id, value, stringLabel, register, enabled]);
 }

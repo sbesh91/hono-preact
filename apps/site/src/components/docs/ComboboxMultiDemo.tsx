@@ -1,5 +1,4 @@
-import { Combobox, matchSubstring } from 'hono-preact-ui';
-import { useState } from 'preact/hooks';
+import { Combobox } from 'hono-preact-ui';
 
 const LANGS = ['TypeScript', 'JavaScript', 'Rust', 'Go', 'Python', 'Ruby'];
 
@@ -9,10 +8,8 @@ const LANGS = ['TypeScript', 'JavaScript', 'Rust', 'Go', 'Python', 'Ruby'];
 // the popup. Picking toggles and keeps the popup open; Combobox.Value renders
 // the chips; Backspace on an empty input removes the last token.
 export function ComboboxMultiDemo() {
-  const [query, setQuery] = useState('');
-  const filtered = LANGS.filter((l) => matchSubstring(l, query));
   return (
-    <Combobox.Root multiple onInputChange={setQuery}>
+    <Combobox.Root multiple>
       <Combobox.Anchor class="docs-cb-field">
         <Combobox.Value
           render={(props, { selectedItems, remove }) => (
@@ -45,7 +42,7 @@ export function ComboboxMultiDemo() {
       <Combobox.Status />
       <Combobox.Positioner class="docs-cb-positioner">
         <Combobox.Popup class="docs-cb" aria-label="Languages">
-          {filtered.map((l) => (
+          {LANGS.map((l) => (
             <Combobox.Option class="docs-cb__option" key={l} value={l}>
               {l}
             </Combobox.Option>
