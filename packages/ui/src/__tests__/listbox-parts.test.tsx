@@ -71,6 +71,9 @@ describe('Listbox parts', () => {
     expect(input.getAttribute('aria-activedescendant')).toBe(first.id);
     expect(first.hasAttribute('data-highlighted')).toBe(true);
     expect(first.getAttribute('aria-selected')).toBe('true');
+    // The highlight-follows aria-selected default must not leak into the
+    // styling contract: data-selected marks explicit selection only.
+    expect(first.hasAttribute('data-selected')).toBe(false);
   });
 
   it('ArrowDown/ArrowUp move the highlight with focus staying on the input', async () => {

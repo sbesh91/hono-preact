@@ -244,7 +244,11 @@ export function ListboxOption<Value = string>(
       role: 'option',
       'aria-selected': selected,
       'aria-disabled': disabled ? 'true' : undefined,
-      'data-selected': selected ? '' : undefined,
+      // Only an explicit selection gets the styling hook: aria-selected
+      // defaults to the highlight for screen readers, but CSS already has
+      // data-highlighted for that state, and duplicating it here would make
+      // selection styles (e.g. a checkmark) fire on every highlighted row.
+      'data-selected': selectedProp ? '' : undefined,
       'data-highlighted': highlighted ? '' : undefined,
       'data-disabled': disabled ? '' : undefined,
       onClick: handleClick,

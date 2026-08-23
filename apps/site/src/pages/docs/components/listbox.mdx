@@ -163,7 +163,10 @@ over the root's value type (`Listbox.Option<Value>`).
 | `...props` | `JSX.HTMLAttributes<HTMLDivElement>`                       | -       | Forwarded to the element; passed `onClick` / `onPointerEnter` run before commit / highlight. |
 
 Sets `role="option"`, `aria-selected`, `aria-disabled` (when disabled), and
-`data-selected` / `data-highlighted` / `data-disabled` while each state holds.
+`data-highlighted` / `data-disabled` while each state holds. `data-selected`
+appears only when you pass `selected` explicitly: the highlight already has
+its own attribute, so selection styles (a checkmark, say) never fire on a
+merely-highlighted row even though `aria-selected` defaults to the highlight.
 Hovering highlights; clicking commits.
 
 ### Listbox.Status
