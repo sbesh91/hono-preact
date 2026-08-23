@@ -273,4 +273,78 @@ describe('defineRoutes: layout-level server plumbing', () => {
     expect(pageLoc.path).toBe('/movies/123');
     expect(pageLoc.pathParams).toEqual({ id: '123' });
   });
+
+  // ---------------------------------------------------------------------------
+  // A layout's location must expose exactly the params the layout's OWN pattern
+  // declares (#326). The wildcard capture that spans the child subtree is not
+  // the layout's to see, and neither are the leaf's params.
+  //
+  // The old implementation stripped the wildcard by NAME, dropping any key
+  // called `rest` or `0`. Those are preact-iso's two conventional names for a
+  // catch-all capture, but nothing reserves them: a route that legitimately
+  // declares `:rest` had its value silently deleted, so a layout `use` guard
+  // read `undefined` for a param the URL really bound. That is a fail-open
+  // shape, which is exactly what guardReadableParamSlots exists to prevent
+  // elsewhere in the framework.
+  // ---------------------------------------------------------------------------
+
+  async function layoutParamsFor(
+    layoutPath: string,
+    childPath: string,
+    url: string
+  ): Promise<Record<string, string>> {
+    let observed: any = null;
+    const Probe = () => {
+      observed = useContext(RouteLocationsContext);
+      return null;
+    };
+    const Layout = ({ children }: { children: any }) =>
+      h('main', null, children);
+
+    const manifest = defineRoutes([
+      {
+        path: layoutPath,
+        layout: () => Promise.resolve({ default: Layout as any }),
+        server: () => Promise.resolve({ __moduleKey: 'pages/probe-layout' }),
+        children: [
+          {
+            path: childPath,
+            view: () => Promise.resolve({ default: Probe }),
+            server: () => Promise.resolve({ __moduleKey: 'pages/probe-leaf' }),
+          },
+        ],
+      },
+    ]);
+
+    history.replaceState(null, '', url);
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })));
+    await waitFor(() =>
+      expect(observed?.get('pages/probe-leaf')).toBeDefined()
+    );
+    return observed.get('pages/probe-layout').pathParams;
+  }
+
+  it('keeps a param the layout itself declares, even when it is named `rest`', async () => {
+    // `/docs/:rest` is an ordinary user param that happens to collide with the
+    // conventional catch-all name. The layout declares it, so the layout must
+    // see its bound value rather than undefined.
+    const params = await layoutParamsFor('/docs/:rest', 'x', '/docs/intro/x');
+    expect(params).toEqual({ rest: 'intro' });
+  });
+
+  it('drops the wildcard capture spanning the child subtree', async () => {
+    const params = await layoutParamsFor('/movies', ':id', '/movies/123');
+    expect(params).toEqual({});
+    expect(params).not.toHaveProperty('rest');
+    expect(params).not.toHaveProperty('0');
+  });
+
+  it("keeps the layout's own params while dropping the leaf's", async () => {
+    const params = await layoutParamsFor(
+      '/org/:orgId',
+      ':projectId',
+      '/org/acme/p1'
+    );
+    expect(params).toEqual({ orgId: 'acme' });
+  });
 });

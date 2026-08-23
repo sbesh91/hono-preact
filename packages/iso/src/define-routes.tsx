@@ -13,7 +13,10 @@ import { RouteManifestContext } from './internal/route-manifest.js';
 import { makeRouterLoadTracker } from './internal/route-change.js';
 import { PageMiddlewareHost } from './internal/page-middleware-host.js';
 import type { PageUse } from './internal/use-types.js';
-import { reservedParamNamesIn } from './internal/param-slots.js';
+import {
+  guardReadableParamSlots,
+  reservedParamNamesIn,
+} from './internal/param-slots.js';
 import { isDefinePageComponent } from './define-page.js';
 
 // Keyed by the component itself: the same bare view resolved from more than
@@ -567,9 +570,10 @@ function makeLayoutGroupComponent(
 /**
  * Derive the layout's own matched location from the active (inner) RouteHook.
  *
- * When a layout matches `/movies/*`, the wildcard portion (`rest` or `0`) is
- * the child segment. The layout's location should be the path up to and
- * including the layout's own segments, with the wildcard stripped.
+ * When a layout matches `/movies/*`, the wildcard portion is the child segment.
+ * The layout's location is the path up to and including the layout's own
+ * segments, with the wildcard stripped, and its params are exactly the slots
+ * the layout's own pattern declares.
  */
 function deriveLayoutLocation(
   active: ViewProps,
@@ -588,13 +592,25 @@ function deriveLayoutLocation(
     .filter(Boolean)
     .join('/');
   const finalPath = '/' + path;
+  // Keep exactly the params the layout's OWN pattern declares, mirroring how
+  // the path above is reconstructed from that same pattern. This drops the
+  // catch-all capture (a bare `*` segment is not a `:param`, so it is never a
+  // declared slot) and any inner-leaf param, without having to GUESS the
+  // wildcard's name: matching on the conventional names `rest`/`0` also
+  // deleted a param a route legitimately declared as `:rest`, leaving a layout
+  // `use` guard reading `undefined` for a value the URL really bound.
+  //
+  // `guardReadableParamSlots`, not `declaredParamSlots`: the allowlist has to
+  // agree with what preact-iso's matcher can actually BIND, which is wider
+  // than this framework's `:param` grammar (e.g. `:board-id`). Filtering on the
+  // narrower grammar would re-introduce the same silent drop for those names.
+  // The `v !== undefined` guard also omits the `undefined` the matcher can
+  // store for an unmatched optional/rest param (the static `string` type does
+  // not reflect that).
+  const layoutOwnSlots = new Set(guardReadableParamSlots(layoutPathPattern));
   const filteredParams: Record<string, string> = {};
   for (const [k, v] of Object.entries(params)) {
-    // Drop the catch-all keys. `pathParams` is typed `Record<string, string>`,
-    // so the old `as string` was redundant; the `v !== undefined` guard also
-    // omits the `undefined` the matcher can store for an unmatched optional/rest
-    // param (the static `string` type does not reflect that).
-    if (k !== 'rest' && k !== '0' && v !== undefined) filteredParams[k] = v;
+    if (layoutOwnSlots.has(k) && v !== undefined) filteredParams[k] = v;
   }
   return {
     ...active,
