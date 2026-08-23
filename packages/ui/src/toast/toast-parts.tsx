@@ -130,9 +130,9 @@ export function ToastRoot(props: ToastRootProps) {
         ),
         'data-type': record.type,
         'data-state': open ? 'open' : 'closed',
-        'data-expanded': toaster.expanded ? 'true' : 'false',
+        'data-expanded': toaster.expanded ? '' : undefined,
         'data-front': before === 0 ? '' : undefined,
-        'data-swiping': swipe.swiping ? 'true' : 'false',
+        'data-swiping': swipe.swiping ? '' : undefined,
         style: {
           ...userStyle,
           '--toast-index': String(index),

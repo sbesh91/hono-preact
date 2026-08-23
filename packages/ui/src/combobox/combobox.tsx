@@ -859,7 +859,7 @@ export interface ComboboxValueState<Value = unknown> {
 
 export type ComboboxValueProps<Value = unknown> = {
   render?: RenderProp<ComboboxValueState<Value>>;
-  children?: (state: ComboboxValueState<Value>) => ComponentChildren;
+  children?: ComponentChildren;
 } & Omit<HTMLAttributes<HTMLSpanElement>, 'children'>;
 
 export function ComboboxValue<Value = unknown>(
@@ -877,6 +877,6 @@ export function ComboboxValue<Value = unknown>(
     defaultTag: 'span',
     props: rest,
     state,
-    children: children ? children(state) : null,
+    children: children ?? null,
   });
 }

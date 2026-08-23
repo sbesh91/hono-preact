@@ -18,19 +18,21 @@ describe('Combobox Value (multi)', () => {
     const onValueChange = vi.fn();
     const { getByText } = render(
       <ComboboxRoot multiple defaultOpen onValueChange={onValueChange}>
-        <ComboboxValue>
-          {({ selectedItems, remove }) =>
-            selectedItems.map((it) => (
-              <button
-                key={it.id}
-                data-testid="chip"
-                onClick={() => remove(it.value)}
-              >
-                {it.label}
-              </button>
-            ))
-          }
-        </ComboboxValue>
+        <ComboboxValue
+          render={(props, { selectedItems, remove }) => (
+            <span {...props}>
+              {selectedItems.map((it) => (
+                <button
+                  key={it.id}
+                  data-testid="chip"
+                  onClick={() => remove(it.value)}
+                >
+                  {it.label}
+                </button>
+              ))}
+            </span>
+          )}
+        />
         <ComboboxInput aria-label="Fruit" />
         <ComboboxPositioner>
           <ComboboxPopup aria-label="Fruits">
@@ -50,18 +52,21 @@ describe('Combobox Value (multi)', () => {
     expect(onValueChange).toHaveBeenLastCalledWith([]);
   });
 
-  it('wraps function-children in a span carrying rest props', async () => {
+  it('render function receives the merged rest props (class)', async () => {
     render(
       <ComboboxRoot multiple defaultOpen value={['apple']}>
-        <ComboboxValue class="chips">
-          {({ selectedItems }) =>
-            selectedItems.map((it) => (
-              <span key={it.id} data-testid="chip">
-                {it.label}
-              </span>
-            ))
-          }
-        </ComboboxValue>
+        <ComboboxValue
+          class="chips"
+          render={(props, { selectedItems }) => (
+            <span {...props} data-testid="wrapper">
+              {selectedItems.map((it) => (
+                <span key={it.id} data-testid="chip">
+                  {it.label}
+                </span>
+              ))}
+            </span>
+          )}
+        />
         <ComboboxInput aria-label="Fruit" />
         <ComboboxPositioner>
           <ComboboxPopup aria-label="Fruits">
@@ -117,15 +122,17 @@ describe('Combobox Value (multi)', () => {
             rename
           </button>
           <ComboboxRoot multiple defaultOpen value={['apple']}>
-            <ComboboxValue>
-              {({ selectedItems }) =>
-                selectedItems.map((it) => (
-                  <span key={it.id} data-testid="chip">
-                    {it.label}
-                  </span>
-                ))
-              }
-            </ComboboxValue>
+            <ComboboxValue
+              render={(props, { selectedItems }) => (
+                <span {...props}>
+                  {selectedItems.map((it) => (
+                    <span key={it.id} data-testid="chip">
+                      {it.label}
+                    </span>
+                  ))}
+                </span>
+              )}
+            />
             <ComboboxInput aria-label="Fruit" />
             <ComboboxPositioner>
               <ComboboxPopup aria-label="Fruits">

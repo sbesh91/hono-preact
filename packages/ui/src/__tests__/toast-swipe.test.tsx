@@ -53,7 +53,7 @@ describe('toast swipe-to-dismiss', () => {
     act(() => {
       fireEvent.pointerMove(root, { clientX: 120, clientY: 0, pointerId: 1 });
     });
-    expect(root.getAttribute('data-swiping')).toBe('true');
+    expect(root.getAttribute('data-swiping')).toBe('');
     act(() => {
       fireEvent.pointerUp(root, { clientX: 120, clientY: 0, pointerId: 1 });
     });
@@ -79,7 +79,7 @@ describe('toast swipe-to-dismiss', () => {
       fireEvent.pointerUp(root, { clientX: 10, clientY: 0, pointerId: 1 });
     });
     expect(toastStore.toasts).toHaveLength(1);
-    expect(root.getAttribute('data-swiping')).toBe('false');
+    expect(root.hasAttribute('data-swiping')).toBe(false);
     expect(root.style.getPropertyValue('--toast-swipe-amount')).toBe('0px');
   });
 
@@ -140,7 +140,7 @@ describe('toast swipe-to-dismiss', () => {
     act(() => {
       fireEvent.pointerDown(close, { clientX: 0, clientY: 0, pointerId: 1 });
     });
-    expect(root.getAttribute('data-swiping')).toBe('false');
+    expect(root.hasAttribute('data-swiping')).toBe(false);
     // And the close button's click still dismisses the toast.
     act(() => {
       fireEvent.click(close);

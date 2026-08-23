@@ -260,7 +260,7 @@ export function SelectTrigger(props: SelectTriggerProps): VNode {
 export type SelectValueProps = {
   placeholder?: string;
   render?: RenderProp<{ selectedLabels: string[] }>;
-  children?: (value: { selectedLabels: string[] }) => ComponentChildren;
+  children?: ComponentChildren;
 } & Omit<HTMLAttributes<HTMLSpanElement>, 'children'>;
 
 export function SelectValue(props: SelectValueProps): VNode {
@@ -268,7 +268,6 @@ export function SelectValue(props: SelectValueProps): VNode {
   const ctx = useSelectContext('Value');
   const labels = ctx.selectedLabels();
   const display = labels.length > 0 ? labels.join(', ') : (placeholder ?? '');
-  const content = children ? children({ selectedLabels: labels }) : display;
   return renderElement<{ selectedLabels: string[] }>({
     render,
     defaultTag: 'span',
@@ -277,7 +276,7 @@ export function SelectValue(props: SelectValueProps): VNode {
       'data-placeholder': labels.length === 0 ? '' : undefined,
     },
     state: { selectedLabels: labels },
-    children: content,
+    children: children ?? display,
   });
 }
 

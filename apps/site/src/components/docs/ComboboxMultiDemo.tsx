@@ -14,23 +14,25 @@ export function ComboboxMultiDemo() {
   return (
     <Combobox.Root multiple onInputChange={setQuery}>
       <Combobox.Anchor class="docs-cb-field">
-        <Combobox.Value>
-          {({ selectedItems, remove }) =>
-            selectedItems.map((it) => (
-              <span class="docs-cb-chip" key={String(it.value)}>
-                {it.label}
-                <button
-                  type="button"
-                  class="docs-cb-chip__remove"
-                  onClick={() => remove(it.value)}
-                  aria-label={`Remove ${it.label}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))
-          }
-        </Combobox.Value>
+        <Combobox.Value
+          render={(props, { selectedItems, remove }) => (
+            <span {...props}>
+              {selectedItems.map((it) => (
+                <span class="docs-cb-chip" key={String(it.value)}>
+                  {it.label}
+                  <button
+                    type="button"
+                    class="docs-cb-chip__remove"
+                    onClick={() => remove(it.value)}
+                    aria-label={`Remove ${it.label}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </span>
+          )}
+        />
         <Combobox.Input
           class="docs-cb-input"
           placeholder="Add language…"

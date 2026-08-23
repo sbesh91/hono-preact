@@ -19,8 +19,8 @@ API. It ships unstyled: style it through the `data-state`,
 `Select.Value` shows the selected option's label by reading the registered
 options client-side, so on the server (before hydration) it falls back to the
 placeholder. For a label that is correct in server-rendered HTML, pass
-`Select.Value` a render prop (or a children function) and resolve the label from
-your own data, which runs on the server too.
+`Select.Value` a render prop and resolve the label from your own data, which
+runs on the server too.
 
 ## Demo
 
@@ -69,9 +69,12 @@ hidden form field has a string to submit.
   name="assignee"
 >
   <Select.Trigger>
-    <Select.Value placeholder="Assign to">
-      {({ selectedLabels }) => selectedLabels.join(', ') || 'Assign to'}
-    </Select.Value>
+    <Select.Value
+      placeholder="Assign to"
+      render={(props, { selectedLabels }) => (
+        <span {...props}>{selectedLabels.join(', ') || 'Assign to'}</span>
+      )}
+    />
   </Select.Trigger>
   {/* ... */}
 </Select.Root>
@@ -316,15 +319,14 @@ required), `id`, and `data-state`.
 
 Shows the selected option's label, or the placeholder while empty. Reads the
 registered option labels client-side, so server-rendered HTML shows the
-placeholder unless you supply a children / render function. Default element
-`<span>`.
+placeholder unless you supply a render function. Default element `<span>`.
 
-| Prop          | Type                                                         | Default | Description                                                    |
-| ------------- | ------------------------------------------------------------ | ------- | -------------------------------------------------------------- |
-| `placeholder` | `string`                                                     | `''`    | Text shown while nothing is selected.                          |
-| `render`      | `RenderProp<{ selectedLabels: string[] }>`                   | -       | Compose or replace the element.                                |
-| `children`    | `(state: { selectedLabels: string[] }) => ComponentChildren` | -       | Render the display from the selected labels (server-accurate). |
-| `...props`    | `JSX.HTMLAttributes<HTMLSpanElement>`                        | -       | Forwarded to the element.                                      |
+| Prop          | Type                                       | Default | Description                                          |
+| ------------- | ------------------------------------------ | ------- | ---------------------------------------------------- |
+| `placeholder` | `string`                                   | `''`    | Text shown while nothing is selected.                |
+| `render`      | `RenderProp<{ selectedLabels: string[] }>` | -       | Compose or replace the element.                      |
+| `children`    | `ComponentChildren`                        | -       | Static content overriding the default label display. |
+| `...props`    | `JSX.HTMLAttributes<HTMLSpanElement>`      | -       | Forwarded to the element.                            |
 
 Sets `data-placeholder` while no option is selected.
 
