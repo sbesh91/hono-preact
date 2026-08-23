@@ -21,3 +21,27 @@ The reference is grouped as the library grows:
   ([usePosition](/docs/components/use-position),
   [useDismiss](/docs/components/use-dismiss),
   [useFocusReturn](/docs/components/use-focus-return)).
+
+## Conventions
+
+Every part follows the same two contracts, so what you learn on one component
+transfers to the rest.
+
+**Data attributes are the styling contract.** Boolean states are
+presence-style: the attribute is present (with an empty value) when the state
+holds and absent otherwise, so CSS selects on `[data-highlighted]`,
+`[data-selected]`, `[data-disabled]`, `[data-expanded]`, `[data-swiping]`,
+`[data-front]`, `[data-placeholder]`, or `[data-empty]` without comparing
+values (in Tailwind, the bare `data-highlighted:` variant). The one valued
+attribute is the open lifecycle enum `data-state="open" | "closed"`, which
+carries two states so exit transitions can target `[data-state='closed']`.
+Positioning parts additionally reflect their resolved placement as
+`data-side` and `data-align`.
+
+**Customization goes through `render`.** Every part accepts a `render` prop
+(see [renderElement](/docs/components/render-element)): a string retags the
+element, a VNode is cloned with the part's props merged in, and a function
+receives the merged props plus the part's state (`Select.Option` passes
+`{ selected, disabled, highlighted }`, `ContextMenu.Trigger` passes
+`{ open }`, and so on). `children` are plain content; parts do not take
+children-as-function.

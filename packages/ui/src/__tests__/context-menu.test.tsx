@@ -36,4 +36,38 @@ describe('ContextMenu', () => {
     await act(async () => {});
     expect(queryByRole('menu')).toBeTruthy();
   });
+
+  it('exposes { open } render state on the Trigger', async () => {
+    const { getByTestId } = render(
+      <ContextMenuRoot>
+        <ContextMenuTrigger
+          render={(props, { open }) => (
+            <div {...props} data-testid="trigger" data-open={String(open)}>
+              Right-click here
+            </div>
+          )}
+        />
+        <MenuPositioner>
+          <MenuPopup aria-label="Context">
+            <MenuItem>Cut</MenuItem>
+          </MenuPopup>
+        </MenuPositioner>
+      </ContextMenuRoot>
+    );
+    const area = getByTestId('trigger');
+    expect(area.getAttribute('data-open')).toBe('false');
+    expect(area.getAttribute('data-state')).toBe('closed');
+    fireEvent(
+      area,
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 20,
+        clientY: 30,
+      })
+    );
+    await act(async () => {});
+    expect(area.getAttribute('data-open')).toBe('true');
+    expect(area.getAttribute('data-state')).toBe('open');
+  });
 });

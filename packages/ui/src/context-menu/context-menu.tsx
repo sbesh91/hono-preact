@@ -47,7 +47,7 @@ export function ContextMenuRoot(props: ContextMenuRootProps) {
 }
 
 export type ContextMenuTriggerProps = {
-  render?: RenderProp;
+  render?: RenderProp<{ open: boolean }>;
   children?: ComponentChildren;
 } & Omit<HTMLAttributes<HTMLDivElement>, 'children'>;
 
@@ -61,7 +61,7 @@ export function ContextMenuTrigger(props: ContextMenuTriggerProps): VNode {
     ctx.openAt?.(event.clientX, event.clientY);
   };
 
-  return renderElement({
+  return renderElement<{ open: boolean }>({
     render,
     defaultTag: 'div',
     props: {
@@ -70,6 +70,7 @@ export function ContextMenuTrigger(props: ContextMenuTriggerProps): VNode {
       'data-state': ctx.open ? 'open' : 'closed',
       onContextMenu: handleContextMenu,
     },
+    state: { open: ctx.open },
     children,
   });
 }

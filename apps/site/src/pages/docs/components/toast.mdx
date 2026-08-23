@@ -116,12 +116,12 @@ continuing a swipe rather than snapping back. Guard every transition behind
   height: 16px;
 }
 /* Collapsed pile: front three opaque and peeking; deeper toasts hide beneath. */
-.toast:not([data-expanded='true']) {
+.toast:not([data-expanded]) {
   --toast-scale: calc(1 - 0.05 * min(var(--toasts-before, 0), 2));
   opacity: calc(1 - max(0, var(--toasts-before, 0) - 2));
 }
 /* Expanded on hover/focus: full size and opacity, real heights. */
-.toast[data-expanded='true'] {
+.toast[data-expanded] {
   --toast-scale: 1;
   opacity: 1;
 }
@@ -140,7 +140,7 @@ continuing a swipe rather than snapping back. Guard every transition behind
   }
 }
 /* Track the pointer 1:1 while dragging. */
-.toast[data-swiping='true'] {
+.toast[data-swiping] {
   transition: none;
 }
 /* Exit: slide out and fade. A swipe-dismiss keeps its offset, so this continues
@@ -167,12 +167,12 @@ continuing a swipe rather than snapping back. Guard every transition behind
     z-[calc(1000-var(--toast-index,0))]
     [transform:translateX(var(--toast-swipe-amount,0px))_translateY(calc(-1*var(--toast-offset,0px)))_scale(var(--toast-scale,1))]
     after:content-[''] after:absolute after:inset-x-0 after:bottom-full after:h-4
-    not-data-[expanded=true]:[--toast-scale:calc(1-0.05*min(var(--toasts-before,0),2))]
-    not-data-[expanded=true]:[opacity:calc(1-max(0,var(--toasts-before,0)-2))]
-    data-[expanded=true]:[--toast-scale:1] data-[expanded=true]:opacity-100
+    not-data-expanded:[--toast-scale:calc(1-0.05*min(var(--toasts-before,0),2))]
+    not-data-expanded:[opacity:calc(1-max(0,var(--toasts-before,0)-2))]
+    data-expanded:[--toast-scale:1] data-expanded:opacity-100
     motion-safe:transition-[transform,opacity] motion-safe:duration-[400ms]
     starting:opacity-0 starting:[transform:translateY(100%)_scale(0.9)]
-    data-[swiping=true]:transition-none
+    data-swiping:transition-none
     data-[state=closed]:opacity-0
     data-[state=closed]:[transform:translateX(110%)_translateY(calc(-1*var(--toast-offset,0px)))]"
     />

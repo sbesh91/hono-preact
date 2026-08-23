@@ -199,7 +199,7 @@ opens the popup at the pointer. Default element `<div>`.
 
 | Prop       | Type                                 | Default | Description                                                                    |
 | ---------- | ------------------------------------ | ------- | ------------------------------------------------------------------------------ |
-| `render`   | `RenderProp`                         | -       | Compose or replace the element.                                                |
+| `render`   | `RenderProp<{ open: boolean }>`      | -       | Compose or replace the element.                                                |
 | `children` | `ComponentChildren`                  | -       | The right-clickable content.                                                   |
 | `...props` | `JSX.HTMLAttributes<HTMLDivElement>` | -       | Forwarded to the element; a passed `onContextMenu` runs before the menu opens. |
 

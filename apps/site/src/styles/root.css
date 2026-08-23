@@ -4849,12 +4849,12 @@ html:active-view-transition-type(docs-within)::view-transition-new(
    library's --toast-offset, each a touch smaller by depth; the fourth and
    beyond hide cleanly beneath the pile rather than fanning out as faint
    outlines. */
-.docs-toast:not([data-expanded='true']) {
+.docs-toast:not([data-expanded]) {
   --toast-scale: calc(1 - 0.05 * min(var(--toasts-before, 0), 2));
   opacity: calc(1 - max(0, var(--toasts-before, 0) - 2));
 }
 /* Expanded on hover/focus: every toast at full size and opacity, real heights. */
-.docs-toast[data-expanded='true'] {
+.docs-toast[data-expanded] {
   --toast-scale: 1;
   opacity: 1;
 }
@@ -4875,7 +4875,7 @@ html:active-view-transition-type(docs-within)::view-transition-new(
   }
 }
 /* While dragging, track the pointer 1:1 (no transition). */
-.docs-toast[data-swiping='true'] {
+.docs-toast[data-swiping] {
   transition: none;
 }
 /* Exit: slide out to the right and fade. A swipe-dismiss keeps its offset, so
