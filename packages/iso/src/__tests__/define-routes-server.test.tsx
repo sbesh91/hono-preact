@@ -273,4 +273,180 @@ describe('defineRoutes: layout-level server plumbing', () => {
     expect(pageLoc.path).toBe('/movies/123');
     expect(pageLoc.pathParams).toEqual({ id: '123' });
   });
+
+  // ---------------------------------------------------------------------------
+  // A layout's location must expose exactly the params the layout's OWN pattern
+  // declares (#326). The wildcard capture that spans the child subtree is not
+  // the layout's to see, and neither are the leaf's params.
+  //
+  // The old implementation stripped the wildcard by NAME, dropping any key
+  // called `rest` or `0`. Those are preact-iso's two conventional names for a
+  // catch-all capture, but nothing reserves them: a route that legitimately
+  // declares `:rest` had its value silently deleted, so a layout `use` guard
+  // read `undefined` for a param the URL really bound. That is a fail-open
+  // shape, which is exactly what guardReadableParamSlots exists to prevent
+  // elsewhere in the framework.
+  // ---------------------------------------------------------------------------
+
+  async function layoutParamsFor(
+    layoutPath: string,
+    childPath: string,
+    url: string
+  ): Promise<Record<string, string>> {
+    let observed: any = null;
+    const Probe = () => {
+      observed = useContext(RouteLocationsContext);
+      return null;
+    };
+    const Layout = ({ children }: { children: any }) =>
+      h('main', null, children);
+
+    const manifest = defineRoutes([
+      {
+        path: layoutPath,
+        layout: () => Promise.resolve({ default: Layout as any }),
+        server: () => Promise.resolve({ __moduleKey: 'pages/probe-layout' }),
+        children: [
+          {
+            path: childPath,
+            view: () => Promise.resolve({ default: Probe }),
+            server: () => Promise.resolve({ __moduleKey: 'pages/probe-leaf' }),
+          },
+        ],
+      },
+    ]);
+
+    history.replaceState(null, '', url);
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })));
+    await waitFor(() =>
+      expect(observed?.get('pages/probe-leaf')).toBeDefined()
+    );
+    return observed.get('pages/probe-layout').pathParams;
+  }
+
+  it('keeps a param the layout itself declares, even when it is named `rest`', async () => {
+    // `/docs/:rest` is an ordinary user param that happens to collide with the
+    // conventional catch-all name. The layout declares it, so the layout must
+    // see its bound value rather than undefined.
+    const params = await layoutParamsFor('/docs/:rest', 'x', '/docs/intro/x');
+    expect(params).toEqual({ rest: 'intro' });
+  });
+
+  it('drops the wildcard capture spanning the child subtree', async () => {
+    const params = await layoutParamsFor('/movies', ':id', '/movies/123');
+    expect(params).toEqual({});
+    expect(params).not.toHaveProperty('rest');
+    expect(params).not.toHaveProperty('0');
+  });
+
+  it("keeps the layout's own params while dropping the leaf's", async () => {
+    const params = await layoutParamsFor(
+      '/org/:orgId',
+      ':projectId',
+      '/org/acme/p1'
+    );
+    expect(params).toEqual({ orgId: 'acme' });
+  });
+  it("a NESTED layout still sees its ancestor layout's params", async () => {
+    // The load-bearing case for how the catch-all is identified. A layout's own
+    // `layoutPathPattern` is RELATIVE to the enclosing layout group, because
+    // walkRouteTree restarts `parentPath` for each inner Router. So the inner
+    // layout's pattern here is `team/:teamId`, which knows nothing about
+    // `:orgId`. Filtering the inner layout's params against that pattern would
+    // strip `orgId` and leave an inner-layout `use` guard reading `undefined`
+    // for a param the URL really bound: the same fail-open shape this filter
+    // exists to avoid, one level up.
+    let observed: any = null;
+    const Probe = () => {
+      observed = useContext(RouteLocationsContext);
+      return null;
+    };
+    const L = ({ children }: any) => h('main', null, children);
+
+    const manifest = defineRoutes([
+      {
+        path: '/org/:orgId',
+        layout: () => Promise.resolve({ default: L as any }),
+        server: () => Promise.resolve({ __moduleKey: 'outer' }),
+        children: [
+          {
+            path: 'team/:teamId',
+            layout: () => Promise.resolve({ default: L as any }),
+            server: () => Promise.resolve({ __moduleKey: 'inner' }),
+            children: [
+              {
+                path: ':taskId',
+                view: () => Promise.resolve({ default: Probe }),
+                server: () => Promise.resolve({ __moduleKey: 'leaf' }),
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    history.replaceState(null, '', '/org/acme/team/t9/task1');
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })));
+    await waitFor(() => expect(observed?.get('leaf')).toBeDefined());
+
+    expect(observed.get('outer').pathParams).toEqual({ orgId: 'acme' });
+    expect(observed.get('inner').pathParams).toEqual({
+      orgId: 'acme',
+      teamId: 't9',
+    });
+    // A nested layout's own path is the real absolute URL prefix it matched,
+    // not the fragment its inner Router matched. Deriving it from the relative
+    // pattern produced '/team/t9', a path that is not a URL and disagrees with
+    // the params alongside it.
+    expect(observed.get('outer').path).toBe('/org/acme');
+    expect(observed.get('inner').path).toBe('/org/acme/team/t9');
+    expect(observed.get('leaf').pathParams).toEqual({
+      orgId: 'acme',
+      teamId: 't9',
+      taskId: 'task1',
+    });
+  });
+  it('a descendant layout keeps an ANCESTOR-declared param named `rest`', async () => {
+    // The catch-all name is only special when it is genuinely the catch-all.
+    // Here `/docs/:rest` declares it at the OUTER layout, so every layout in
+    // the subtree owns that value and must keep reading it.
+    let observed: any = null;
+    const Probe = () => {
+      observed = useContext(RouteLocationsContext);
+      return null;
+    };
+    const L = ({ children }: any) => h('main', null, children);
+
+    const manifest = defineRoutes([
+      {
+        path: '/docs/:rest',
+        layout: () => Promise.resolve({ default: L as any }),
+        server: () => Promise.resolve({ __moduleKey: 'outer' }),
+        children: [
+          {
+            path: 'sec/:secId',
+            layout: () => Promise.resolve({ default: L as any }),
+            server: () => Promise.resolve({ __moduleKey: 'inner' }),
+            children: [
+              {
+                path: ':leafId',
+                view: () => Promise.resolve({ default: Probe }),
+                server: () => Promise.resolve({ __moduleKey: 'leaf' }),
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    history.replaceState(null, '', '/docs/intro/sec/s1/x');
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })));
+    await waitFor(() => expect(observed?.get('leaf')).toBeDefined());
+
+    expect(observed.get('outer').pathParams).toEqual({ rest: 'intro' });
+    expect(observed.get('inner').pathParams).toEqual({
+      rest: 'intro',
+      secId: 's1',
+    });
+  });
 });
