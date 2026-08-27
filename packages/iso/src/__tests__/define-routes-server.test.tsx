@@ -394,10 +394,59 @@ describe('defineRoutes: layout-level server plumbing', () => {
       orgId: 'acme',
       teamId: 't9',
     });
+    // A nested layout's own path is the real absolute URL prefix it matched,
+    // not the fragment its inner Router matched. Deriving it from the relative
+    // pattern produced '/team/t9', a path that is not a URL and disagrees with
+    // the params alongside it.
+    expect(observed.get('outer').path).toBe('/org/acme');
+    expect(observed.get('inner').path).toBe('/org/acme/team/t9');
     expect(observed.get('leaf').pathParams).toEqual({
       orgId: 'acme',
       teamId: 't9',
       taskId: 'task1',
+    });
+  });
+  it('a descendant layout keeps an ANCESTOR-declared param named `rest`', async () => {
+    // The catch-all name is only special when it is genuinely the catch-all.
+    // Here `/docs/:rest` declares it at the OUTER layout, so every layout in
+    // the subtree owns that value and must keep reading it.
+    let observed: any = null;
+    const Probe = () => {
+      observed = useContext(RouteLocationsContext);
+      return null;
+    };
+    const L = ({ children }: any) => h('main', null, children);
+
+    const manifest = defineRoutes([
+      {
+        path: '/docs/:rest',
+        layout: () => Promise.resolve({ default: L as any }),
+        server: () => Promise.resolve({ __moduleKey: 'outer' }),
+        children: [
+          {
+            path: 'sec/:secId',
+            layout: () => Promise.resolve({ default: L as any }),
+            server: () => Promise.resolve({ __moduleKey: 'inner' }),
+            children: [
+              {
+                path: ':leafId',
+                view: () => Promise.resolve({ default: Probe }),
+                server: () => Promise.resolve({ __moduleKey: 'leaf' }),
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    history.replaceState(null, '', '/docs/intro/sec/s1/x');
+    render(h(LocationProvider, null, h(Routes, { routes: manifest })));
+    await waitFor(() => expect(observed?.get('leaf')).toBeDefined());
+
+    expect(observed.get('outer').pathParams).toEqual({ rest: 'intro' });
+    expect(observed.get('inner').pathParams).toEqual({
+      rest: 'intro',
+      secId: 's1',
     });
   });
 });

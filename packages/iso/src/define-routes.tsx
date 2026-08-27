@@ -511,7 +511,7 @@ function getOrCreateLazyView(
 function makeLayoutGroupComponent(
   layoutImport: NonNullable<RouteDef['layout']>,
   server: RouteDef['server'] | undefined,
-  layoutPathPattern: string,
+  layoutAbsolutePattern: string,
   children: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>,
   guardUse: PageUse
@@ -522,7 +522,15 @@ function makeLayoutGroupComponent(
         layoutImport(),
         server ? server() : Promise.resolve(undefined),
       ]);
-      const inner = buildInnerRoutes(children, viewCache);
+      // Hand the layout's own absolute pattern down so a NESTED layout can
+      // keep accumulating: its inner Router restarts the relative prefix, but
+      // the absolute one must survive the boundary.
+      const inner = buildInnerRoutes(
+        children,
+        viewCache,
+        [],
+        layoutAbsolutePattern
+      );
       const Wrapper: ComponentType<ViewProps> = (location) => {
         // One load tracker per mounted inner Router instance (stable across
         // renders) so the cold-flush coordinator can tell this layout's leaf
@@ -530,7 +538,7 @@ function makeLayoutGroupComponent(
         const loadTracker = useMemo(makeRouterLoadTracker, []);
         const layoutLocation = deriveLayoutLocation(
           location,
-          layoutPathPattern
+          layoutAbsolutePattern
         );
         const layoutNode = h(
           Layout,
@@ -577,10 +585,10 @@ function makeLayoutGroupComponent(
  */
 function deriveLayoutLocation(
   active: ViewProps,
-  layoutPathPattern: string
+  layoutAbsolutePattern: string
 ): ViewProps {
   const params = active.pathParams ?? {};
-  const path = layoutPathPattern
+  const path = layoutAbsolutePattern
     .split('/')
     .map((seg) =>
       seg.startsWith(':')
@@ -592,35 +600,38 @@ function deriveLayoutLocation(
     .filter(Boolean)
     .join('/');
   const finalPath = '/' + path;
-  // Drop the child-subtree catch-all capture, which preact-iso binds under one
-  // of two conventional names (`rest` for the named form, `0` for a bare
-  // positional `*`). Neither name is reserved, so the drop is suppressed when
-  // the layout's OWN pattern declares a param by that name: a route spelling
-  // `/docs/:rest` binds a value the layout legitimately owns, and deleting it
-  // left a layout `use` guard reading `undefined` for a param the URL really
-  // bound -- a fail-open shape.
+  // Keep exactly the params the layout's own ABSOLUTE pattern declares, the
+  // same pattern the path above is reconstructed from. Because that pattern
+  // spans the layout and all its ancestors, this keeps every param the layout
+  // legitimately owns while dropping the child-subtree catch-all capture (a
+  // bare `*` segment is not a `:param`, so it is never a declared slot) and any
+  // deeper leaf param.
   //
-  // Deliberately NOT an allowlist built from `layoutPathPattern`. That pattern
-  // is RELATIVE to the enclosing layout group (walkRouteTree restarts
-  // `parentPath` for each inner Router, which is what the inner Router needs),
-  // so it cannot see ancestor params: a nested layout under `/org/:orgId` would
-  // have `orgId` silently stripped, recreating the same fail-open shape one
-  // level up. The params a layout may read are ancestors + its own, and only
-  // the wildcard capture is not its own.
+  // Deriving the drop-set structurally is what fixes the original defect: the
+  // previous filter deleted any key named `rest` or `0`, preact-iso's two
+  // conventional catch-all names. Neither name is reserved, so a route spelling
+  // `/docs/:rest` had a legitimately bound value silently deleted, leaving a
+  // layout `use` guard reading `undefined` for a param the URL really bound --
+  // a fail-open shape.
   //
-  // `guardReadableParamSlots`, not `declaredParamSlots`: the suppression must
+  // The ABSOLUTE pattern is load-bearing here. `walkRouteTree` restarts the
+  // relative prefix at each layout group's inner Router (which is what that
+  // Router needs to match), so a relative pattern cannot see ancestor params:
+  // filtering against it would strip `orgId` from a layout nested under
+  // `/org/:orgId` and recreate the same fail-open shape one level up.
+  //
+  // `guardReadableParamSlots`, not `declaredParamSlots`: the allowlist must
   // agree with what preact-iso's matcher can actually BIND, which is wider than
-  // this framework's `:param` grammar (e.g. `:board-id`).
+  // this framework's `:param` grammar (e.g. `:board-id`). Filtering on the
+  // narrower grammar would re-introduce the same silent drop for those names.
   //
   // The `v !== undefined` guard also omits the `undefined` the matcher can
   // store for an unmatched optional/rest param (the static `string` type does
   // not reflect that).
-  const layoutOwnSlots = new Set(guardReadableParamSlots(layoutPathPattern));
-  const isCatchAllCapture = (k: string): boolean =>
-    (k === 'rest' || k === '0') && !layoutOwnSlots.has(k);
+  const layoutSlots = new Set(guardReadableParamSlots(layoutAbsolutePattern));
   const filteredParams: Record<string, string> = {};
   for (const [k, v] of Object.entries(params)) {
-    if (!isCatchAllCapture(k) && v !== undefined) filteredParams[k] = v;
+    if (layoutSlots.has(k) && v !== undefined) filteredParams[k] = v;
   }
   return {
     ...active,
@@ -662,10 +673,16 @@ function walkRouteTree(
   viewCache: Map<unknown, ComponentType<ViewProps>>,
   emit: RouteEmitter,
   parentPath = '',
-  inheritedUse: PageUse = []
+  inheritedUse: PageUse = [],
+  absoluteParentPath = parentPath
 ): void {
   for (const r of routes) {
     const here = joinRoutePath(parentPath, r.path);
+    // The same join against a prefix that does NOT reset at a layout group's
+    // inner Router. `here` is what the enclosing Router must match, so it stays
+    // relative; `hereAbsolute` is the node's real place in the route table, and
+    // is the only spelling that can answer "which params does this node own".
+    const hereAbsolute = joinRoutePath(absoluteParentPath, r.path);
     const ownUse: PageUse = composeUse(inheritedUse, r.use);
     if (r.view) {
       emit.view(
@@ -677,7 +694,7 @@ function walkRouteTree(
         makeLayoutGroupComponent(
           r.layout,
           r.server,
-          here,
+          hereAbsolute,
           r.children,
           viewCache,
           ownUse
@@ -688,7 +705,7 @@ function walkRouteTree(
       // Bare grouping: thread the prefix down and carry `use`. A root '/'
       // prefix is handled by joinRoutePath's root reset, so descendants
       // never pick up a doubled slash.
-      walkRouteTree(r.children, viewCache, emit, here, ownUse);
+      walkRouteTree(r.children, viewCache, emit, here, ownUse, hereAbsolute);
     }
   }
 }
@@ -708,7 +725,8 @@ function walkRouteTree(
 export function buildInnerRoutes(
   children: ReadonlyArray<RouteDef>,
   viewCache: Map<unknown, ComponentType<ViewProps>>,
-  pendingUse: PageUse = []
+  pendingUse: PageUse = [],
+  absoluteParentPath = ''
 ): VNode<any>[] {
   const nodes: VNode<any>[] = [];
   walkRouteTree(
@@ -728,7 +746,8 @@ export function buildInnerRoutes(
       },
     },
     '',
-    pendingUse
+    pendingUse,
+    absoluteParentPath
   );
   return nodes;
 }
