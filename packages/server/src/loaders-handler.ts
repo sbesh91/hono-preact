@@ -301,8 +301,14 @@ export function loadersHandler(
     // (bare defineLoader) receive no page tier. A route-bound loader whose
     // declared route the resolver cannot handle is rejected immediately (500)
     // rather than being run guard-less, which would silently drop auth gates.
-    const routeBound = typeof entry.routeId === 'string';
-    if (dev && !routeBound && findGuardedRoute) {
+    // Resolver, guard key and the route-bound flag are derived from ONE
+    // `typeof entry.routeId` check so they cannot desync, which also keeps the
+    // pairing cast-free (mirrors the page-actions-handler twin).
+    const pageTier =
+      typeof entry.routeId === 'string'
+        ? { resolve: resolvePageUse, key: entry.routeId, routeBound: true }
+        : { resolve: EMPTY_PAGE_USE, key: '', routeBound: false };
+    if (dev && !pageTier.routeBound && findGuardedRoute) {
       const guarded = findGuardedRoute(validatedLocation.path);
       if (guarded !== null) {
         warnBareLoaderOnGuardedRoute(warnedBareGuarded, {
@@ -318,8 +324,8 @@ export function loadersHandler(
       unitTimeoutMs: entry.timeoutMs,
       defaultTimeoutMs,
       appConfig,
-      resolvePageUse: routeBound ? resolvePageUse : EMPTY_PAGE_USE,
-      path: routeBound ? entry.routeId! : '',
+      resolvePageUse: pageTier.resolve,
+      path: pageTier.key,
       unitUse: entry.use,
     });
     if (!composed.ok) {
@@ -336,8 +342,8 @@ export function loadersHandler(
       const detail = dev
         ? `: ${composed.error instanceof Error ? composed.error.message : String(composed.error)}`
         : '';
-      const unit = routeBound
-        ? `Route-bound loader '${entry.routeId}'`
+      const unit = pageTier.routeBound
+        ? `Route-bound loader '${pageTier.key}'`
         : `Loader '${module}.${loaderName}'`;
       return c.json(
         { error: `${unit} could not compose its middleware chain${detail}` },

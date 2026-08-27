@@ -8,7 +8,10 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { Plugin } from 'vite';
 import type { Targets } from 'lightningcss';
-import { PRELOAD_MANIFEST_FILE } from '@hono-preact/iso/internal/contract';
+import {
+  PRELOAD_MANIFEST_FILE,
+  type PreloadArtifact,
+} from '@hono-preact/iso/internal/contract';
 import {
   chunkCloser,
   extractRouteChains,
@@ -21,23 +24,9 @@ import {
 } from './route-preload.js';
 import { applyCssAutoSplit } from './css-auto-split.js';
 
-/**
- * The client build artifact read at runtime by the adapter's manifest reader.
- * `closure` is the client entry's static-import closure (#250); `routes` maps
- * each route pattern to the chunks its matched layout/view need (#249). Both are
- * `modulepreload` hints emitted into the SSR head; the route map is also matched
- * against the request path at render time.
- */
-export interface PreloadArtifact {
-  closure: string[];
-  routes: RoutePreloadMap;
-  routeCss: RouteCssMap;
-  /**
-   * The residual global stylesheet URLs the SSR head injects render-blocking
-   * before route sheets; `[]` unless the app configured `css.global`.
-   */
-  globalCss: string[];
-}
+// The artifact shape itself is single-sourced in the iso contract module (#324);
+// re-exported so this plugin stays the obvious place to find it.
+export type { PreloadArtifact };
 
 /** The subset of a Rollup output-bundle entry this collector reads. */
 export interface BundleChunkLike {
@@ -221,7 +210,9 @@ function readRouteChains(
   try {
     return extractRouteChains(source, routesAbsPath, expandGlobFs, warn);
   } catch (e) {
-    warn(`route map generation failed: ${(e as Error).message}`);
+    warn(
+      `route map generation failed: ${e instanceof Error ? e.message : String(e)}`
+    );
     return [];
   }
 }

@@ -1,5 +1,4 @@
 import { parse } from '@babel/parser';
-import type { ExportNamedDeclaration } from '@babel/types';
 import type { Plugin } from 'vite';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 import {
@@ -35,7 +34,7 @@ export function serverLoaderValidationPlugin(): Plugin {
             `${id}: .server files may not use 'export * from ...'. Use explicit named exports only.`
           );
         } else if (node.type === 'ExportNamedDeclaration') {
-          const named = node as ExportNamedDeclaration;
+          const named = node;
           if (named.exportKind === 'type') continue;
 
           for (const s of named.specifiers) {

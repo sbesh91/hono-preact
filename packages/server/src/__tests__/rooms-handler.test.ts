@@ -1003,4 +1003,62 @@ describe('resolveRoomKey', () => {
     expect(resolveRoomKey(channel, enc(42))).toEqual({ ok: false });
     expect(resolveRoomKey(channel, enc([1, 2]))).toEqual({ ok: false });
   });
+
+  // -------------------------------------------------------------------------
+  // Optional / repeat slot arities (#326). The `?`, `*` and `+` suffixes are
+  // covered at the neighbouring layers (`declaredParamSlots`/`requiredParamSlots`
+  // in param-slots, `parseKeyParams` in socket-resolution), but what was never
+  // pinned is the COMPOSITION through resolveRoomKey: whether an omitted slot
+  // interpolates to a clean topic or leaves a dangling separator. A topic is a
+  // pub/sub namespace key, so a stray trailing '/' would silently split one
+  // room into two.
+  // -------------------------------------------------------------------------
+
+  it('an omitted optional slot yields a clean topic, with no trailing separator', () => {
+    const channel = defineChannel('room/:roomId/:sub?')();
+    expect(resolveRoomKey(channel, enc({ roomId: 'r1' }))).toEqual({
+      ok: true,
+      params: { roomId: 'r1' },
+      topic: 'room/r1',
+    });
+  });
+
+  it('a `*` slot is optional: absent resolves, and the topic drops the segment', () => {
+    const channel = defineChannel('files/:rest*')();
+    expect(resolveRoomKey(channel, enc({}))).toEqual({
+      ok: true,
+      params: {},
+      topic: 'files',
+    });
+  });
+
+  it('a `+` slot is required: absent denies, present resolves', () => {
+    const channel = defineChannel('files/:rest+')();
+    expect(resolveRoomKey(channel, enc({}))).toEqual({ ok: false });
+    expect(resolveRoomKey(channel, enc({ rest: 'a' }))).toEqual({
+      ok: true,
+      params: { rest: 'a' },
+      topic: 'files/a',
+    });
+  });
+
+  it('(security) a repeat slot cannot inject extra topic segments: its value is encoded', () => {
+    // `*`/`+` spell a multi-segment capture in a ROUTE, but a room topic is a
+    // flat namespace key. Interpolation percent-encodes the separator, so a
+    // client sending `a/b` reaches `files/a%2Fb` and not the sibling topic
+    // `files/a/b`. That containment is the property worth pinning: it is what
+    // stops a client from steering itself into an unrelated room by smuggling
+    // separators through a param VALUE.
+    const channel = defineChannel('files/:rest*')();
+    const result = resolveRoomKey(channel, enc({ rest: 'a/b' }));
+    expect(result).toEqual({
+      ok: true,
+      params: { rest: 'a/b' },
+      topic: 'files/a%2Fb',
+    });
+    const sibling = resolveRoomKey(channel, enc({ rest: 'a' }));
+    expect(sibling.ok && result.ok && sibling.topic).not.toBe(
+      result.ok && result.topic
+    );
+  });
 });

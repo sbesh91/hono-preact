@@ -139,3 +139,55 @@ export const FORM_ROOM_FIELD = '__room';
  */
 export const WS_DENY_CODE = 4403;
 export const WS_TIMEOUT_CODE = 4408;
+
+// ---------------------------------------------------------------------------
+// Preload artifact shape.
+//
+// The constants above own the artifact's *name* (PRELOAD_MANIFEST_FILE/_URL);
+// these types own its *shape*. Both sides of the round-trip live here so the
+// build writer (vite `preload-manifest.ts`) and the runtime reader (server
+// `preload-modules.ts`) cannot drift: previously each package declared a
+// structurally identical copy kept in sync only by a comment (#324).
+//
+// Types only, so this stays type-erased at runtime and the packages still
+// share no runtime code.
+// ---------------------------------------------------------------------------
+
+/**
+ * Map from route pattern to the client chunk URLs that route needs, in
+ * discovery order (outer layout chunks first, leaf view last). Keys are route
+ * patterns (`/`, `/docs/:slug`); values are root-relative hrefs
+ * (`/static/home-CB6FkG2E.js`).
+ *
+ * A flat list, not a priority split: like the entry closure, every route chunk
+ * is hydration-only and yields to render-critical CSS/fonts, so the server
+ * hints them all at `fetchpriority="low"`. Order is preserved only so the head
+ * tags read outer-to-inner.
+ */
+export type RoutePreloadMap = Record<string, string[]>;
+
+/**
+ * Map from route pattern to the CSS asset URLs that route needs, the
+ * render-critical sibling of {@link RoutePreloadMap}. The server injects the
+ * matched route's sheets as `<link rel="stylesheet">` into the SSR head.
+ */
+export type RouteCssMap = Record<string, string[]>;
+
+/**
+ * The client build artifact: written by vite `preloadManifestPlugin` into the
+ * client output under {@link PRELOAD_MANIFEST_FILE}, read back at runtime by
+ * the adapter closure readers (Node `fs` at boot, Cloudflare `ASSETS` at first
+ * render) and normalized by `resolvePreloadManifest`.
+ *
+ * `closure` is the client entry's static-import closure (#250); `routes` maps
+ * each route pattern to the chunks its matched layout/view need (#249);
+ * `routeCss` is the render-critical stylesheet sibling; `globalCss` holds the
+ * residual global stylesheet URLs the SSR head injects render-blocking before
+ * route sheets (`[]` unless the app configured `css.global`).
+ */
+export interface PreloadArtifact {
+  closure: string[];
+  routes: RoutePreloadMap;
+  routeCss: RouteCssMap;
+  globalCss: string[];
+}

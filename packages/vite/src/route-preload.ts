@@ -24,21 +24,15 @@ import type {
   ObjectExpression,
 } from '@babel/types';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
+import type {
+  RoutePreloadMap,
+  RouteCssMap,
+} from '@hono-preact/iso/internal/contract';
 
-/**
- * Build-generated map from route pattern to the client chunk URLs that route
- * needs, in discovery order (outer layout chunks first, leaf view last).
- * Serialized into the client build artifact; the server's `route-preload-tags`
- * declares the structurally identical consumer type. Kept in sync by the
- * artifact round-trip (a JSON contract between this package's build output and
- * the server runtime), not a shared import (the packages don't share runtime).
- *
- * A flat list (not a priority split): like the entry closure, every route chunk
- * is hydration-only and yields to render-critical CSS/fonts, so the server hints
- * them all at `fetchpriority="low"`. Order is preserved only so the head tags
- * read outer-to-inner.
- */
-export type RoutePreloadMap = Record<string, string[]>;
+// The artifact shape is single-sourced in the shared iso contract module, so
+// the build writer and the server reader cannot drift (#324). Re-exported here
+// because this module's own signatures are the build side of that contract.
+export type { RoutePreloadMap, RouteCssMap };
 
 /** A leaf route and the source modules it pulls in (outer layout -> leaf view). */
 export interface RouteModuleChain {
@@ -486,14 +480,6 @@ export function resolvePreloadMap(
   }
   return map;
 }
-
-/**
- * Build-generated map from route pattern to the CSS asset URLs that route needs,
- * the render-critical sibling of {@link RoutePreloadMap}. Serialized into the
- * client build artifact; the server injects the matched route's sheets as
- * `<link rel="stylesheet">` into the SSR head.
- */
-export type RouteCssMap = Record<string, string[]>;
 
 /** The distinct CSS asset file names a set of chunks import, in first-seen order. */
 function cssOfChunks(
