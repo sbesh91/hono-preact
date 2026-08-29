@@ -10,16 +10,20 @@ import {
 // application route by probing the filesystem. Tests drive that probe through
 // this set rather than creating a temp tree.
 let existingFiles = new Set<string>();
+let existingDirs = new Set<string>();
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
   return {
     ...actual,
     default: actual,
-    existsSync: (p: string) => existingFiles.has(p),
+    existsSync: (p: string) => existingFiles.has(p) || existingDirs.has(p),
     statSync: (p: string) => {
-      if (!existingFiles.has(p)) throw new Error(`ENOENT: ${p}`);
-      return { isFile: () => true };
+      if (existingFiles.has(p)) return { isFile: () => true };
+      // A directory exists but is not a file, which is the distinction the
+      // middleware's `isFile` probe depends on.
+      if (existingDirs.has(p)) return { isFile: () => false };
+      throw new Error(`ENOENT: ${p}`);
     },
   };
 });
@@ -136,9 +140,12 @@ async function captureSsrMiddleware(
    * (see `dev-passthrough.ts`); tests set the mocked `fs` answer rather than
    * laying down a temp tree.
    */
-  projectFiles: readonly string[] = []
+  projectFiles: readonly string[] = [],
+  /** Directories that exist in the project for this run. */
+  projectDirs: readonly string[] = []
 ) {
   existingFiles = new Set(projectFiles);
+  existingDirs = new Set(projectDirs);
   let handler:
     | ((
         req: { url?: string; headers?: Record<string, string> },
@@ -250,6 +257,20 @@ describe('nodeDevServerPlugin dev pass-through', () => {
     let nexted = false;
     await handler(
       { url: '/llms.txt', headers: {} },
+      { setHeader() {}, write() {}, end() {} },
+      () => (nexted = true)
+    ).catch(() => {});
+    expect(nexted).toBe(false);
+  });
+
+  it('does not claim a directory that happens to match the route', async () => {
+    // `/src` exists as a folder, but a folder is not something Vite serves. An
+    // existence check that stopped at "the path exists" would swallow an app
+    // route whose name collides with a directory.
+    const handler = await captureSsrMiddleware(undefined, [], ['/p/src']);
+    let nexted = false;
+    await handler(
+      { url: '/src', headers: {} },
       { setHeader() {}, write() {}, end() {} },
       () => (nexted = true)
     ).catch(() => {});

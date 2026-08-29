@@ -40,10 +40,16 @@ export function nodeBuildPlugin(ctx: HonoPreactAdapterContext): Plugin {
 
 export interface NodeDevServerOptions {
   /**
-   * Paths that must reach SSR in dev even though they collide with the
-   * built-in Vite-internal pass-through prefixes (`/@`, `/node_modules/`).
-   * A string matches by prefix; a RegExp matches by `.test()`. Matched
-   * against the query-stripped request path.
+   * Paths that must reach SSR in dev even though the dev server would
+   * otherwise hand them to Vite. Two things are overridable this way:
+   *
+   * - the built-in Vite-internal prefixes (`/@`, `/node_modules/`), for an app
+   *   route like `/@:username`;
+   * - the project-file pass-through, for an app route whose path collides with
+   *   a real file on disk (see `dev-passthrough.ts`).
+   *
+   * A string matches by prefix; a RegExp matches by `.test()`. Matched against
+   * the query-stripped request path.
    *
    * This cannot override Vite's own endpoints (its HMR client, `/@id/`,
    * `/@fs/`, `/@react-refresh`): those always reach Vite regardless of any
@@ -68,6 +74,12 @@ const VITE_OWNED_PREFIXES = ['/@vite/', '/@id/', '/@fs/', '/@react-refresh'];
  * serves, so `/src` must not be claimed just because the folder exists.
  * `statSync` throws on a broken symlink or a permission error; that is a "no",
  * not a crash, so the dev server can never 500 on a routing decision.
+ *
+ * Deliberately uncached. Files appear and disappear constantly during a dev
+ * session (that is what dev *is*), and a stale "no" here would 404 a module the
+ * author just created, with a full restart as the only cure. The cost is at
+ * most two `stat` calls on requests that reach this branch, which is dev-only
+ * and far below the SSR render it gates.
  */
 function isFile(absolutePath: string): boolean {
   try {

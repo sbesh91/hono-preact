@@ -59,17 +59,19 @@ A root-level key is what makes a service worker at `/sw.js` possible: nothing ab
 
 ## nodeAdapter(options?)
 
-| Option          | Type                            | Default | Description                                                                                          |
-| --------------- | ------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `devSsrInclude` | `readonly (string \| RegExp)[]` | `[]`    | Paths that must reach SSR in dev despite matching Vite's internal `/@` or `/node_modules/` prefixes. |
+| Option          | Type                            | Default | Description                                                                             |
+| --------------- | ------------------------------- | ------- | --------------------------------------------------------------------------------------- |
+| `devSsrInclude` | `readonly (string \| RegExp)[]` | `[]`    | Paths that must reach SSR in dev despite the dev server otherwise handing them to Vite. |
 
-The Node dev server hands `/@…` and `/node_modules/…` requests to Vite, which owns its HMR client and module graph. An app route that starts the same way, such as a `/@:username` profile page, never reaches SSR in dev even though it works in production. List it under `devSsrInclude` to force SSR:
+In dev, the Node dev server hands two kinds of request to Vite rather than to your app. The first is anything under `/@…` or `/node_modules/…`, which is where Vite's HMR client and module graph live. The second is any path that names a real file in your project: that is how `/src/routes.ts` and every module and asset it pulls in reach the browser at all.
+
+Either one can shadow a route you meant your app to serve. A `/@:username` profile page starts like a Vite-internal path, and a route whose URL happens to match a file on disk looks like a request for that file. Both work in production and would go missing in dev. List them under `devSsrInclude` to force SSR:
 
 ```ts
 nodeAdapter({ devSsrInclude: [/^\/@(?!vite\/|id\/|fs\/)[^/]+$/] });
 ```
 
-`devSsrInclude` is checked before the built-in `/@` and `/node_modules/` prefix check. A string matches by prefix and a RegExp by `test()`, both against the request path with any query string removed. The built-in prefixes still apply to everything else, and Vite's own endpoints (its HMR client, `/@id/`, `/@fs/`, `/@react-refresh`) always reach Vite regardless of any pattern given here: `devSsrInclude` cannot break HMR or module loading.
+A string matches by prefix and a RegExp by `test()`, both against the request path with any query string removed. Everything not listed keeps the default behavior. Vite's own endpoints (its HMR client, `/@id/`, `/@fs/`, `/@react-refresh`) always reach Vite regardless of any pattern given here, so `devSsrInclude` cannot break HMR or module loading.
 
 ## What the plugin handles
 
