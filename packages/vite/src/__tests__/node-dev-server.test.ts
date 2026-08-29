@@ -6,10 +6,28 @@ import {
   type NodeDevServerOptions,
 } from '../node-dev-server.js';
 
-// createServerModuleRunner needs a real Vite dev server internals (HMR
-// channel, etc.) that a plain stub can't satisfy. The caller test below only
-// needs the middleware's routing decision, not a working module runner, so
-// stub it out while keeping the real nodeDevServerPlugin under test.
+// The dev middleware distinguishes a Vite-served project file from an
+// application route by probing the filesystem. Tests drive that probe through
+// this set rather than creating a temp tree.
+let existingFiles = new Set<string>();
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    default: actual,
+    existsSync: (p: string) => existingFiles.has(p),
+    statSync: (p: string) => {
+      if (!existingFiles.has(p)) throw new Error(`ENOENT: ${p}`);
+      return { isFile: () => true };
+    },
+  };
+});
+
+// createServerModuleRunner needs real Vite dev server internals (HMR channel,
+// etc.) that a plain stub can't satisfy. The caller tests below only need the
+// middleware's routing decision, not a working module runner, so stub it out
+// while keeping the real nodeDevServerPlugin under test.
 vi.mock('vite', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vite')>();
   return {
@@ -110,7 +128,17 @@ describe('shouldForceSsr', () => {
  * with a stub server whose `middlewares.use` captures the handler, and whose
  * `environments.ssr` is enough for createServerModuleRunner not to throw.
  */
-async function captureSsrMiddleware(options?: NodeDevServerOptions) {
+async function captureSsrMiddleware(
+  options?: NodeDevServerOptions,
+  /**
+   * Files that "exist" in the project for this run. The middleware probes the
+   * filesystem to tell a Vite-served project file from an application route
+   * (see `dev-passthrough.ts`); tests set the mocked `fs` answer rather than
+   * laying down a temp tree.
+   */
+  projectFiles: readonly string[] = []
+) {
+  existingFiles = new Set(projectFiles);
   let handler:
     | ((
         req: { url?: string; headers?: Record<string, string> },
@@ -122,6 +150,7 @@ async function captureSsrMiddleware(options?: NodeDevServerOptions) {
   await (plugin.configureServer as (server: unknown) => void | Promise<void>)({
     environments: { ssr: { hot: { on() {} }, topLevelConfig: {} } },
     httpServer: { on() {} },
+    config: { root: ctx.root, publicDir: `${ctx.root}/public` },
     middlewares: {
       use(fn: typeof handler) {
         handler ??= fn;
@@ -166,6 +195,76 @@ describe('nodeDevServerPlugin dev pass-through', () => {
     let nexted = false;
     await handler(
       { url: '/@alice', headers: {} },
+      { setHeader() {}, write() {}, end() {} },
+      () => (nexted = true)
+    ).catch(() => {});
+    expect(nexted).toBe(false);
+  });
+
+  // Regression: issue #392. The client entry statically imports /src/routes.ts.
+  // Handing that request to the SSR app answers it with the SSR document, so
+  // the browser rejects the module on strict MIME checking and the entire
+  // client graph never executes: no hydration, on every Node-adapter app.
+  it('passes an application source module through to Vite', async () => {
+    const handler = await captureSsrMiddleware(undefined, ['/p/src/routes.ts']);
+    // `next()` with no argument is the pass-through branch; `next(err)` is the
+    // catch. Asserting only "next was called" would pass against the unfixed
+    // code, whose SSR attempt throws on this stub request and lands in `next(err)`.
+    const args: unknown[] = [];
+    await handler({ url: '/src/routes.ts' }, {}, (...a: unknown[]) =>
+      args.push(...(a.length ? a : [undefined]))
+    );
+    expect(args).toEqual([undefined]);
+  });
+
+  it('passes a source module through with a Vite query suffix', async () => {
+    const handler = await captureSsrMiddleware(undefined, [
+      '/p/src/pages/home.css',
+    ]);
+    const args: unknown[] = [];
+    await handler(
+      { url: '/src/pages/home.css?direct' },
+      {},
+      (...a: unknown[]) => args.push(...(a.length ? a : [undefined]))
+    );
+    expect(args).toEqual([undefined]);
+  });
+
+  it('still sends an application route to SSR when no such file exists', async () => {
+    // The mirror of the case above: /about names no project file, so the SSR
+    // app must keep it. This is what stops the fix from swallowing routes.
+    const handler = await captureSsrMiddleware(undefined, ['/p/src/routes.ts']);
+    let nexted = false;
+    await handler(
+      { url: '/about', headers: {} },
+      { setHeader() {}, write() {}, end() {} },
+      () => (nexted = true)
+    ).catch(() => {});
+    expect(nexted).toBe(false);
+  });
+
+  it('sends a build-generated asset URL to SSR (no file on disk in dev)', async () => {
+    // /llms.txt is an emitted client asset with no source file; the app serves
+    // it in dev. An extension-based rule would have wrongly claimed it.
+    const handler = await captureSsrMiddleware();
+    let nexted = false;
+    await handler(
+      { url: '/llms.txt', headers: {} },
+      { setHeader() {}, write() {}, end() {} },
+      () => (nexted = true)
+    ).catch(() => {});
+    expect(nexted).toBe(false);
+  });
+
+  it('lets devSsrInclude force a real project file to SSR', async () => {
+    // The escape hatch has to reach the new branch too, for an app whose route
+    // genuinely collides with a file path.
+    const handler = await captureSsrMiddleware({ devSsrInclude: ['/src/'] }, [
+      '/p/src/routes.ts',
+    ]);
+    let nexted = false;
+    await handler(
+      { url: '/src/routes.ts', headers: {} },
       { setHeader() {}, write() {}, end() {} },
       () => (nexted = true)
     ).catch(() => {});

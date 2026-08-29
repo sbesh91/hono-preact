@@ -1,7 +1,9 @@
+import * as fs from 'node:fs';
 import type { Plugin, ViteBuilder, ViteDevServer } from 'vite';
 import { createServerModuleRunner } from 'vite';
 import type { HonoPreactAdapterContext } from './adapter.js';
 import { toFetchRequest, writeFetchResponse } from './node-request.js';
+import { isViteProjectFile } from './dev-passthrough.js';
 
 export function nodeBuildPlugin(ctx: HonoPreactAdapterContext): Plugin {
   return {
@@ -60,6 +62,20 @@ export interface NodeDevServerOptions {
  * cannot override them; they are checked before any user pattern.
  */
 const VITE_OWNED_PREFIXES = ['/@vite/', '/@id/', '/@fs/', '/@react-refresh'];
+
+/**
+ * Existence probe for {@link isViteProjectFile}. A directory is not a file Vite
+ * serves, so `/src` must not be claimed just because the folder exists.
+ * `statSync` throws on a broken symlink or a permission error; that is a "no",
+ * not a crash, so the dev server can never 500 on a routing decision.
+ */
+function isFile(absolutePath: string): boolean {
+  try {
+    return fs.statSync(absolutePath).isFile();
+  } catch {
+    return false;
+  }
+}
 
 /**
  * True when `path` matches any force-to-SSR pattern.
@@ -170,6 +186,25 @@ export function nodeDevServerPlugin(
           // that already match a built-in prefix.
           if (path.startsWith('/@') || path.startsWith('/node_modules/')) {
             if (!shouldForceSsr(path, forcePatterns)) return next();
+          }
+
+          // Ordinary project files carry no distinguishing prefix: a request
+          // for `/src/routes.ts` is shaped exactly like one for `/about`, and
+          // the client entry statically imports the former. Answering it from
+          // the SSR app returns the SSR document, which the browser rejects on
+          // strict MIME checking, taking the whole client graph down with it
+          // (issue #392). Existence is the discriminator; see dev-passthrough.ts.
+          // Overridable via `devSsrInclude`, for an app whose route genuinely
+          // collides with a path on disk.
+          if (
+            isViteProjectFile(path, {
+              root: server.config.root,
+              publicDir: server.config.publicDir,
+              fileExists: isFile,
+            }) &&
+            !shouldForceSsr(path, forcePatterns)
+          ) {
+            return next();
           }
 
           const { default: app } = (await runner.import(
