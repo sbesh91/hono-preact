@@ -74,7 +74,9 @@ export default function DocsLayout({ children }: LayoutProps) {
 
 No `?url` suffix and no manual `<link>`: a bare side-effect `import` is the whole contract. The framework follows each route's build-time import graph to find the CSS it pulls in, injects a `<link rel="stylesheet">` for it after the global sheet (so it wins the same equal-specificity ties auto-split rules do), and carries it along on client-side navigation as part of the route's JS chunk.
 
-Hand-split sheets and auto-split compose freely: nothing about importing `home.css` from `home.tsx` changes because `root.css` is also being split. Route sheets are always render-blocking, present for first paint with no flash of unstyled content, for the same reason the injected link is a real stylesheet link and not a hint.
+Hand-split sheets and auto-split compose freely: nothing about importing `home.css` from `home.tsx` changes because `root.css` is also being split. In a production build, route sheets are render-blocking, present for first paint with no flash of unstyled content, for the same reason the injected link is a real stylesheet link and not a hint.
+
+Under `vite dev` a hand-split sheet is delivered differently. The route-to-CSS map is a build artifact, so there's nothing for the dev server to inject into the SSR head; the sheet instead arrives with its route's JavaScript and its rules apply once that module evaluates. A cold dev load of the route shows its own styles flash in a moment after first paint. Your global stylesheet is unaffected either way, since `vite dev` links it whole and unsplit, so every rule living there is present for first paint in dev too. If the flash gets in your way while developing, move those rules into the global stylesheet and let auto-split scope them for the production build.
 
 ## Keep centering in one `transform`
 
