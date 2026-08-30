@@ -1,11 +1,17 @@
-import { readRequestSlot, writeRequestSlot } from './request-scoped-slot.js';
+import {
+  globalRequestSlotKey,
+  readRequestSlot,
+  writeRequestSlot,
+} from './request-scoped-slot.js';
 
 export type ServerLoaderStream = {
   loaderId: string;
   gen: AsyncGenerator<unknown, unknown, unknown>;
 };
 
-const REGISTRY_KEY = Symbol.for('@hono-preact/streaming-ssr-registry');
+const REGISTRY_KEY = globalRequestSlotKey<ServerLoaderStream[]>(
+  '@hono-preact/streaming-ssr-registry'
+);
 
 /**
  * Register a streaming loader's remaining generator iterations for the
@@ -16,7 +22,7 @@ export function registerServerStreamingLoader(
   loaderId: string,
   gen: AsyncGenerator<unknown, unknown, unknown>
 ): void {
-  const list = readRequestSlot<ServerLoaderStream[]>(REGISTRY_KEY) ?? [];
+  const list = readRequestSlot(REGISTRY_KEY) ?? [];
   list.push({ loaderId, gen });
   writeRequestSlot(REGISTRY_KEY, list);
 }
@@ -28,7 +34,7 @@ export function registerServerStreamingLoader(
  * `runRequestScope`.
  */
 export function takeServerStreamingLoaders(): ServerLoaderStream[] {
-  const list = readRequestSlot<ServerLoaderStream[]>(REGISTRY_KEY) ?? [];
-  writeRequestSlot<ServerLoaderStream[]>(REGISTRY_KEY, []);
+  const list = readRequestSlot(REGISTRY_KEY) ?? [];
+  writeRequestSlot(REGISTRY_KEY, []);
   return list;
 }

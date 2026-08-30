@@ -1,5 +1,9 @@
 import type { ActionResolution } from './internal/action-envelope.js';
 import { isBrowser } from './is-browser.js';
+import {
+  requestSlotKey,
+  type RequestSlotKey,
+} from './internal/request-scoped-slot.js';
 
 export interface LoaderCache<T> {
   get(locKey?: string): T | null;
@@ -8,7 +12,27 @@ export interface LoaderCache<T> {
   invalidate(): void;
 }
 
-type RequestStore = Map<symbol, unknown>;
+/**
+ * The per-request store, viewed through its keys' value types.
+ *
+ * The backing object is an ordinary `Map<symbol, unknown>`; this interface is
+ * the typed lens over it. `RequestSlotKey<T>` carries the value type, so a read
+ * returns `T | undefined` and a write demands a `T`, and neither the accessors
+ * in this file nor `request-scoped-slot.ts` need a cast to say so. The single
+ * assertion is where the Map is created (see `createRequestStore`), because a
+ * heterogeneous Map cannot express "the value type depends on the key" in its
+ * own signature.
+ */
+interface RequestStore {
+  get<T>(key: RequestSlotKey<T>): T | undefined;
+  set<T>(key: RequestSlotKey<T>, value: T): void;
+  delete(key: RequestSlotKey<unknown>): void;
+}
+
+/** Create the backing Map and view it through {@link RequestStore}. */
+function createRequestStore(): RequestStore {
+  return new Map<symbol, unknown>() as RequestStore;
+}
 
 type ALSInstance = {
   getStore(): RequestStore | undefined;
@@ -36,8 +60,12 @@ if (!looksLikeBrowser) {
   }
 }
 
-const HONO_CONTEXT_KEY = Symbol('@hono-preact/iso/honoContext');
-const ACTION_RESULT_KEY = Symbol('@hono-preact/iso/actionResult');
+const HONO_CONTEXT_KEY = requestSlotKey<unknown>(
+  '@hono-preact/iso/honoContext'
+);
+const ACTION_RESULT_KEY = requestSlotKey<ActionResultSlot>(
+  '@hono-preact/iso/actionResult'
+);
 
 export function getRequestStore(): RequestStore | undefined {
   return alsInstance?.getStore();
@@ -70,8 +98,7 @@ export type ActionResultSlot = {
 export function getActionResultSlot(): ActionResultSlot | null {
   const store = getRequestStore();
   if (!store) return null;
-  const slot = store.get(ACTION_RESULT_KEY);
-  return (slot ?? null) as ActionResultSlot | null;
+  return store.get(ACTION_RESULT_KEY) ?? null;
 }
 
 export function setActionResultSlot(slot: ActionResultSlot): void {
@@ -100,7 +127,7 @@ export function runRequestScope<R>(
     }
     return fn();
   }
-  const store: RequestStore = new Map();
+  const store = createRequestStore();
   if (initial?.honoContext !== undefined) {
     store.set(HONO_CONTEXT_KEY, initial.honoContext);
   }
@@ -137,14 +164,14 @@ function warnFallbackOnce(): void {
 }
 
 export function createCache<T>(): LoaderCache<T> {
-  const key = Symbol('cache');
+  const key = requestSlotKey<CacheEntry<T>>('cache');
   let fallbackStore: CacheEntry<T> | null = null;
 
   function readEntry(): CacheEntry<T> | null {
     if (!isBrowser()) {
       const reqStore = getRequestStore();
       if (reqStore) {
-        return (reqStore.get(key) as CacheEntry<T> | undefined) ?? null;
+        return reqStore.get(key) ?? null;
       }
     }
     return fallbackStore;

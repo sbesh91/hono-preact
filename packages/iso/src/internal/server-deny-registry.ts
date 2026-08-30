@@ -1,5 +1,9 @@
 import type { ErrorStatusCode } from '../outcomes.js';
-import { readRequestSlot, writeRequestSlot } from './request-scoped-slot.js';
+import {
+  globalRequestSlotKey,
+  readRequestSlot,
+  writeRequestSlot,
+} from './request-scoped-slot.js';
 
 /** The response-level facts a rendered SSR loader deny must apply to the document. */
 export type ServerDenyRecord = {
@@ -7,7 +11,11 @@ export type ServerDenyRecord = {
   headers: Record<string, string> | undefined;
 };
 
-const REGISTRY_KEY = Symbol.for('@hono-preact/server-deny-registry');
+// `takeServerDeny` clears the slot, so `undefined` is a value this slot
+// genuinely holds and belongs in its type.
+const REGISTRY_KEY = globalRequestSlotKey<ServerDenyRecord | undefined>(
+  '@hono-preact/server-deny-registry'
+);
 
 /**
  * Record the deny that a rendered SSR loader `errorFallback` stands in for, so
@@ -20,7 +28,7 @@ const REGISTRY_KEY = Symbol.for('@hono-preact/server-deny-registry');
  * suspension-resume order.
  */
 export function recordServerDeny(record: ServerDenyRecord): void {
-  const current = readRequestSlot<ServerDenyRecord>(REGISTRY_KEY);
+  const current = readRequestSlot(REGISTRY_KEY);
   if (current === undefined || record.status > current.status) {
     writeRequestSlot(REGISTRY_KEY, record);
   }
@@ -32,7 +40,7 @@ export function recordServerDeny(record: ServerDenyRecord): void {
  * scope. Returns null when no loader deny was rendered.
  */
 export function takeServerDeny(): ServerDenyRecord | null {
-  const record = readRequestSlot<ServerDenyRecord>(REGISTRY_KEY);
-  writeRequestSlot<ServerDenyRecord | undefined>(REGISTRY_KEY, undefined);
+  const record = readRequestSlot(REGISTRY_KEY);
+  writeRequestSlot(REGISTRY_KEY, undefined);
   return record ?? null;
 }
