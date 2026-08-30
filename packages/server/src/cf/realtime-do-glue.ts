@@ -235,7 +235,7 @@ export function makeDOConnState(sockets: WebSocket[]): DOConnState {
   // is immutable for a connection's lifetime, so filter once at construction.
   const roomSockets = sockets.filter((ws) => {
     const att: unknown = ws.deserializeAttachment();
-    return !isTopicSubscriber(att) && !isSocketConnection(att);
+    return isRoomConnAttachment(att);
   });
 
   return {
@@ -296,6 +296,33 @@ export function isSocketConnection(
     typeof attachment === 'object' &&
     attachment !== null &&
     (attachment as { kind?: unknown }).kind === 'socket'
+  );
+}
+
+/**
+ * True when a hibernation socket's attachment is a room connection.
+ *
+ * Defined as negative space on purpose: the DO writes exactly three kinds of
+ * attachment, and the other two are self-identifying via `kind`, while a room
+ * attachment carries no discriminant of its own. Every call site already made
+ * this same "neither topic nor socket, therefore room" inference; this states it
+ * once so the three `as RoomConnAttachment` reads in `realtime-do.ts` become
+ * narrowing instead of assertion.
+ *
+ * A stricter structural check (`connId`/`moduleKey`/`name` present and of the
+ * right type) is possible, but it would change behavior for an unrecognized
+ * attachment, which today is treated as a room. That is a decision about
+ * hibernation-boundary trust, not a cast cleanup, so it is deliberately not
+ * made here.
+ */
+export function isRoomConnAttachment(
+  attachment: unknown
+): attachment is RoomConnAttachment {
+  return (
+    typeof attachment === 'object' &&
+    attachment !== null &&
+    !isTopicSubscriber(attachment) &&
+    !isSocketConnection(attachment)
   );
 }
 

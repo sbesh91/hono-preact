@@ -23,6 +23,7 @@ import {
   parseHeaderJson,
   isTopicSubscriber,
   isSocketConnection,
+  isRoomConnAttachment,
   makeServerSocketHandle,
   fanOutToTopicSubscribers,
 } from './realtime-do-glue.js';
@@ -308,9 +309,13 @@ export class HonoPreactRealtimeDO extends DurableObject {
       await def.message?.(makeServerSocketHandle(ws, att.data), parsed);
       return;
     }
-    // Sanctioned cast: we wrote this attachment in fetch(); read it back at the
-    // untrusted-shaped hibernation boundary.
-    const att = attachment as RoomConnAttachment;
+    // Narrowing, where this used to assert. The false arm is new: a non-object
+    // attachment (a socket accepted without one) previously fell through and
+    // threw a TypeError on the first property read. Skipping it matches what
+    // the topic and socket arms above already do with an attachment that isn't
+    // theirs, and a hibernation callback is not a useful place to throw.
+    if (!isRoomConnAttachment(attachment)) return;
+    const att = attachment;
     const def = await this.getDef(att.moduleKey, att.name);
     const t = makeCfRoomTransport(att.connId, this.#store());
     const raw =
@@ -334,7 +339,8 @@ export class HonoPreactRealtimeDO extends DurableObject {
       def.close?.(makeServerSocketHandle(ws, att.data), { code, reason });
       return;
     }
-    const att = attachment as RoomConnAttachment;
+    if (!isRoomConnAttachment(attachment)) return;
+    const att = attachment;
     const def = await this.getDef(att.moduleKey, att.name);
     // engineClose does: leavePresence (a CF no-op; the socket is already
     // evicted from getWebSockets), broadcast presence/leave to the room.
@@ -363,7 +369,8 @@ export class HonoPreactRealtimeDO extends DurableObject {
       def.error?.(makeServerSocketHandle(ws, att.data), err);
       return;
     }
-    const att = attachment as RoomConnAttachment;
+    if (!isRoomConnAttachment(attachment)) return;
+    const att = attachment;
     const def = await this.getDef(att.moduleKey, att.name);
     const t = makeCfRoomTransport(att.connId, this.#storeWith(ws));
     const conn = makeRoomConnection(t, (code, reason) =>

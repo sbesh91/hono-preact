@@ -14,6 +14,7 @@ import {
   isTopicSubscriber,
   fanOutToTopicSubscribers,
   isSocketConnection,
+  isRoomConnAttachment,
   makeServerSocketHandle,
   type RoomConnAttachment,
 } from '../realtime-do-glue.js';
@@ -434,6 +435,48 @@ describe('isTopicSubscriber', () => {
     expect(isTopicSubscriber(undefined)).toBe(false);
     expect(isTopicSubscriber('topic')).toBe(false);
     expect(isTopicSubscriber({ kind: 'room' })).toBe(false);
+  });
+});
+
+describe('isRoomConnAttachment', () => {
+  it('true for a room attachment', () => {
+    expect(
+      isRoomConnAttachment({
+        connId: 'c1',
+        moduleKey: 'm',
+        name: 'n',
+        params: {},
+        data: null,
+        presence: null,
+      })
+    ).toBe(true);
+  });
+
+  it('false for the two other attachment kinds', () => {
+    expect(isRoomConnAttachment({ kind: 'topic' })).toBe(false);
+    expect(
+      isRoomConnAttachment({
+        kind: 'socket',
+        moduleKey: 'm',
+        name: 'n',
+        data: null,
+      })
+    ).toBe(false);
+  });
+
+  it('false for a non-object attachment', () => {
+    expect(isRoomConnAttachment(null)).toBe(false);
+    expect(isRoomConnAttachment(undefined)).toBe(false);
+    expect(isRoomConnAttachment('room')).toBe(false);
+  });
+
+  // Behavior parity with the code this replaces: the DO writes exactly three
+  // attachment kinds, and every call site already treated "neither topic nor
+  // socket" as a room. An unrecognized object stays a room here so this stays a
+  // refactor; tightening it is a deliberate behavior change, not a cast sweep.
+  it('treats an unrecognized object attachment as a room, as before', () => {
+    expect(isRoomConnAttachment({ kind: 'something-new' })).toBe(true);
+    expect(isRoomConnAttachment({})).toBe(true);
   });
 });
 
