@@ -1,7 +1,9 @@
+import * as fs from 'node:fs';
 import type { Plugin, ViteBuilder, ViteDevServer } from 'vite';
 import { createServerModuleRunner } from 'vite';
 import type { HonoPreactAdapterContext } from './adapter.js';
 import { toFetchRequest, writeFetchResponse } from './node-request.js';
+import { isViteProjectFile } from './dev-passthrough.js';
 
 export function nodeBuildPlugin(ctx: HonoPreactAdapterContext): Plugin {
   return {
@@ -38,10 +40,16 @@ export function nodeBuildPlugin(ctx: HonoPreactAdapterContext): Plugin {
 
 export interface NodeDevServerOptions {
   /**
-   * Paths that must reach SSR in dev even though they collide with the
-   * built-in Vite-internal pass-through prefixes (`/@`, `/node_modules/`).
-   * A string matches by prefix; a RegExp matches by `.test()`. Matched
-   * against the query-stripped request path.
+   * Paths that must reach SSR in dev even though the dev server would
+   * otherwise hand them to Vite. Two things are overridable this way:
+   *
+   * - the built-in Vite-internal prefixes (`/@`, `/node_modules/`), for an app
+   *   route like `/@:username`;
+   * - the project-file pass-through, for an app route whose path collides with
+   *   a real file on disk (see `dev-passthrough.ts`).
+   *
+   * A string matches by prefix; a RegExp matches by `.test()`. Matched against
+   * the query-stripped request path.
    *
    * This cannot override Vite's own endpoints (its HMR client, `/@id/`,
    * `/@fs/`, `/@react-refresh`): those always reach Vite regardless of any
@@ -60,6 +68,26 @@ export interface NodeDevServerOptions {
  * cannot override them; they are checked before any user pattern.
  */
 const VITE_OWNED_PREFIXES = ['/@vite/', '/@id/', '/@fs/', '/@react-refresh'];
+
+/**
+ * Existence probe for {@link isViteProjectFile}. A directory is not a file Vite
+ * serves, so `/src` must not be claimed just because the folder exists.
+ * `statSync` throws on a broken symlink or a permission error; that is a "no",
+ * not a crash, so the dev server can never 500 on a routing decision.
+ *
+ * Deliberately uncached. Files appear and disappear constantly during a dev
+ * session (that is what dev *is*), and a stale "no" here would 404 a module the
+ * author just created, with a full restart as the only cure. The cost is at
+ * most two `stat` calls on requests that reach this branch, which is dev-only
+ * and far below the SSR render it gates.
+ */
+function isFile(absolutePath: string): boolean {
+  try {
+    return fs.statSync(absolutePath).isFile();
+  } catch {
+    return false;
+  }
+}
 
 /**
  * True when `path` matches any force-to-SSR pattern.
@@ -170,6 +198,25 @@ export function nodeDevServerPlugin(
           // that already match a built-in prefix.
           if (path.startsWith('/@') || path.startsWith('/node_modules/')) {
             if (!shouldForceSsr(path, forcePatterns)) return next();
+          }
+
+          // Ordinary project files carry no distinguishing prefix: a request
+          // for `/src/routes.ts` is shaped exactly like one for `/about`, and
+          // the client entry statically imports the former. Answering it from
+          // the SSR app returns the SSR document, which the browser rejects on
+          // strict MIME checking, taking the whole client graph down with it
+          // (issue #392). Existence is the discriminator; see dev-passthrough.ts.
+          // Overridable via `devSsrInclude`, for an app whose route genuinely
+          // collides with a path on disk.
+          if (
+            isViteProjectFile(path, {
+              root: server.config.root,
+              publicDir: server.config.publicDir,
+              fileExists: isFile,
+            }) &&
+            !shouldForceSsr(path, forcePatterns)
+          ) {
+            return next();
           }
 
           const { default: app } = (await runner.import(
