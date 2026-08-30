@@ -24,9 +24,12 @@ import type {
   ObjectExpression,
 } from '@babel/types';
 import { BABEL_PARSER_PLUGINS } from './parser-options.js';
-import type {
-  RoutePreloadMap,
-  RouteCssMap,
+import {
+  joinRoutePath,
+  commonDirPrefix,
+  defaultSlug,
+  type RoutePreloadMap,
+  type RouteCssMap,
 } from '@hono-preact/iso/internal/contract';
 
 // The artifact shape is single-sourced in the shared iso contract module, so
@@ -52,47 +55,6 @@ export interface RouteBundleChunkLike {
   imports?: string[];
   /** Vite's per-chunk CSS metadata: the CSS asset file names this chunk pulls in. */
   viteMetadata?: { importedCss?: Set<string> };
-}
-
-// ---------------------------------------------------------------------------
-// Route-path joining + content-route slug rules. These are byte-for-byte copies
-// of the runtime's private helpers: `joinRoutePath` (iso `define-routes.tsx`)
-// and `commonDirPrefix`/`defaultSlug` (iso `content-routes.tsx`). They must stay
-// in sync so build-time patterns match the runtime registrations; if the runtime
-// rule changes, a divergent copy silently emits wrong/no preload hints for the
-// affected routes (an optimization degrades, not a correctness bug).
-// TODO(#249): extract the three into a preact-free iso leaf and import here, so
-// there is one source of truth instead of a comment-synced copy.
-// ---------------------------------------------------------------------------
-
-function joinRoutePath(parentPath: string, childPath: string): string {
-  if (parentPath === '') return childPath;
-  if (childPath === '') return parentPath;
-  if (parentPath === '/') {
-    return childPath.startsWith('/') ? childPath : '/' + childPath;
-  }
-  return parentPath + '/' + childPath;
-}
-
-function commonDirPrefix(keys: readonly string[]): string {
-  if (keys.length === 0) return '';
-  let prefix = keys[0];
-  for (let i = 1; i < keys.length; i++) {
-    const k = keys[i];
-    let j = 0;
-    while (j < prefix.length && j < k.length && prefix[j] === k[j]) j++;
-    prefix = prefix.slice(0, j);
-    if (prefix === '') break;
-  }
-  const lastSlash = prefix.lastIndexOf('/');
-  return lastSlash === -1 ? '' : prefix.slice(0, lastSlash + 1);
-}
-
-function defaultSlug(key: string, base: string): string {
-  let s = key.startsWith(base) ? key.slice(base.length) : key;
-  s = s.replace(/\.[^./]+$/, '');
-  s = s.replace(/(^|\/)index$/, '');
-  return s;
 }
 
 // ---------------------------------------------------------------------------
