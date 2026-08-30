@@ -3,7 +3,7 @@ import { isBrowser } from './is-browser.js';
 import {
   requestSlotKey,
   type RequestSlotKey,
-} from './internal/request-scoped-slot.js';
+} from './internal/request-slot-key.js';
 
 export interface LoaderCache<T> {
   get(locKey?: string): T | null;
@@ -74,7 +74,11 @@ export function getRequestStore(): RequestStore | undefined {
 // Returns the seeded value from the active runRequestScope, or undefined when no scope
 // is active (browser / happy-dom: node:async_hooks is unavailable). Throws when a scope
 // IS active but was never seeded with { honoContext } (framework bug, surfaces loud).
-// The `as T` is a typed Map-read, not a value cast.
+//
+// The `as T` is the one slot cast a branded key cannot remove: the value really
+// is `unknown` (runRequestScope seeds it from `initial.honoContext: unknown`),
+// and `T` is the CALLER's assertion about what it seeded, not a fact the key
+// could carry. Sanctioned on those grounds rather than reshaped.
 export function getRequestHonoContext<T = unknown>(): T | undefined {
   const store = getRequestStore();
   if (!store) return undefined;

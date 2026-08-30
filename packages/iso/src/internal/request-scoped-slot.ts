@@ -1,4 +1,5 @@
 import { getRequestStore } from '../cache.js';
+import type { RequestSlotKey } from './request-slot-key.js';
 
 /**
  * A minimal per-request read/write primitive over the AsyncLocalStorage-backed
@@ -15,38 +16,12 @@ import { getRequestStore } from '../cache.js';
  * agrees. A disagreement is now a compile error instead of a silent lie.
  */
 
-declare const slotValue: unique symbol;
-
-/**
- * A request-store key that carries the type of the value stored under it.
- *
- * The brand is phantom: it exists only in the type system and never at
- * runtime, where these are ordinary symbols. It is required rather than
- * optional, which is what makes the type nominal: an unbranded `symbol` is not
- * a slot key, so a caller cannot skip `requestSlotKey` and lose the value type.
- * Being an intersection with `symbol`, a key is still usable as a `Map` key.
- */
-export type RequestSlotKey<T> = symbol & { readonly [slotValue]: T };
-
-/**
- * Mint a slot key for values of type `T`.
- *
- * The single assertion here is the brand's construction site: a real `symbol`
- * has no such property, and attaching one at runtime would be pointless
- * bookkeeping for a purely compile-time distinction. Confining it to this one
- * factory is what makes every read and write below cast-free.
- */
-export function requestSlotKey<T>(description: string): RequestSlotKey<T> {
-  return Symbol(description) as RequestSlotKey<T>;
-}
-
-/**
- * Mint a slot key backed by the global symbol registry, for a slot that must
- * be the same key across duplicate module instances (see `Symbol.for`).
- */
-export function globalRequestSlotKey<T>(key: string): RequestSlotKey<T> {
-  return Symbol.for(key) as RequestSlotKey<T>;
-}
+/** Re-exported so a consumer needs only this module for the slot primitive. */
+export {
+  requestSlotKey,
+  globalRequestSlotKey,
+  type RequestSlotKey,
+} from './request-slot-key.js';
 
 /** Read the current value stored under `key` for this request, if any. */
 export function readRequestSlot<T>(key: RequestSlotKey<T>): T | undefined {
