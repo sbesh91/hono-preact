@@ -20,7 +20,16 @@ describe('joinRoutePath', () => {
 
   it('never doubles the separator under a root parent', () => {
     expect(joinRoutePath('/', 'about')).toBe('/about');
+    // A child that already starts with '/' is legal under a root grouping:
+    // validation resets the parent path to '' there, so these are checked as
+    // top-level routes. Collapsing this branch turns '/y' into '//y'.
     expect(joinRoutePath('/', '/about')).toBe('/about');
+  });
+
+  it('keeps a nested join relative when the parent contributes no segment', () => {
+    // Load-bearing: a layout group's inner Router matches its children relative
+    // to itself, so this must NOT become '/about'.
+    expect(joinRoutePath('', 'about')).toBe('about');
   });
 
   it('joins nested segments with a single slash', () => {

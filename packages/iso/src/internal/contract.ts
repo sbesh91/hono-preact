@@ -210,8 +210,23 @@ export interface PreloadArtifact {
 
 /**
  * Join a parent route path to a child's, the way nested route registration
- * does. `''` at either end passes the other through, and a `/` parent never
- * doubles the separator.
+ * does. Every branch below is load-bearing; the shape looks fussier than a
+ * string concat because each case means something different.
+ *
+ * - **`parentPath === ''`** returns the child UNCHANGED, so the result stays
+ *   RELATIVE: `('', 'about')` is `'about'`, not `'/about'`. A layout group's
+ *   inner Router matches its children relative to itself, which is why
+ *   `define-routes.tsx` keeps a separate `here` and `hereAbsolute`. Making this
+ *   absolute silently breaks nested routing.
+ * - **`childPath === ''`** is a bare-grouping or index child contributing no
+ *   segment of its own, so the parent passes through without a trailing slash.
+ * - **`parentPath === '/'`** joins against the root without doubling the
+ *   separator, and accepts a child that ALREADY starts with `/`. That last case
+ *   looks unreachable (`defineRoutes` rejects a nested child path starting with
+ *   `/`) but is not: `collectRouteViolations` resets the parent path to `''`
+ *   under a root grouping, so those children are validated as top-level, where
+ *   a leading slash is legal. `defineRoutes([{ path: '/', children: [{ path:
+ *   'x' }, { path: '/y' }] }])` flattens to `['/x', '/y']` because of it.
  */
 export function joinRoutePath(parentPath: string, childPath: string): string {
   if (parentPath === '') return childPath;
