@@ -191,3 +191,81 @@ export interface PreloadArtifact {
   routeCss: RouteCssMap;
   globalCss: string[];
 }
+
+// ---------------------------------------------------------------------------
+// Route-path rules.
+//
+// These are contracts in the same sense as the constants above: the build-time
+// route scan (vite `route-preload.ts`) must derive exactly the patterns the
+// runtime registers (iso `define-routes.tsx`, `content-routes.tsx`), or the
+// preload map is keyed by patterns that never match and the affected routes
+// silently ship no hints. They lived as byte-for-byte copies in both packages,
+// kept in sync by a comment; this is that single source.
+//
+// They are pure string functions with no imports, so `contract.ts` remains the
+// leaf that `no-runtime-import.test.ts` requires it to be. That test is what
+// keeps build-time code out of the runtime barrel, so nothing added here may
+// ever import anything.
+// ---------------------------------------------------------------------------
+
+/**
+ * Join a parent route path to a child's, the way nested route registration
+ * does. Every branch below is load-bearing; the shape looks fussier than a
+ * string concat because each case means something different.
+ *
+ * - **`parentPath === ''`** returns the child UNCHANGED, so the result stays
+ *   RELATIVE: `('', 'about')` is `'about'`, not `'/about'`. A layout group's
+ *   inner Router matches its children relative to itself, which is why
+ *   `define-routes.tsx` keeps a separate `here` and `hereAbsolute`. Making this
+ *   absolute silently breaks nested routing.
+ * - **`childPath === ''`** is a bare-grouping or index child contributing no
+ *   segment of its own, so the parent passes through without a trailing slash.
+ * - **`parentPath === '/'`** joins against the root without doubling the
+ *   separator, and accepts a child that ALREADY starts with `/`. That last case
+ *   looks unreachable (`defineRoutes` rejects a nested child path starting with
+ *   `/`) but is not: `collectRouteViolations` resets the parent path to `''`
+ *   under a root grouping, so those children are validated as top-level, where
+ *   a leading slash is legal. `defineRoutes([{ path: '/', children: [{ path:
+ *   'x' }, { path: '/y' }] }])` flattens to `['/x', '/y']` because of it.
+ */
+export function joinRoutePath(parentPath: string, childPath: string): string {
+  if (parentPath === '') return childPath;
+  if (childPath === '') return parentPath;
+  if (parentPath === '/') {
+    return childPath.startsWith('/') ? childPath : '/' + childPath;
+  }
+  return parentPath + '/' + childPath;
+}
+
+/**
+ * The longest directory prefix common to every key, used as the base a content
+ * route's slug is taken relative to. Returns `''` when the keys share no
+ * directory, and always ends at a `/` so a partial segment is never treated as
+ * a directory.
+ */
+export function commonDirPrefix(keys: readonly string[]): string {
+  if (keys.length === 0) return '';
+  let prefix = keys[0];
+  for (let i = 1; i < keys.length; i++) {
+    const k = keys[i];
+    let j = 0;
+    while (j < prefix.length && j < k.length && prefix[j] === k[j]) j++;
+    prefix = prefix.slice(0, j);
+    if (prefix === '') break;
+  }
+  const lastSlash = prefix.lastIndexOf('/');
+  return lastSlash === -1 ? '' : prefix.slice(0, lastSlash + 1);
+}
+
+/**
+ * The default slug for a content-route module key: strip the base prefix, the
+ * final extension, and a trailing `index` segment. The `index` strip takes the
+ * preceding separator with it, so `docs/guide/index.mdx` under base `docs/`
+ * becomes `guide`, and `docs/index.mdx` becomes `''` (the base's own route).
+ */
+export function defaultSlug(key: string, base: string): string {
+  let s = key.startsWith(base) ? key.slice(base.length) : key;
+  s = s.replace(/\.[^./]+$/, '');
+  s = s.replace(/(^|\/)index$/, '');
+  return s;
+}

@@ -2,6 +2,7 @@ import { h } from 'preact';
 import type { ComponentChildren, ComponentType } from 'preact';
 import type { RouteDef, ViewProps } from './define-routes.js';
 import { DEFINE_PAGE_MARKER } from './define-page.js';
+import { commonDirPrefix, defaultSlug } from './internal/contract.js';
 
 export interface ContentRoutesOptions {
   /**
@@ -34,28 +35,9 @@ const DefaultWrapper: ComponentType<{ children: ComponentChildren }> = ({
 // truncated at its last '/', so only whole leading directory segments are
 // stripped. A single-key map yields that key's directory. When every key
 // shares a deeper directory, pass `base` explicitly to control the depth.
-function commonDirPrefix(keys: readonly string[]): string {
-  if (keys.length === 0) return '';
-  let prefix = keys[0];
-  for (let i = 1; i < keys.length; i++) {
-    const k = keys[i];
-    let j = 0;
-    while (j < prefix.length && j < k.length && prefix[j] === k[j]) j++;
-    prefix = prefix.slice(0, j);
-    if (prefix === '') break;
-  }
-  const lastSlash = prefix.lastIndexOf('/');
-  return lastSlash === -1 ? '' : prefix.slice(0, lastSlash + 1);
-}
 
 // Default slug rule: strip the base prefix, the final extension, and a
 // trailing `index` segment (so `index` -> '' and `dir/index` -> 'dir').
-function defaultSlug(key: string, base: string): string {
-  let s = key.startsWith(base) ? key.slice(base.length) : key;
-  s = s.replace(/\.[^./]+$/, '');
-  s = s.replace(/(^|\/)index$/, '');
-  return s;
-}
 
 /**
  * Turn a Vite `import.meta.glob` module map into framework route nodes, one per

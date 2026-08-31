@@ -7,6 +7,7 @@ import type {
   VNode,
 } from 'preact';
 import { lazy, Route, Router, useLocation } from 'preact-iso';
+import { joinRoutePath } from './internal/contract.js';
 import type { RouteHook } from 'preact-iso';
 import { RouteLocationsProvider } from './internal/route-locations.js';
 import { RouteManifestContext } from './internal/route-manifest.js';
@@ -185,14 +186,6 @@ const asViewComponent = (c: ComponentType<any>): ComponentType<ViewProps> =>
 // pattern keys equal the type-derived spellings for every tree shape,
 // including a root '/' layout or grouping node. `validate` keeps its own
 // join rule (display-path with a leading slash).
-function joinRoutePath(parentPath: string, childPath: string): string {
-  if (parentPath === '') return childPath;
-  if (childPath === '') return parentPath;
-  if (parentPath === '/') {
-    return childPath.startsWith('/') ? childPath : '/' + childPath;
-  }
-  return parentPath + '/' + childPath;
-}
 
 // Compose inherited page-layer `use` (ancestors outer-first) with a node's own
 // `use`. Returns `base` unchanged when the node declares none, so the common
