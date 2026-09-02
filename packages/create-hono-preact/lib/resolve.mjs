@@ -40,11 +40,23 @@ export function validateProjectName(name) {
  */
 
 /**
+ * Entries that do not make a directory "occupied" for scaffolding purposes:
+ * git's own bookkeeping, and the placeholder used to keep an otherwise empty
+ * directory tracked. Anything else is real content the scaffold must not
+ * write over.
+ */
+const GIT_ONLY_ENTRIES = new Set(['.git', '.gitkeep']);
+
+/**
  * Single source of truth for whether a resolved target path is usable as a fresh
  * project directory. Returns an error message when the path already exists as a
  * file, or as a non-empty directory; returns undefined when it does not exist or
  * is an empty directory. Used by both the interactive prompt validator and the
  * flag-supplied-dir guard, so the two never diverge.
+ *
+ * A directory holding nothing but git bookkeeping counts as empty: `git init`
+ * or `gh repo clone` before scaffolding is a normal flow, and it would
+ * otherwise be turned away from its own repository root.
  *
  * @param {string} dest absolute target path
  * @param {string} name the name to show in the message
@@ -55,7 +67,8 @@ export function checkTargetDir(dest, name) {
   if (!statSync(dest).isDirectory()) {
     return `A file named '${name}' already exists.`;
   }
-  if (readdirSync(dest).length > 0) {
+  const occupied = readdirSync(dest).filter((e) => !GIT_ONLY_ENTRIES.has(e));
+  if (occupied.length > 0) {
     return `Directory '${name}' already exists and is not empty.`;
   }
   return undefined;

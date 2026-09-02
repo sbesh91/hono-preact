@@ -20,7 +20,7 @@
 
 1. Create or extend `src/pages/<name>.server.ts`:
 
-   ```ts
+   ```ts file=src/pages/profile.server.ts
    import { defineLoader } from 'hono-preact';
 
    export const serverLoaders = {
@@ -48,8 +48,10 @@
    need the same data inside the view can call `.useData()`, which hands back a
    `ReadonlySignal` of that same union:
 
-   ```tsx
-   function RenderedAt() {
+   ```tsx file=src/pages/rendered-at.tsx
+   import { serverLoaders } from './profile.server.js';
+
+   export function RenderedAt() {
      const state = serverLoaders.default.useData();
      // `.value` is required: `useData()` returns a signal, not the state.
      return <small>{state.value.data?.renderedAt}</small>;
@@ -57,7 +59,7 @@
    ```
 
 
-   ```tsx
+   ```tsx file=src/pages/profile.tsx
    import { definePage } from 'hono-preact';
    import { serverLoaders } from './profile.server.js';
 
