@@ -18,7 +18,7 @@ signed-in user.
 
 1. Write the guard (for example `src/guards.ts`):
 
-   ```ts
+   ```ts file=src/guards.ts
    import {
      defineServerMiddleware,
      defineClientMiddleware,
@@ -26,8 +26,9 @@ signed-in user.
    } from 'hono-preact';
 
    const requireUserServer = defineServerMiddleware(async (ctx, next) => {
-     const user = await getUser(ctx.c); // your server-side session lookup
-     if (!user) throw redirect('/login');
+     // Stand-in for your real session lookup; `ctx.c` is the Hono context.
+     const authed = ctx.c.req.header('cookie')?.includes('session=');
+     if (!authed) throw redirect('/login');
      await next();
    });
 
@@ -44,15 +45,31 @@ signed-in user.
    ```
 
 2. Attach it to the route node in `src/routes.ts` with `use:`. Put it on the node you want
-   to protect, or on a parent to protect a whole subtree:
+   to protect, or on a parent to protect a whole subtree. This example guards the
+   scaffold's existing `/about` route so it runs as written; use whichever node is
+   actually sensitive in your app:
 
-   ```ts
-   {
-     path: '/dashboard',
-     view: () => import('./pages/dashboard.js'),
-     use: requireUser,
-     // any children here inherit requireUser automatically
-   },
+   ```ts file=src/routes.ts
+   import { defineRoutes } from 'hono-preact';
+   import { requireUser } from './guards.js';
+
+   const routeTree = [
+     { path: '/', view: () => import('./pages/home.js') },
+     {
+       path: '/about',
+       view: () => import('./pages/about.js'),
+       use: requireUser,
+       // any children here inherit requireUser automatically
+     },
+   ] as const;
+
+   export default defineRoutes(routeTree);
+
+   declare module 'hono-preact' {
+     interface RegisteredRoutes {
+       tree: typeof routeTree;
+     }
+   }
    ```
 
 ## Verify

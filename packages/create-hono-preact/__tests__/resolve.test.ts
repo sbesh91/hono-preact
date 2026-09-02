@@ -128,6 +128,26 @@ describe('validateDirName', () => {
     expect(validateDirName('empty-existing', dir)).toBeUndefined();
   });
 
+  // `git init` (or `gh repo clone`) then scaffold is a normal flow, and it
+  // leaves a directory whose only entry is `.git`. Treating that as occupied
+  // sent people to a throwaway subdirectory for no reason.
+  it('accepts a directory whose only entry is .git', () => {
+    mkdirSync(join(dir, 'git-only', '.git'), { recursive: true });
+    expect(validateDirName('git-only', dir)).toBeUndefined();
+  });
+
+  it('accepts a directory holding only .git and .gitkeep', () => {
+    mkdirSync(join(dir, 'git-keep', '.git'), { recursive: true });
+    writeFileSync(join(dir, 'git-keep', '.gitkeep'), '');
+    expect(validateDirName('git-keep', dir)).toBeUndefined();
+  });
+
+  it('still rejects a directory holding .git plus real content', () => {
+    mkdirSync(join(dir, 'git-plus', '.git'), { recursive: true });
+    writeFileSync(join(dir, 'git-plus', 'README.md'), '# existing');
+    expect(validateDirName('git-plus', dir)).toMatch(/not empty/i);
+  });
+
   it('rejects a name with JSON/shell metacharacters before touching the filesystem', () => {
     // The RCE lever: a name is substituted into package.json / shell scripts, so
     // a quote (JSON breakout to a sibling `postinstall`) or shell metachar must

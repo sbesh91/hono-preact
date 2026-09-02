@@ -15,7 +15,7 @@
 
 1. Add the action to `src/pages/<name>.server.ts` alongside any loaders:
 
-   ```ts
+   ```ts file=src/pages/signup.server.ts
    import { defineAction, redirect } from 'hono-preact';
 
    export const serverActions = {
@@ -39,7 +39,7 @@
 3. Render a `<Form>` wired to the action, reading its status and result, in
    `src/pages/<name>.tsx`:
 
-   ```tsx
+   ```tsx file=src/pages/signup.tsx
    import { Form, useActionResult, useFormStatus } from 'hono-preact';
    import { serverActions } from './signup.server.js';
 

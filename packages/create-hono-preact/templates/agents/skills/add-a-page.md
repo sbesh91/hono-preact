@@ -15,7 +15,7 @@
 
 1. Create the component at `src/pages/<name>.tsx` (replace `<name>`):
 
-   ```tsx
+   ```tsx file=src/pages/about.tsx
    import type { FunctionComponent } from 'preact';
 
    const About: FunctionComponent = () => (
@@ -34,14 +34,27 @@
    (the scaffold declares it `as const` so route params and paths stay typed). The
    import specifier ends in `.js`, not `.tsx`:
 
-   ```ts
-   { path: '/about', view: () => import('./pages/about.js') },
+   ```ts file=src/routes.ts
+   import { defineRoutes } from 'hono-preact';
+
+   const routeTree = [
+     { path: '/', view: () => import('./pages/home.js') },
+     { path: '/about', view: () => import('./pages/about.js') },
+   ] as const;
+
+   export default defineRoutes(routeTree);
+
+   declare module 'hono-preact' {
+     interface RegisteredRoutes {
+       tree: typeof routeTree;
+     }
+   }
    ```
 
 3. Confirm `src/Layout.tsx` renders both `<ClientScript />` and `<Head />` (both from
    `hono-preact`). The scaffold's layout already does; a hand-written one must:
 
-   ```tsx
+   ```tsx no-compile=in-place excerpt of an existing Layout.tsx
    import { ClientScript, Head } from 'hono-preact';
    // ...inside the returned document...
    <Head defaultTitle="My app" />

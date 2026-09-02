@@ -72,3 +72,6 @@ packages/create-hono-preact/templates/agents/llms-full.txt
 # dirtying the working tree.
 .hp-size-probe-*/
 packages/*/dist-missing-module-*/
+
+# Scratch projects built by the recipe-snippet compile gate
+.recipe-check/

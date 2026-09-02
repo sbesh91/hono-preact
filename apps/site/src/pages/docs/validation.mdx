@@ -231,6 +231,37 @@ Pass `searchSchema` or `paramsSchema` to `serverRoute(path).loader(fn, opts)` to
 
 Validation runs on both entry paths, but they fail differently because they happen at different layers. On a **direct page load (SSR)** an invalid param is a bad URL: the response is a plain `400`/`404` (the status above), and no client error boundary renders. On a **client navigation (loader RPC fetch)** the failure reaches the loader's error boundary, where you can render a custom fallback and read the field issues (below). Use `.default(...)` for optional search params you want to render rather than error on.
 
+### Path params are typed, not trusted
+
+Binding a server module with `serverRoute(pattern)` types `ctx.location.pathParams` from the pattern, so a loader on `/projects/:projectId/tasks/:taskId` sees both keys as `string` with no optionality to narrow. That type is a **shape** guarantee, not a trust boundary.
+
+On a direct page load the values come from the matched URL. On a client navigation the loader is reached over RPC, and the params travel in the request the client sends, so a caller can supply any string for a key the pattern declares. The type says the key is there; it says nothing about the value being one your data actually contains.
+
+Two consequences worth designing around:
+
+- **Validate the value's form** with `paramsSchema` whenever the loader does more than echo it. A param used as a database key, a filesystem path, or a cache key should be constrained to the shape you expect (a numeric id, a known slug) rather than accepted as an arbitrary string.
+- **Re-check authorization against the resolved record**, not the raw param. A well-formed `projectId` the caller is not a member of passes any schema you write. Look the record up, then decide, and answer a miss with `deny(404, ...)` so a probe cannot distinguish "does not exist" from "not yours".
+
+```ts
+const route = serverRoute('/projects/:projectId/tasks/:taskId');
+
+export const serverLoaders = {
+  task: route.loader(
+    async ({ location, c }) => {
+      // Coerced by paramsSchema, so this is a number here.
+      const task = await findTask(location.pathParams.taskId);
+      // Existence and access are decided on the record, not the param.
+      if (!task || !(await mayRead(c, task)))
+        throw deny(404, 'Task not found.');
+      return task;
+    },
+    { paramsSchema: z.object({ taskId: z.coerce.number().int() }) }
+  ),
+};
+```
+
+The framework does not derive or cross-check the params against the pattern for you beyond matching key names, so a loader that skips both steps above is trusting client input.
+
 ### Reading loader validation issues
 
 On the client-navigation path the failure reaches the error boundary as a `LoaderValidationError` carrying the same normalized field issues an action's `deny(422)` does. Read them with `getValidationIssues(error)`, the same reader the action path uses, so field-level errors render identically across actions and loaders:

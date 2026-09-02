@@ -126,6 +126,26 @@ A `use` on a route node inherits down the tree: it applies to the node's own vie
 
 Bare units are the exception, and loaders and actions behave the same way. A route-independent `defineLoader` or `defineAction` runs its SSR render inside the route chain, but its client-driven RPC (`POST /__loaders` for a loader, the action POST for an action) runs only the app-level `use` and the unit's own unit-level `use`, never the route node's page-layer `use`. So a bare unit colocated under a guarded route is gated on first paint but not on a direct RPC hit. A bare unit is route-independent by design: the client chooses where to POST, so the route it posts from is not a security boundary. Bind it with `serverRoute(r).loader` / `serverRoute(r).action` (as in the example above), or give it a unit-level `use`, to gate it everywhere.
 
+One server module can hold both kinds at once, and nothing flags the mix. A module that defines its loaders through a `route` binder and its actions with a plain `defineAction` reads as one route-bound unit, but only the loaders are gated by the route node; the actions are route-independent and their POST runs with the app-level and unit-level chains alone. Proximity in the file is not a gate. When a module is meant to sit behind a route's guard, bind every unit in it through the same binder:
+
+```ts
+const route = serverRoute('/projects/:projectId');
+
+export const serverLoaders = {
+  board: route.loader(async ({ location }) =>
+    loadBoard(location.pathParams.projectId)
+  ),
+};
+
+export const serverActions = {
+  // Bound through the same binder, so the route node's `use` gates this too.
+  // A plain `defineAction` here would not be gated by the route node.
+  moveCard: route.action(async (ctx, input) => moveCard(input)),
+};
+```
+
+Mixing is legitimate when it is deliberate: an action that genuinely serves several routes, or one whose gate belongs on the unit rather than the page, is better off bare with its own `use`. The rule is that the choice should be explicit per unit, because reading the module will not tell you which chain each one runs.
+
 A layout's own server module binds either scope of its node. `serverRoute('/admin/*')` is the subtree scope: the chain every descendant inherits (the layout's inherited and own `use`), the usual spelling for shell data. `serverRoute('/admin')` is the page scope: the deepest composed chain for the pattern string, which adds the index child's own `use` when the index child declares one (see [Binding a layout's loaders](/docs/loaders#binding-a-layouts-loaders)).
 
 A grouping node that declares `use` and `children` but no `view` or `layout` has no page pattern of its own, but its subtree does: a server module shared across the subtree binds `serverRoute('/x/*')` and runs the composed chain the node passes to every descendant. Under a tree-form registration (`tree: typeof routeTree`, see [Typed route params](/docs/layouts#typed-route-params)) the `'/x/*'` spelling is typed like every other children-bearing node's subtree; a paths-only registration types subtree patterns heuristically from the path union, which cannot see a grouping node.

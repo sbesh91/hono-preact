@@ -523,6 +523,39 @@ A route-bound loader (`serverRoute(r).loader(fn)`) receives:
 
 A route-independent loader (`defineLoader(fn)`) receives the same fields except `location`.
 
+### `ctx.c` is an untyped Context
+
+`ctx.c` is Hono's `Context` with its default environment, which means `c.env` is untyped. Every binding read typechecks, including one that does not exist: `c.env.MY_KV` and `c.env.MY_KVV` are equally acceptable to the compiler, and the mistake surfaces at runtime as a read of `undefined`. The route table has `RegisteredRoutes` to make `pathParams` and `buildPath` typed against your real routes; there is no counterpart for bindings, so nothing carries your `wrangler.jsonc` or `.env` shape into `ctx.c`. Typing bindings this way is planned API surface, not something you can register today.
+
+Until then, declare the shape once and read bindings through it, so a typo is a compile error at every call site rather than at none:
+
+```ts
+// src/env.ts
+import type { Context } from 'hono';
+
+export type AppBindings = {
+  MY_KV: KVNamespace;
+  API_TOKEN: string;
+};
+
+// `c.env` is untyped, so this narrows rather than widens; keep it as the only
+// place the app reads bindings off a raw Context.
+export const bindings = (c: Context): AppBindings => c.env;
+```
+
+```ts
+import { bindings } from '../env.js';
+
+export const serverLoaders = {
+  default: defineLoader(async ({ c }) => {
+    const movies = await getMovies(bindings(c).MY_KV);
+    return { movies };
+  }),
+};
+```
+
+Keeping one accessor also gives you a single place to update when a binding is added or renamed, and a single seam to stub in tests.
+
 `location.pathParams` and `location.searchParams` are plain objects, so read them any way you like: `pathParams.id`, `'id' in pathParams`, `Object.keys(pathParams)`, and the rest all work. You never have to worry about a param name clashing with a built-in like `constructor` or `toString`, because a route can't declare one in the first place: `serverRoute('/plugin/:constructor')` throws at definition. The same holds for a socket's `data` params and a room's `onJoin` params; see [WebSockets](/docs/websockets) and [Rooms](/docs/rooms).
 
 Pass the signal to upstream `fetch` calls and subscriptions so they clean up promptly:
