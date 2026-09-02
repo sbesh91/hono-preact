@@ -45,7 +45,9 @@ signed-in user.
    ```
 
 2. Attach it to the route node in `src/routes.ts` with `use:`. Put it on the node you want
-   to protect, or on a parent to protect a whole subtree:
+   to protect, or on a parent to protect a whole subtree. This example guards the
+   scaffold's existing `/about` route so it runs as written; use whichever node is
+   actually sensitive in your app:
 
    ```ts file=src/routes.ts
    import { defineRoutes } from 'hono-preact';
@@ -54,7 +56,7 @@ signed-in user.
    const routeTree = [
      { path: '/', view: () => import('./pages/home.js') },
      {
-       path: '/dashboard',
+       path: '/about',
        view: () => import('./pages/about.js'),
        use: requireUser,
        // any children here inherit requireUser automatically
