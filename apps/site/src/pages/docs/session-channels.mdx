@@ -31,18 +31,18 @@ type SessionChannel<T> = {
 
 The type argument is explicit rather than inferred: a channel payload is declared once and read by one paired middleware, so there is nothing to infer it from.
 
-The optional `id` argument names the channel yourself. Leave it off in application code. The framework's Vite plugin derives a stable id from the declaring module and injects it at the call site, which is what makes the server bundle and the client bundle agree on the same channel.
+The optional `id` argument lets you name the channel yourself. Leave it off in application code. The framework's Vite plugin derives a stable id from the declaring module and injects it at the call site, which is what makes the server bundle and the client bundle agree on the same channel.
 
 ## Where to declare a channel
 
 **Declare the channel in a module both tiers import.** The server middleware and the client middleware have to reach the same declaration, and the id injection is what ties the two bundles together.
 
-A channel declared inside a `.server.*` module does not get an injected id. The Vite plugin skips `.server.*` modules by design, so the declaration falls back to a per-instance runtime counter, the two bundles end up with different ids, and every `read()` returns `undefined`. Nothing throws; the guard simply never sees a published value. Keep the `defineSessionChannel` call in a shared module (`auth/session-channel.ts` in the example above) and import it from both legs.
+**A channel declared in a `.server.*` module silently never resolves.** It does not get an injected id: the Vite plugin skips `.server.*` modules by design, so the declaration falls back to a per-instance runtime counter, the two bundles end up with different ids, and every `read()` returns `undefined`. Nothing throws; the guard simply never sees a published value. Keep the `defineSessionChannel` call in a shared module (`auth/session-channel.ts` in the example above) and import it from both legs.
 
 ## A guard with both legs
 
 ```ts
-// auth/session.ts
+// auth/require-session.ts
 import {
   defineServerMiddleware,
   defineClientMiddleware,
@@ -74,7 +74,7 @@ Attach the pair to a route node's `use` the way any other guard attaches (see [M
 ```ts
 // src/routes.ts
 import { defineRoutes } from 'hono-preact';
-import { requireSession } from './auth/session.js';
+import { requireSession } from './auth/require-session.js';
 
 export default defineRoutes([
   { path: '/login', view: () => import('./pages/login.js') },
@@ -94,11 +94,11 @@ export default defineRoutes([
 
 ## What travels, and what does not
 
-The published value ships to the client on **every** response that runs the publishing middleware: inline in the SSR document, and on a response header for a loader or action RPC. Treat it as public. Publish a decision (`{ signedIn: true }`, a role name, a plan tier), never a token, a session secret, or anything you would not put in view-source.
+The published value ships to the client on **every** response that runs the publishing middleware: inline in the SSR document, and on a response header for every loader, action and live-loader stream response. Treat it as public. Publish a decision (`{ signedIn: true }`, a role name, a plan tier), never a token, a session secret, or anything you would not put in view-source.
 
 The value is not persisted. It lives in memory for the life of the page, and each server round-trip replaces it wholesale. That is how a logout clears it: the next round-trip publishes `{ signedIn: false }` and the client leg starts denying, with no application bookkeeping and nothing to clean up.
 
-`read()` returns `undefined` when no round-trip has published on this channel yet. A guard treats `undefined` exactly the way it treats an absent flag: not authorized. The example above spells this as `?.signedIn`, which is falsy for both the unpublished case and an explicit `{ signedIn: false }`.
+`read()` returns `undefined` when no round-trip has published on this channel yet, and also when the two bundles disagree on the channel id (see [Where to declare a channel](#where-to-declare-a-channel)). A guard treats `undefined` exactly the way it treats an absent flag: not authorized. The example above spells this as `?.signedIn`, which is falsy for both the unpublished case and an explicit `{ signedIn: false }`.
 
 ## The client leg is not a security boundary
 
