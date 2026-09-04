@@ -7,7 +7,6 @@ import {
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { serverActions } from './login.server.js';
-import { DEMO_AUTHED_KEY } from '../../demo/guard.js';
 
 const LoginPage: FunctionComponent = () => {
   useTitle('Sign in');
@@ -15,19 +14,6 @@ const LoginPage: FunctionComponent = () => {
   const result = useActionResult(serverActions.login).value;
   const error =
     result?.kind === 'deny' || result?.kind === 'error' ? result.message : null;
-
-  // Set the client-guard flag as the sign-in is submitted, before the action's
-  // redirect triggers a full reload to /demo/projects. Without this, the client
-  // guard runs during that page's hydration before projects.tsx's bootstrap
-  // useEffect, sees no flag, and bounces back to /demo/login. A stale flag from
-  // a failed sign-in is harmless: the server guard rejects on the next request.
-  const markAuthed = () => {
-    try {
-      window.localStorage.setItem(DEMO_AUTHED_KEY, '1');
-    } catch {
-      // ignore: server guard remains the source of truth on full reloads.
-    }
-  };
 
   return (
     <div class="grid min-h-screen place-items-center bg-background px-4 py-10">
@@ -75,7 +61,6 @@ const LoginPage: FunctionComponent = () => {
           <button
             type="submit"
             class="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground hover:bg-accent-hover disabled:opacity-60"
-            onClick={markAuthed}
             disabled={pending}
           >
             {pending ? 'Signing in...' : 'Sign in'}
