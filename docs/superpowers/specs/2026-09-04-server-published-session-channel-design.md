@@ -132,9 +132,16 @@ The published value has to reach the client on both kinds of server round-trip:
 
 1. **SSR document load.** Serialized into the bootstrap payload the document
    shell already emits.
-2. **Loader and action RPC.** A sibling field on the existing envelopes
-   (`packages/iso/src/internal/envelope.tsx` for the loader hydration anchor,
-   `packages/iso/src/internal/action-envelope.ts` for actions).
+2. **Loader and action RPC.** A response header (`X-HP-Channels`, a JSON
+   object) set by `loaders-handler.ts` and `page-actions-handler.ts`.
+
+   A header rather than a field on the response body, for two reasons. The
+   loader RPC has two response shapes, a JSON body and an SSE stream
+   (`c.json(result)` and the streaming path in `loaders-handler.ts`), and a body
+   field covers only the first. And on the action side the body is
+   `ActionEnvelope`, a discriminated union, so a sibling field would have to be
+   intersected onto every arm. A header is uniform across all of these and
+   reshapes no wire type.
 
 Both are required. SSR-only would mean a logout performed through an action does
 not refresh the channel until a full reload, which puts the app back to clearing
