@@ -8,11 +8,22 @@ import { BABEL_PARSER_PLUGINS } from './parser-options.js';
 
 const ISO_PACKAGE_SOURCES = new Set(['@hono-preact/iso', 'hono-preact']);
 
+// The channel factory is NOT a strip. Its call sites are rewritten in BOTH
+// bundles, to the same id, which is the whole point: the server and client
+// bundles each construct their own channel object, so only a compile-time id
+// can make the two agree. A runtime counter cannot.
+const CHANNEL_FACTORY = 'defineSessionChannel';
+
 // Each strip replaces the entire call expression with a literal brand
 // object. The middleware/observer factory output IS a small descriptor
 // record, so inlining the brand object lets the user's fn body and any
 // modules it pulls in tree-shake out of the wrong-env bundle.
 type StripStrategy = { name: string; replacement: string };
+
+// What a matched call site turns into. `strip` swaps the whole call for an
+// inert brand object; `channelId` keeps the callee and supplies the id
+// argument the user omitted.
+type Rewrite = { kind: 'strip'; replacement: string } | { kind: 'channelId' };
 
 // In the server bundle we strip anything client-only. The replacement
 // `fn` arity matches the documented `(ctx, next) => Promise<void | Outcome>`
@@ -50,15 +61,15 @@ const CLIENT_BUNDLE_STRIPS: ReadonlyArray<StripStrategy> = [
 //              module cannot export middleware (the exports contract blocks it),
 //              guard-strip is the ONLY protection for route-level middleware.
 type StripBindings = {
-  direct: Map<string, StripStrategy>;
+  direct: Map<string, Rewrite>;
   namespaces: Set<string>;
 };
 
 function collectLocalBindings(
   ast: ReturnType<typeof parse>,
-  byName: ReadonlyMap<string, StripStrategy>
+  byName: ReadonlyMap<string, Rewrite>
 ): StripBindings {
-  const direct = new Map<string, StripStrategy>();
+  const direct = new Map<string, Rewrite>();
   const namespaces = new Set<string>();
   for (const node of ast.program.body) {
     if (node.type !== 'ImportDeclaration') continue;
@@ -71,9 +82,9 @@ function collectLocalBindings(
       }
       if (spec.type !== 'ImportSpecifier') continue;
       if (spec.imported.type !== 'Identifier') continue;
-      const strategy = byName.get(spec.imported.name);
-      if (strategy) {
-        direct.set(spec.local.name, strategy);
+      const rewrite = byName.get(spec.imported.name);
+      if (rewrite) {
+        direct.set(spec.local.name, rewrite);
       }
     }
   }
@@ -81,25 +92,32 @@ function collectLocalBindings(
 }
 
 type Hit = {
-  strategy: StripStrategy;
+  text: string;
   start: number;
   end: number;
 };
 
 function findCallsByLocalName(
   ast: File,
+  code: string,
+  moduleId: string,
   bindings: StripBindings,
-  byName: ReadonlyMap<string, StripStrategy>,
+  byName: ReadonlyMap<string, Rewrite>,
   hits: Hit[]
 ): void {
+  // Counts every channel call in the module, in source order, whether or not
+  // its rewrite survives (a call nested inside a stripped body is dropped at
+  // apply time). Counting before that filter is what keeps the index the same
+  // in a bundle that strips the enclosing call and one that does not.
+  let channelIndex = 0;
   traverse(ast, {
     CallExpression(path: NodePath<CallExpression>) {
       const { node } = path;
       const callee = node.callee;
-      let strategy: StripStrategy | undefined;
+      let rewrite: Rewrite | undefined;
       if (callee.type === 'Identifier') {
         // `defineServerMiddleware(...)` via a named import.
-        strategy = bindings.direct.get(callee.name);
+        rewrite = bindings.direct.get(callee.name);
       } else if (
         callee.type === 'MemberExpression' &&
         !callee.computed &&
@@ -108,14 +126,38 @@ function findCallsByLocalName(
         callee.property.type === 'Identifier'
       ) {
         // `hp.defineServerMiddleware(...)` via a namespace import: the object is
-        // a framework namespace binding and the property names the strip.
-        strategy = byName.get(callee.property.name);
+        // a framework namespace binding and the property names the symbol.
+        rewrite = byName.get(callee.property.name);
       }
-      if (strategy && node.start != null && node.end != null) {
-        hits.push({ strategy, start: node.start, end: node.end });
+      if (!rewrite || node.start == null || node.end == null) return;
+      if (rewrite.kind === 'strip') {
+        hits.push({
+          text: rewrite.replacement,
+          start: node.start,
+          end: node.end,
+        });
+        return;
       }
+      const index = channelIndex++;
+      // A user who passed an explicit id owns it.
+      if (node.arguments.length > 0) return;
+      if (callee.start == null || callee.end == null) return;
+      // Preserve the callee text so a renamed or namespaced import round-trips.
+      const calleeText = code.slice(callee.start, callee.end);
+      hits.push({
+        text: `${calleeText}(${JSON.stringify(`${moduleId}#${index}`)})`,
+        start: node.start,
+        end: node.end,
+      });
     },
   });
+}
+
+// Vite hands the transform an id that can carry a `?v=...` / `?import` suffix,
+// and the suffix is not the same in the two bundles. The path before the `?`
+// is, so that is the identity.
+function normalizeModuleId(id: string): string {
+  return id.split('?')[0] ?? id;
 }
 
 export function guardStripPlugin(): Plugin {
@@ -123,7 +165,11 @@ export function guardStripPlugin(): Plugin {
     name: 'hono-preact:guard-strip',
     enforce: 'pre',
     transform(code: string, id: string, options?: { ssr?: boolean }) {
-      if (!/\.[jt]sx?$/.test(id)) return;
+      // Normalize once, up front: Vite ids can carry a `?v=...` / `?import`
+      // suffix that both defeats the extension test below and differs between
+      // the two bundles.
+      const moduleId = normalizeModuleId(id);
+      if (!/\.[jt]sx?$/.test(moduleId)) return;
       // `.server.*` files are intentionally skipped in both bundles.
       // In the client bundle the server-only stub plugin already rewrites
       // imports of these files; in the server bundle the file's own
@@ -131,13 +177,16 @@ export function guardStripPlugin(): Plugin {
       // `.server.*` module's named exports to the allowlist, so a user
       // cannot land a `defineClientMiddleware(...)` value as a recognized
       // export and ship it to the server.
-      if (/\.server\.[jt]sx?$/.test(id)) return;
+      if (/\.server\.[jt]sx?$/.test(moduleId)) return;
       const strips = options?.ssr ? SERVER_BUNDLE_STRIPS : CLIENT_BUNDLE_STRIPS;
 
       // Cheap pre-filter: only parse files that mention at least one of the
-      // symbols we strip. Avoids parsing the entire dep graph just to
-      // confirm no strips apply.
-      if (!strips.some((s) => code.includes(s.name))) return;
+      // symbols we rewrite. Avoids parsing the entire dep graph just to
+      // confirm nothing applies.
+      const mentioned =
+        strips.some((s) => code.includes(s.name)) ||
+        code.includes(CHANNEL_FACTORY);
+      if (!mentioned) return;
 
       const ast = parse(code, {
         sourceType: 'module',
@@ -145,17 +194,34 @@ export function guardStripPlugin(): Plugin {
         errorRecovery: true,
       });
 
-      const byName = new Map(strips.map((s) => [s.name, s]));
+      const byName = new Map<string, Rewrite>(
+        strips.map((s) => [
+          s.name,
+          { kind: 'strip', replacement: s.replacement },
+        ])
+      );
+      byName.set(CHANNEL_FACTORY, { kind: 'channelId' });
       const bindings = collectLocalBindings(ast, byName);
       if (bindings.direct.size === 0 && bindings.namespaces.size === 0) return;
 
       const hits: Hit[] = [];
-      findCallsByLocalName(ast, bindings, byName, hits);
+      findCallsByLocalName(ast, code, moduleId, bindings, byName, hits);
       if (hits.length === 0) return;
 
+      // Drop any hit nested inside an earlier one: the outer rewrite already
+      // replaced that source range, and overlapping overwrites are an error.
+      const ordered = [...hits].sort((a, b) => a.start - b.start);
+      const applicable: Hit[] = [];
+      let coveredTo = -1;
+      for (const hit of ordered) {
+        if (hit.start < coveredTo) continue;
+        applicable.push(hit);
+        coveredTo = hit.end;
+      }
+
       const s = new MagicString(code);
-      for (const hit of [...hits].reverse()) {
-        s.overwrite(hit.start, hit.end, hit.strategy.replacement);
+      for (const hit of applicable.reverse()) {
+        s.overwrite(hit.start, hit.end, hit.text);
       }
       return { code: s.toString(), map: s.generateMap({ hires: true }) };
     },
