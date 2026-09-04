@@ -88,6 +88,9 @@ export {
 } from './internal/server-deny-registry.js';
 export type { ServerDenyRecord } from './internal/server-deny-registry.js';
 
+export { takeChannelSnapshot } from './internal/channel-registry.js';
+export type { ChannelSnapshot } from './internal/channel-wire.js';
+
 export {
   beginSubmit,
   endSubmit,

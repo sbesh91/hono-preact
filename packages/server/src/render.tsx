@@ -27,6 +27,7 @@ import {
   captureRequestScope,
   takeServerStreamingLoaders,
   takeServerDeny,
+  takeChannelSnapshot,
   dispatchServer,
   partitionUse,
   getActionResultSlot,
@@ -34,6 +35,7 @@ import {
 import type {
   ServerDenyRecord,
   ServerLoaderStream,
+  ChannelSnapshot,
 } from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
 import { getDevGlobalCss } from './dev-global-css.js';
@@ -128,6 +130,7 @@ export async function renderPage(
     html: string;
     streamingLoaders: ServerLoaderStream[];
     serverDeny: ServerDenyRecord | null;
+    channels: ChannelSnapshot | null;
   };
   let rootResult: RootOutcome | RootValue;
   try {
@@ -186,11 +189,16 @@ export async function renderPage(
             // runRequestScope: the AsyncLocalStorage store backing it is
             // not live once this scope's promise is awaited by the caller.
             const serverDeny = takeServerDeny();
+            // Taken here for the same reason as the deny above: the
+            // AsyncLocalStorage store backing it is not live once this
+            // scope's promise is awaited by the caller.
+            const channels = takeChannelSnapshot();
             return {
               kind: 'value',
               html: rendered.html,
               streamingLoaders: loaders,
               serverDeny,
+              channels,
             };
           },
         });
@@ -287,6 +295,7 @@ export async function renderPage(
     routePreloadModules: routePreload,
     routeStyleSheets,
     globalStyleSheets,
+    channels: rootResult.channels,
   });
 
   // Non-streaming case: preserve existing single-shot behavior.
