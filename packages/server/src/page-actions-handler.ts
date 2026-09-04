@@ -11,6 +11,9 @@ import {
   setActionResultSlot,
   dispatchServer,
   serializeActionOutcome,
+  takeChannelSnapshot,
+  CHANNEL_HEADER,
+  encodeSnapshot,
   type ActionResolution,
 } from '@hono-preact/iso/internal';
 import { composeServerChainOrFailClosed } from './compose-server-chain.js';
@@ -379,28 +382,37 @@ export function pageActionsHandler(
       | ReadableStream<unknown>
       | undefined;
 
+    // Populated from inside runRequestScope regardless of how the action
+    // chain settles (success, outcome, or plain throw): takeChannelSnapshot
+    // must run while the AsyncLocalStorage store backing it is still live
+    // (same constraint as takeServerDeny's call site in render.tsx).
+    let channels: ReturnType<typeof takeChannelSnapshot> = null;
     try {
       const value = await runRequestScope(async () => {
-        const dispatch = await dispatchServer<unknown, 'action'>({
-          middleware: serverMw,
-          ctx,
-          inner: async () => {
-            // Schema failure: short-circuit to a 422 deny carrying the
-            // normalized issues under the reserved key. The handler never
-            // runs. Caught below by `isOutcome(err)`, serialized into the
-            // envelope (JSON) or the deny re-render (PE) like any deny.
-            const effectivePayload = entry.input
-              ? await coerceActionInput(entry.input, payload)
-              : payload;
-            const inner = await fn(actionCtx, effectivePayload);
-            // Normalize return-style outcomes to throw-style so the catch
-            // path handles all outcomes uniformly.
-            if (isOutcome(inner)) throw inner;
-            return inner;
-          },
-        });
-        if (dispatch.kind === 'outcome') throw dispatch.outcome;
-        return dispatch.value;
+        try {
+          const dispatch = await dispatchServer<unknown, 'action'>({
+            middleware: serverMw,
+            ctx,
+            inner: async () => {
+              // Schema failure: short-circuit to a 422 deny carrying the
+              // normalized issues under the reserved key. The handler never
+              // runs. Caught below by `isOutcome(err)`, serialized into the
+              // envelope (JSON) or the deny re-render (PE) like any deny.
+              const effectivePayload = entry.input
+                ? await coerceActionInput(entry.input, payload)
+                : payload;
+              const inner = await fn(actionCtx, effectivePayload);
+              // Normalize return-style outcomes to throw-style so the catch
+              // path handles all outcomes uniformly.
+              if (isOutcome(inner)) throw inner;
+              return inner;
+            },
+          });
+          if (dispatch.kind === 'outcome') throw dispatch.outcome;
+          return dispatch.value;
+        } finally {
+          channels = takeChannelSnapshot();
+        }
       });
 
       if (isAsyncGenerator(value) || value instanceof ReadableStream) {
@@ -456,6 +468,9 @@ export function pageActionsHandler(
         signal: timeoutSignal,
         timeoutMs:
           typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+        // Must ride the SSE Response's init: it cannot be added after the
+        // stream starts flushing chunks.
+        channelHeader: channels ? encodeSnapshot(channels) : undefined,
       };
       if (isAsyncGenerator(streamingResult)) {
         return sseGeneratorResponse(c, streamingResult, {
@@ -472,7 +487,12 @@ export function pageActionsHandler(
     if (accept === 'json') {
       const env = serializeActionOutcome(resolution);
       applyOutcomeHeaders(c, env.headers);
-      return c.json(env.body, env.status);
+      const res = c.json(env.body, env.status);
+      // Omitting the header when nothing published is deliberate: an absent
+      // header leaves the client store alone, while `{}` would clear a live
+      // session hint on a response whose chain ran no publishing middleware.
+      if (channels) res.headers.set(CHANNEL_HEADER, encodeSnapshot(channels));
+      return res;
     }
 
     // HTML / PE path.

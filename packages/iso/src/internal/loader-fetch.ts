@@ -6,6 +6,8 @@ import { readValidationIssues } from './validation-issues.js';
 import { LoaderValidationError } from '../loader-validation-error.js';
 import { LoaderDenyError } from '../loader-deny-error.js';
 import { isDenyCode } from '../outcomes.js';
+import { CHANNEL_HEADER, decodeSnapshot } from './channel-wire.js';
+import { applyChannelSnapshot } from './channel-store.js';
 
 export type LoaderFetchCallbacks<T> = {
   onChunk: (value: T) => void;
@@ -64,6 +66,11 @@ export function fetchLoaderData<T>(
       body: JSON.stringify({ module: moduleKey, loader: loaderName, location }),
       signal,
     });
+
+    // Applied before the body is examined, and before the `res.ok` bail, so a
+    // denied or errored round-trip still updates the store. A 401 is exactly
+    // the response that should clear a stale session hint.
+    applyChannelSnapshot(decodeSnapshot(res.headers.get(CHANNEL_HEADER)));
 
     if (!res.ok) throw await loaderHttpError(res);
     if (!isEventStream(res)) return readJsonResult<T>(res);

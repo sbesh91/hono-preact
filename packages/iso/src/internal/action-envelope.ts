@@ -3,6 +3,8 @@ import type { DenyCode, Outcome } from '../outcomes.js';
 import { isDenyCode } from '../outcomes.js';
 import type { DenyRecord } from './deny-record.js';
 import { readValidationIssues } from './validation-issues.js';
+import { CHANNEL_HEADER, decodeSnapshot } from './channel-wire.js';
+import { applyChannelSnapshot } from './channel-store.js';
 
 export type ActionEnvelope =
   | { __outcome: 'success'; data: unknown }
@@ -99,6 +101,11 @@ export function toDenyRecord<TData>(decoded: {
 export async function decodeActionResponse(
   res: Response
 ): Promise<DecodedEnvelope> {
+  // Applied before the body is parsed, and regardless of what the envelope
+  // turns out to be, so a denied or errored round-trip still updates the
+  // store. Both client call sites (`action.ts` and `form.tsx`) route through
+  // here, which is why the read lives in this one place rather than at each.
+  applyChannelSnapshot(decodeSnapshot(res.headers.get(CHANNEL_HEADER)));
   let raw: unknown;
   try {
     raw = await res.json();
