@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { guardStripPlugin } from '../guard-strip.js';
+import { classifyModuleId, guardStripPlugin } from '../guard-strip.js';
 import type { Plugin } from 'vite';
 
 type TransformFn = (
@@ -196,7 +196,17 @@ describe('guardStripPlugin: query-suffixed module ids', () => {
     expect(result?.code).not.toContain('secretServerCall');
   });
 
-  it('still skips a .server.* module when its id carries a query suffix', () => {
+  // Asserting only `toBeUndefined()` here would be vacuous: without
+  // normalization the raw id `/src/foo.server.ts?v=1` fails the extension test
+  // first and the transform bails before the `.server.` check ever runs, so the
+  // result is undefined either way. The verdict is what discriminates. It must
+  // be `server-module`, meaning normalization ran and the `.server.` guard did
+  // the skipping; `not-script` would mean normalization never happened.
+  it('skips a query-suffixed .server.* module via the .server guard, not the extension gate', () => {
+    expect(classifyModuleId('/src/foo.server.ts?v=1')).toEqual({
+      verdict: 'server-module',
+      moduleId: '/src/foo.server.ts',
+    });
     const code = `
       import { defineServerMiddleware } from '@hono-preact/iso';
       export const mw = defineServerMiddleware(async () => undefined);
@@ -204,7 +214,21 @@ describe('guardStripPlugin: query-suffixed module ids', () => {
     expect(transform(code, '/src/foo.server.ts?v=1')).toBeUndefined();
   });
 
+  it('classifies a query-suffixed ordinary module as eligible', () => {
+    expect(classifyModuleId('/src/x.tsx?v=abc')).toEqual({
+      verdict: 'eligible',
+      moduleId: '/src/x.tsx',
+    });
+  });
+
+  it('classifies a non-script id as not-script', () => {
+    expect(classifyModuleId('/src/styles.css?used').verdict).toBe('not-script');
+  });
+
   it('ignores rollup virtual ids', () => {
+    expect(
+      classifyModuleId('\0/node_modules/x/foo.js?commonjs-proxy').verdict
+    ).toBe('virtual-id');
     const code = `
       import { defineServerMiddleware } from '@hono-preact/iso';
       export const mw = defineServerMiddleware(async () => undefined);

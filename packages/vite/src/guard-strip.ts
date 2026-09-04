@@ -164,27 +164,53 @@ function normalizeModuleId(id: string): string {
   return id.split('?')[0] ?? id;
 }
 
+/**
+ * Why a module is or is not eligible for rewriting. The reason is part of the
+ * result rather than a bare boolean so a test can pin WHICH gate rejected an
+ * id: a `.server.*` module carrying a `?v=` suffix must be rejected as
+ * `server-module`, and rejecting it as `not-script` would mean normalization
+ * never ran.
+ */
+export type ModuleIdVerdict =
+  | 'eligible'
+  // A rollup/commonjs virtual id (`\0...`). Not something this plugin authored
+  // or is meant to see.
+  | 'virtual-id'
+  | 'not-script'
+  // `.server.*` files are intentionally skipped in both bundles.
+  // In the client bundle the server-only stub plugin already rewrites
+  // imports of these files; in the server bundle the file's own
+  // body stays as-authored. The validation plugin restricts a
+  // `.server.*` module's named exports to the allowlist, so a user
+  // cannot land a `defineClientMiddleware(...)` value as a recognized
+  // export and ship it to the server.
+  | 'server-module';
+
+/**
+ * Classifies a raw Vite module id. Normalizes first, on purpose: a dev id
+ * carries a `?v=<hash>` suffix that would otherwise fail the extension test and
+ * skip the module entirely, leaking a server middleware body into the client
+ * bundle.
+ */
+export function classifyModuleId(rawId: string): {
+  verdict: ModuleIdVerdict;
+  moduleId: string;
+} {
+  const moduleId = normalizeModuleId(rawId);
+  if (moduleId.startsWith('\0')) return { verdict: 'virtual-id', moduleId };
+  if (!/\.[jt]sx?$/.test(moduleId)) return { verdict: 'not-script', moduleId };
+  if (/\.server\.[jt]sx?$/.test(moduleId))
+    return { verdict: 'server-module', moduleId };
+  return { verdict: 'eligible', moduleId };
+}
+
 export function guardStripPlugin(): Plugin {
   return {
     name: 'hono-preact:guard-strip',
     enforce: 'pre',
     transform(code: string, id: string, options?: { ssr?: boolean }) {
-      // Normalize once, up front: Vite ids can carry a `?v=...` / `?import`
-      // suffix that both defeats the extension test below and differs between
-      // the two bundles.
-      const moduleId = normalizeModuleId(id);
-      // Rollup/commonjs virtual ids (`\0...`) previously failed the extension
-      // test on their query suffix alone. Nothing here is meant to see them.
-      if (moduleId.startsWith('\0')) return;
-      if (!/\.[jt]sx?$/.test(moduleId)) return;
-      // `.server.*` files are intentionally skipped in both bundles.
-      // In the client bundle the server-only stub plugin already rewrites
-      // imports of these files; in the server bundle the file's own
-      // body stays as-authored. The validation plugin restricts a
-      // `.server.*` module's named exports to the allowlist, so a user
-      // cannot land a `defineClientMiddleware(...)` value as a recognized
-      // export and ship it to the server.
-      if (/\.server\.[jt]sx?$/.test(moduleId)) return;
+      const { verdict, moduleId } = classifyModuleId(id);
+      if (verdict !== 'eligible') return;
       const strips = options?.ssr ? SERVER_BUNDLE_STRIPS : CLIENT_BUNDLE_STRIPS;
 
       // Cheap pre-filter: only parse files that mention at least one of the
