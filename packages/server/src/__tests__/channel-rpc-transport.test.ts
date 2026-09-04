@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { h } from 'preact';
-import { defineServerMiddleware, type AppConfig } from '@hono-preact/iso';
+import { defineServerMiddleware, deny, type AppConfig } from '@hono-preact/iso';
 import { publishToChannel, CHANNEL_HEADER } from '@hono-preact/iso/internal';
 import { loadersHandler } from '../loaders-handler.js';
 import { pageActionsHandler } from '../page-actions-handler.js';
@@ -12,6 +12,14 @@ function publishingGate() {
   return defineServerMiddleware(async (_ctx, next) => {
     publishToChannel('demo', { signedIn: true });
     await next();
+  });
+}
+
+/** Publishes, then denies: the guard clears a session hint on the way out. */
+function publishThenDenyGate() {
+  return defineServerMiddleware(async () => {
+    publishToChannel('demo', { signedIn: false });
+    throw deny(401, 'expired');
   });
 }
 
@@ -112,5 +120,14 @@ describe('RPC channel header', () => {
     const handler = buildActionHandler({ use: [] });
     const res = await postAction(handler);
     expect(res.headers.get(CHANNEL_HEADER)).toBe('{"demo":{"signedIn":true}}');
+  });
+
+  it('sets the header on a loader response denied after publishing', async () => {
+    const app = makeLoadersApp({ use: [publishThenDenyGate()] });
+    const res = await postLoader(app);
+    expect(res.status).toBe(401);
+    expect(res.headers.get(CHANNEL_HEADER)).toBe(
+      '{"demo":{"signedIn":false}}'
+    );
   });
 });

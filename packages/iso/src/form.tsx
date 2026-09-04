@@ -22,6 +22,8 @@ import {
   getLastActionResult,
 } from './internal/action-result-store.js';
 import { decodeActionResponse } from './internal/action-envelope.js';
+import { CHANNEL_HEADER, decodeSnapshot } from './internal/channel-wire.js';
+import { applyChannelSnapshot } from './internal/channel-store.js';
 import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import type { Serialize } from './internal/serialize.js';
 import { useInvalidate, type InvalidateInput } from './use-invalidate.js';
@@ -326,6 +328,10 @@ export function Form<TPayload, TResult>({
           headers: { Accept: 'application/json' },
           signal: controller.signal,
         });
+        // Applied once, right after fetch resolves, mirroring action.ts's
+        // single call site: a denied or errored round-trip must still update
+        // the store (a 401 is exactly what should clear a stale hint).
+        applyChannelSnapshot(decodeSnapshot(res.headers.get(CHANNEL_HEADER)));
         const decoded = await decodeActionResponse(res);
         // Every outcome records a result (or reloads) and returns; `<Form>`
         // never throws a classified outcome (unlike useAction). The shared

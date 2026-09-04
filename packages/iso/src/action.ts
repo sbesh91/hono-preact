@@ -28,6 +28,8 @@ import {
   VALIDATION_FAILED_MESSAGE,
 } from './internal/contract.js';
 import { toError } from './internal/to-error.js';
+import { CHANNEL_HEADER, decodeSnapshot } from './internal/channel-wire.js';
+import { applyChannelSnapshot } from './internal/channel-store.js';
 // Type-only: the validate.js runtime is loaded lazily inside the schema gate
 // (see mutate) so useAction consumers without a `schema` do not pull it into
 // the base chunk.
@@ -646,6 +648,14 @@ export function useAction<
             signal: controller.signal,
           });
         }
+
+        // Applied once, right after fetch resolves and above the content-type
+        // branch, so both the streaming and JSON arms see it. A guard that
+        // publishes on a streaming action must still reach the store even
+        // though the streaming arm never calls decodeActionResponse.
+        applyChannelSnapshot(
+          decodeSnapshot(response.headers.get(CHANNEL_HEADER))
+        );
 
         const contentType = response.headers.get('Content-Type') ?? '';
         if (contentType.includes('text/event-stream') && response.body) {
