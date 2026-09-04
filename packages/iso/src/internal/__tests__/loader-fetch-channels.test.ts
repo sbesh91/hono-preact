@@ -11,11 +11,12 @@ afterEach(() => {
 function stubFetch(headers: Record<string, string>) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () =>
-      new Response(JSON.stringify({ results: {} }), {
-        status: 200,
-        headers: { 'content-type': 'application/json', ...headers },
-      })
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ results: {} }), {
+          status: 200,
+          headers: { 'content-type': 'application/json', ...headers },
+        })
     )
   );
 }

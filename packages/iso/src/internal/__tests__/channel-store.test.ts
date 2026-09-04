@@ -53,7 +53,8 @@ describe('hydrateChannelsFromDocument', () => {
   });
 
   it('cannot throw on a malformed global', () => {
-    (globalThis as { __HP_CHANNELS__?: unknown }).__HP_CHANNELS__ = 'not-an-object';
+    (globalThis as { __HP_CHANNELS__?: unknown }).__HP_CHANNELS__ =
+      'not-an-object';
     expect(() => hydrateChannelsFromDocument()).not.toThrow();
     expect(readChannelValue('demo')).toBeUndefined();
   });

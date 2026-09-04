@@ -67,9 +67,8 @@ function buildActionHandler(appConfig: AppConfig) {
         },
       ],
     ]);
-  const renderPage = vi.fn(
-    async (c: { html: (s: string) => unknown }) =>
-      c.html('<!doctype html><body>RENDERED</body>')
+  const renderPage = vi.fn(async (c: { html: (s: string) => unknown }) =>
+    c.html('<!doctype html><body>RENDERED</body>')
   );
   return pageActionsHandler({
     resolverByPath,
@@ -126,8 +125,6 @@ describe('RPC channel header', () => {
     const app = makeLoadersApp({ use: [publishThenDenyGate()] });
     const res = await postLoader(app);
     expect(res.status).toBe(401);
-    expect(res.headers.get(CHANNEL_HEADER)).toBe(
-      '{"demo":{"signedIn":false}}'
-    );
+    expect(res.headers.get(CHANNEL_HEADER)).toBe('{"demo":{"signedIn":false}}');
   });
 });

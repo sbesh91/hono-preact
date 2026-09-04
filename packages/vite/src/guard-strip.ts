@@ -12,6 +12,10 @@ const ISO_PACKAGE_SOURCES = new Set(['@hono-preact/iso', 'hono-preact']);
 // bundles, to the same id, which is the whole point: the server and client
 // bundles each construct their own channel object, so only a compile-time id
 // can make the two agree. A runtime counter cannot.
+//
+// Id stability rests on one invariant: both bundles must feed this plugin
+// identical pre-transform source. Another `enforce: 'pre'` plugin that rewrites
+// a module in only one environment would shift the AST and break the agreement.
 const CHANNEL_FACTORY = 'defineSessionChannel';
 
 // Each strip replaces the entire call expression with a literal brand
@@ -169,6 +173,9 @@ export function guardStripPlugin(): Plugin {
       // suffix that both defeats the extension test below and differs between
       // the two bundles.
       const moduleId = normalizeModuleId(id);
+      // Rollup/commonjs virtual ids (`\0...`) previously failed the extension
+      // test on their query suffix alone. Nothing here is meant to see them.
+      if (moduleId.startsWith('\0')) return;
       if (!/\.[jt]sx?$/.test(moduleId)) return;
       // `.server.*` files are intentionally skipped in both bundles.
       // In the client bundle the server-only stub plugin already rewrites

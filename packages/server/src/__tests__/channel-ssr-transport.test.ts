@@ -13,12 +13,20 @@ describe('assembleDocument channel bootstrap', () => {
   });
 
   it('emits nothing when no channel published', () => {
-    const html = assembleDocument({ html: '<div>app</div>', head: {}, channels: null });
+    const html = assembleDocument({
+      html: '<div>app</div>',
+      head: {},
+      channels: null,
+    });
     expect(html).not.toContain('__HP_CHANNELS__');
   });
 
   it('emits nothing when the snapshot is an empty object', () => {
-    const html = assembleDocument({ html: '<div>app</div>', head: {}, channels: {} });
+    const html = assembleDocument({
+      html: '<div>app</div>',
+      head: {},
+      channels: {},
+    });
     expect(html).not.toContain('__HP_CHANNELS__');
   });
 

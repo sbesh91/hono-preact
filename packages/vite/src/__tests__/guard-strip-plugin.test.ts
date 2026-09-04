@@ -176,3 +176,41 @@ describe('guardStripPlugin: leaves unaffected code alone', () => {
     expect(transform(code, '/src/pages/admin.server.ts')).toBeUndefined();
   });
 });
+
+// The plugin normalizes the Vite id (drops any `?...` suffix) before both the
+// extension test and the `.server.*` test. These two pin that: a dev id carries
+// a `?v=<hash>` cache-busting suffix, and without normalization it fails the
+// extension test, so the module is skipped entirely and a server middleware
+// body ships to the client.
+describe('guardStripPlugin: query-suffixed module ids', () => {
+  it('strips defineServerMiddleware in the client bundle for a query-suffixed id', () => {
+    const code = `
+      import { defineServerMiddleware } from '@hono-preact/iso';
+      export const mw = defineServerMiddleware(async (_c, next) => {
+        await secretServerCall();
+        await next();
+      });
+    `;
+    const result = transform(code, '/src/x.tsx?v=abc');
+    expect(result?.code).toMatch(/runs:\s*['"]server['"]/);
+    expect(result?.code).not.toContain('secretServerCall');
+  });
+
+  it('still skips a .server.* module when its id carries a query suffix', () => {
+    const code = `
+      import { defineServerMiddleware } from '@hono-preact/iso';
+      export const mw = defineServerMiddleware(async () => undefined);
+    `;
+    expect(transform(code, '/src/foo.server.ts?v=1')).toBeUndefined();
+  });
+
+  it('ignores rollup virtual ids', () => {
+    const code = `
+      import { defineServerMiddleware } from '@hono-preact/iso';
+      export const mw = defineServerMiddleware(async () => undefined);
+    `;
+    expect(
+      transform(code, '\0/node_modules/x/foo.js?commonjs-proxy')
+    ).toBeUndefined();
+  });
+});

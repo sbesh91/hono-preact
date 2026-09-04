@@ -227,7 +227,9 @@ function buildSseResponse(
     headers: {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
-      ...(channelHeader !== undefined ? { [CHANNEL_HEADER]: channelHeader } : {}),
+      ...(channelHeader !== undefined
+        ? { [CHANNEL_HEADER]: channelHeader }
+        : {}),
     },
   });
 }
