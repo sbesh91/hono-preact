@@ -24,11 +24,16 @@ export function encodeSnapshot(snapshot: ChannelSnapshot): string {
   return JSON.stringify(snapshot);
 }
 
+function isChannelSnapshot(value: unknown): value is ChannelSnapshot {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
  * Parse a snapshot off the wire. Returns null for anything that is not a JSON
  * object, including `null`, arrays and primitives. This is a trust boundary in
- * the sense that the wire cannot prove the shape, so the check is structural
- * and total rather than a cast.
+ * the sense that the wire cannot prove the shape, so the check is a type
+ * predicate: structural and total, and it carries the narrowing through to the
+ * return with no cast.
  */
 export function decodeSnapshot(raw: string | null): ChannelSnapshot | null {
   if (raw === null) return null;
@@ -38,8 +43,5 @@ export function decodeSnapshot(raw: string | null): ChannelSnapshot | null {
   } catch {
     return null;
   }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
+  return isChannelSnapshot(parsed) ? parsed : null;
 }
