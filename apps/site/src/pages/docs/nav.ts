@@ -89,6 +89,7 @@ export const nav: NavArea[] = [
         icon: Shield,
         entries: [
           { title: 'Middleware', route: '/docs/middleware' },
+          { title: 'Session Channels', route: '/docs/session-channels' },
           { title: 'CSRF Protection', route: '/docs/csrf' },
         ],
       },

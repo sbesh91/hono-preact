@@ -173,6 +173,11 @@ export type {
   Next,
 } from './define-middleware.js';
 
+// Server-published session channel: a typed value a server middleware
+// publishes on each round-trip and its paired client middleware reads.
+export { defineSessionChannel } from './session-channel.js';
+export type { SessionChannel } from './session-channel.js';
+
 export { defineStreamObserver } from './define-stream-observer.js';
 export type {
   StreamObserver,
