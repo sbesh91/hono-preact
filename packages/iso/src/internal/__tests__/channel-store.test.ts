@@ -71,4 +71,22 @@ describe('hydrateChannelsFromDocument', () => {
     expect(() => hydrateChannelsFromDocument()).not.toThrow();
     expect(readChannelValue('demo')).toBeUndefined();
   });
+
+  it('leaves the store alone when the global is circular', () => {
+    applyChannelSnapshot({ demo: 1 });
+    const circular: { self?: unknown } = {};
+    circular.self = circular;
+    (globalThis as { __HP_CHANNELS__?: unknown }).__HP_CHANNELS__ = circular;
+    expect(() => hydrateChannelsFromDocument()).not.toThrow();
+    expect(readChannelValue('demo')).toBe(1);
+  });
+
+  it('leaves the store alone when the global carries a BigInt', () => {
+    applyChannelSnapshot({ demo: 1 });
+    (globalThis as { __HP_CHANNELS__?: unknown }).__HP_CHANNELS__ = {
+      demo: 1n,
+    };
+    expect(() => hydrateChannelsFromDocument()).not.toThrow();
+    expect(readChannelValue('demo')).toBe(1);
+  });
 });

@@ -49,9 +49,16 @@ const EXTERNAL_COUNTING_SIGNALS = EXTERNAL.filter(
 // signals reached core, the fix is the import, not the budget.
 const CORE_BUDGET_BYTES = 6_200;
 // core + `FEATURE_MODULES.runtime`, the real always-loaded floor. Measured at
-// 8,406 B once the session-channel store landed; the headroom matches
-// CORE_BUDGET's (a few hundred bytes for ordinary growth, far under the
-// ~3,300 B a signals import would add).
+// 8,406 B, up from 7,961 B: the session-channel client store sits in the
+// always-loaded graph, so every route pays its ~445 B whether or not the build
+// declares a channel. That consumed the headroom the 8,400 B budget had, hence
+// 8,600 B. Making the store conditional on a build actually declaring a channel
+// is a known follow-up; the budget is not the place to absorb it.
+//
+// The headroom here matches CORE_BUDGET's (a few hundred bytes for ordinary
+// growth, far under the ~3,300 B a signals import would add). If this is ever
+// being raised because signals reached the runtime bucket, the fix is the
+// import, not the budget.
 const FLOOR_BUDGET_BYTES = 8_600;
 
 describe('always-loaded core size floor', () => {

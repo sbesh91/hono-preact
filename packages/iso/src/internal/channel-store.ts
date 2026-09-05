@@ -44,5 +44,16 @@ export function hydrateChannelsFromDocument(): void {
   // Re-encode and run the same total decoder the header path uses, so one
   // structural check covers both transports and neither can accept a shape the
   // other rejects.
-  applyChannelSnapshot(decodeSnapshot(JSON.stringify(raw)));
+  //
+  // The global is whatever the page's last-writing script left there, and
+  // JSON.stringify throws on a circular object or a BigInt. This runs inside
+  // bootClient, so an escaping throw would take hydration for the whole page
+  // down. A global the decoder cannot read leaves the store as it was.
+  let encoded: string;
+  try {
+    encoded = JSON.stringify(raw);
+  } catch {
+    return;
+  }
+  applyChannelSnapshot(decodeSnapshot(encoded));
 }

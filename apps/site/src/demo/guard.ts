@@ -17,10 +17,15 @@ export const session = defineSessionChannel<{ signedIn: boolean }>();
 // the route tree node in routes.ts; the framework runs it for every render and
 // every loader/action RPC under that subtree, so unauthenticated requests
 // redirect the same way regardless of entry point.
+//
+// The publish precedes the redirect throw because the redirect response still
+// carries the channel header. An expired cookie therefore publishes
+// { signedIn: false } and actively clears the client hint, rather than leaving
+// the client leg waving navigations through on a stale { signedIn: true }.
 const requireSessionServer = defineServerMiddleware(async (ctx, next) => {
   const user = await currentUser(ctx.c);
+  session.publish(ctx, { signedIn: Boolean(user) });
   if (!user) throw redirect('/demo/login');
-  session.publish(ctx, { signedIn: true });
   await next();
 });
 
