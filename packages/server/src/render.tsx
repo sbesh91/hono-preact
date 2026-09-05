@@ -298,8 +298,19 @@ export async function renderPage(
     channels: rootResult.channels,
   });
 
+  // A document carrying a channel bootstrap is per-visitor: one user's
+  // published snapshot is inlined into the HTML, so a shared cache that stores
+  // it hands that snapshot to the next visitor. Only set the directive when the
+  // application has not already written one: an app that has decided how its
+  // pages cache owns that decision, and this must not silently replace it.
+  const emitsSnapshot =
+    rootResult.channels !== null &&
+    Object.keys(rootResult.channels).length > 0 &&
+    c.res.headers.get('Cache-Control') === null;
+
   // Non-streaming case: preserve existing single-shot behavior.
   if (streamingLoaders.length === 0) {
+    if (emitsSnapshot) c.header('Cache-Control', 'private, no-store');
     return c.html(`<!doctype html>${fullHtml}`);
   }
 
@@ -313,5 +324,10 @@ export async function renderPage(
     dev: options?.dev ?? false,
     status: serverDeny ? serverDeny.status : undefined,
     denyHeaders: serverDeny ? serverDeny.headers : undefined,
+    // `no-transform` is kept alongside `private, no-store`: it is structural
+    // for a streamed document (it stops middleboxes rebuffering the stream),
+    // while the private/no-store pair is what keeps a per-visitor snapshot out
+    // of a shared cache.
+    cacheControl: emitsSnapshot ? 'private, no-store, no-transform' : undefined,
   });
 }
