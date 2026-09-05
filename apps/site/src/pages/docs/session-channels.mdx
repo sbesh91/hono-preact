@@ -1,0 +1,182 @@
+# Session Channels
+
+A session channel is a typed value a server middleware publishes on each round-trip and its paired client middleware reads. The server already knows who the visitor is; a session channel is how that answer reaches the client tier of a guard without the browser having to keep its own copy.
+
+Declare the channel once, publish from the server leg, read from the client leg:
+
+```ts
+// auth/session-channel.ts
+import { defineSessionChannel } from 'hono-preact';
+
+export const sessionChannel = defineSessionChannel<{ signedIn: boolean }>();
+```
+
+## The API
+
+`defineSessionChannel<T extends ChannelPayload>(id?)` returns a `SessionChannel<T>`:
+
+```ts
+type SessionChannel<T extends ChannelPayload> = {
+  readonly __channelId: string;
+  publish(ctx, value: T): void;
+  read(ctx): T | undefined;
+};
+```
+
+| Member        | Description                                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `publish`     | Publish from a server middleware, passing its context. The value ships to the browser with the response. A no-op outside a request scope. |
+| `read`        | Read from a client middleware, passing its context. Returns what the last server round-trip published, or `undefined` if none has.        |
+| `__channelId` | The cross-bundle identity of the channel. It appears on the wire, so a value you see while debugging traces back to a declaration.        |
+
+The type argument is explicit rather than inferred: a channel payload is declared once and read by one paired middleware, so there is nothing to infer it from.
+
+## What a channel may carry
+
+`T` is constrained to `ChannelPayload`: a bare primitive, an array of primitives, or a flat record whose values are primitives or arrays of primitives.
+
+```ts
+type ChannelPrimitive = string | number | boolean | null;
+
+type ChannelPayload =
+  | ChannelPrimitive
+  | readonly ChannelPrimitive[]
+  | { readonly [key: string]: ChannelPrimitive | readonly ChannelPrimitive[] };
+```
+
+A channel payload is a hint about a decision, and depth is what turns a hint into a record. One level is enough for `{ signedIn: true }`, `{ role: 'admin', plan: 'pro' }` or `{ roles: ['admin', 'editor'] }`, while the `user` object your guard already holds stops compiling the moment it carries a nested profile, a `Date`, or a method.
+
+Be clear about what this buys you: it narrows the blast radius, it does not make the channel safe. A flat record of primitives is still publishable, and no type can tell a role string from a session token string. The constraint stops the accidental object dump. The rule below (publish a decision, not a record) covers the rest, and a dev-only warning fires when a published value grows past a few hundred bytes.
+
+The optional `id` argument lets you name the channel yourself. Leave it off in application code. The framework's Vite plugin derives a stable id from the declaring module and injects it at the call site, which is what makes the server bundle and the client bundle agree on the same channel.
+
+## Where to declare a channel
+
+**Declare the channel in a module both tiers import.** The server middleware and the client middleware have to reach the same declaration, and the id injection is what ties the two bundles together.
+
+**A channel declared in a `.server.*` module silently never resolves.** It does not get an injected id: the Vite plugin skips `.server.*` modules by design, so the declaration falls back to a per-instance runtime counter, the two bundles end up with different ids, and every `read()` returns `undefined`. Nothing throws; the guard simply never sees a published value. Keep the `defineSessionChannel` call in a shared module (`auth/session-channel.ts` in the example above) and import it from both legs.
+
+**Publish from a scope at least as broad as every page a navigation can start from.** This is the placement rule that decides whether a guard works, and it is separate from where you enforce. A client leg reads the store as it stands when the navigation begins, before any loader RPC for the destination has been sent, so a channel published only on the guarded subtree reads `undefined` for a visitor arriving from outside it. What that costs you depends on how your client leg reads `undefined` (see [What `undefined` means](#what-undefined-means)): a leg that denies on unknown bounces a signed-in visitor, and a leg that defers on unknown renders the shell for a beat.
+
+Publish one level above where you enforce, on the subtree a navigation realistically starts inside:
+
+```ts
+// src/routes.ts
+{
+  path: '/app',
+  use: [publishSession],       // publishes on every page under /app
+  children: [
+    { path: 'dashboard', use: requireSession, /* enforces */ },
+  ],
+}
+```
+
+Broader is not automatically better. App-level `use` publishes on every page in the app, which makes every document per-visitor and therefore uncacheable by a shared cache (see [Publishing makes the document per-user](#publishing-makes-the-document-per-user)). Scope the publish to the subtree that needs it.
+
+**Import `defineSessionChannel` directly from `hono-preact`, not through an app-local barrel.** The id injection matches the import by source, so a module that re-exports `defineSessionChannel` from its own barrel and imports it from there gets no injected id, and the channel silently never resolves in the same way.
+
+## A guard with both legs
+
+```ts
+// auth/require-session.ts
+import {
+  defineServerMiddleware,
+  defineClientMiddleware,
+  redirect,
+} from 'hono-preact';
+import { sessionChannel } from './session-channel.js';
+import { currentUser } from './session.js';
+
+// Publisher for the guarded subtree: runs on every render and every RPC under
+// the node it is attached to, one level above where the session is enforced.
+export const publishSession = defineServerMiddleware(async (ctx, next) => {
+  const user = await currentUser(ctx.c);
+  sessionChannel.publish(ctx, { signedIn: Boolean(user) });
+  await next();
+});
+
+// Server check (SSR + RPC): validates the signed cookie via Hono helpers and
+// is the authoritative redirect. It publishes too, so a round-trip that finds
+// an expired cookie clears the client hint on its way out.
+const server = defineServerMiddleware(async (ctx, next) => {
+  const user = await currentUser(ctx.c);
+  sessionChannel.publish(ctx, { signedIn: Boolean(user) });
+  if (!user) throw redirect('/login');
+  await next();
+});
+
+// Client check (intra-app navigation): reads what the last round-trip said.
+// `undefined` means nothing has published yet, which is unknown rather than
+// unauthorized, so it defers to the server guard; a published negative is a
+// real answer and redirects now.
+const client = defineClientMiddleware(async (ctx, next) => {
+  const hint = sessionChannel.read(ctx);
+  if (hint !== undefined && !hint.signedIn) throw redirect('/login');
+  await next();
+});
+
+export const requireSession = [server, client];
+```
+
+Attach the pair to a route node's `use` the way any other guard attaches (see [Middleware](/docs/middleware)):
+
+```ts
+// src/routes.ts
+import { defineRoutes } from 'hono-preact';
+import { requireSession } from './auth/require-session.js';
+
+export default defineRoutes([
+  { path: '/login', view: () => import('./pages/login.js') },
+  {
+    path: '/admin',
+    use: requireSession,
+    children: [
+      {
+        path: '',
+        view: () => import('./pages/admin/index.js'),
+        server: () => import('./pages/admin/index.server.js'),
+      },
+    ],
+  },
+]);
+```
+
+## What travels, and what does not
+
+The published value ships to the client on **every** response that runs the publishing middleware: inline in the SSR document, and on a response header for every loader, action and live-loader stream response. Treat it as public. Publish a decision (`{ signedIn: true }`, a role name, a plan tier), never a token, a session secret, or anything you would not put in view-source.
+
+For a live loader, only what was published before the stream opens travels on that response. The snapshot goes out as a response header, and headers are fixed once the stream has started, so a publish from inside the streaming body does not ship.
+
+### Publishing makes the document per-user
+
+A page whose chain publishes gets a per-user SSR document: the snapshot is inlined into the HTML, so a shared or CDN cache that stores it would serve one visitor's snapshot to the next. When a document carries a snapshot the framework sets `Cache-Control: private, no-store` on the response, unless your own middleware already set a `Cache-Control`, in which case yours stands and the caching decision is yours. This is about cache reuse across visitors, which is a separate concern from the value being safe to read.
+
+A streamed document is stricter. A page with a streaming loader builds its response headers itself and always writes its own `Cache-Control`, so a `Cache-Control` your middleware set cannot survive that path. When a streamed document carries a snapshot the response is `Cache-Control: private, no-store, no-transform`, whether or not you set one. If you want to own caching on a streaming page, do not publish on it.
+
+The value is not persisted. It lives in memory for the life of the page, and each server round-trip merges what it published into the store, per channel. A channel the response says nothing about keeps the value it already had, so an action that publishes on one channel never disturbs another. Clearing is always an explicit publish: the logout action publishes `{ signedIn: false }`, which is a real answer the client leg acts on.
+
+### What `undefined` means
+
+`read()` returns `undefined` when no round-trip has published on this channel yet, and also when the two bundles disagree on the channel id (see [Where to declare a channel](#where-to-declare-a-channel)). That is **unknown**, not **unauthorized**. The channel says nothing about the visitor; it says nothing has spoken yet.
+
+Your guard chooses how to read that, and the two readings trade different things:
+
+- **Defer on unknown, enforce on a published negative.** `undefined` passes through and the navigation proceeds; the loader RPC then runs the authoritative server middleware, which redirects an unauthenticated visitor a beat later. A published `{ signedIn: false }` is a real answer from a round-trip that checked, so that one redirects immediately. You trade a brief shell render for a visitor who was going to be refused anyway against never bouncing a visitor who is genuinely signed in. This is what the [demo](/demo/projects) does:
+
+  ```ts
+  const client = defineClientMiddleware(async (ctx, next) => {
+    const hint = sessionChannel.read(ctx);
+    if (hint !== undefined && !hint.signedIn) throw redirect('/login');
+    await next();
+  });
+  ```
+
+- **Treat unknown as denied**, folding both cases together (`if (!sessionChannel.read(ctx)?.signedIn) throw redirect('/login')`). Nothing renders that the server is going to refuse. The price is that you must now publish from a scope broad enough that a signed-in visitor can never reach the guard with an unpublished channel, which is the placement rule above taken to its strictest reading. Publish too narrowly and this leg bounces people who are signed in.
+
+A channel that never received a build-time id produces the same `undefined` forever. In dev the framework warns on the console the first time such a channel publishes or is read, naming the channel, so this failure is visible rather than silent.
+
+## The client leg is not a security boundary
+
+The client leg exists so a navigation that would fail can redirect immediately instead of painting a page the server is about to refuse. The server middleware is authoritative. It runs on every SSR render and on every loader and action RPC, so a visitor who defeats the client check (by editing the in-page value, or by calling the RPC endpoint directly) still meets the server guard on the request that actually returns data.
+
+Write the two legs as a pair for that reason: the client leg reads, the server leg both publishes and enforces.

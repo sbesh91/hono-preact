@@ -64,7 +64,7 @@ Isomorphic primitives shared between server and client (`packages/iso/`):
 - **Actions**: `defineAction`, `useAction`, `useOptimistic`, `useOptimisticAction`, `<Form>`.
 - **Signals**: `@preact/signals` primitives (`signal`, `computed`, `effect`, `batch`, `untracked`, `useSignal`, `useComputed`, `useSignalEffect`, and the `Signal`/`ReadonlySignal` types) are re-exported directly from `hono-preact`. See [Signals](/docs/signals).
 - **Caching**: `createCache` (advanced: shared caches across loaders).
-- **Middleware**: `defineServerMiddleware`, `defineClientMiddleware`, `defineStreamObserver`, `defineApp`, plus the outcome constructors `redirect`, `deny` (and `render` at the `hono-preact/page` subpath) and predicates `isOutcome` / `isRedirect` / `isDeny` / `isRender`. See [Middleware](/docs/middleware).
+- **Middleware**: `defineServerMiddleware`, `defineClientMiddleware`, `defineStreamObserver`, `defineApp`, `defineSessionChannel`, plus the outcome constructors `redirect`, `deny` (and `render` at the `hono-preact/page` subpath) and predicates `isOutcome` / `isRedirect` / `isDeny` / `isRender`. See [Middleware](/docs/middleware).
 - **Utilities**: `prefetch`, `isBrowser`, `Route`/`Router`/`lazy` (re-exports of preact-iso for advanced use).
 
 ### App-level config (optional)

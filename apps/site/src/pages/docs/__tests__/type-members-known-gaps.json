@@ -139,6 +139,8 @@
     "ServerSocket.data",
     "ServerSocket.raw",
     "ServerSocket.send",
+    "SessionChannel.publish",
+    "SessionChannel.read",
     "ShowProps.children",
     "ShowProps.fallback",
     "ShowProps.when",

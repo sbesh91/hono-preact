@@ -3,7 +3,7 @@ import { defineRoutes, contentRoutes } from 'hono-preact';
 // /docs). Side-effect import: the generated client entry imports this module,
 // so the subscriber is installed once at startup.
 import './docs-transition.js';
-import { requireSession } from './demo/guard.js';
+import { publishSession, requireSession } from './demo/guard.js';
 import { archivedGate } from './demo/archived-gate.js';
 import { MdxArticle } from './components/MdxArticle.js';
 
@@ -27,6 +27,12 @@ const routeTree = [
   {
     path: '/demo',
     layout: () => import('./pages/demo/demo-layout.js'),
+    // Publishing is scoped to the demo subtree, one level above where it is
+    // enforced. Every demo page publishes, so a navigation that starts anywhere
+    // inside /demo carries a real answer into /demo/projects; and no docs page
+    // publishes, so no docs document is made per-visitor (a document carrying a
+    // snapshot is uncacheable by a shared cache).
+    use: [publishSession],
     children: [
       { path: '', view: () => import('./pages/demo/index.js') },
       { path: 'login', view: () => import('./pages/demo/login.js') },

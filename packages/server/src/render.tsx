@@ -27,6 +27,9 @@ import {
   captureRequestScope,
   takeServerStreamingLoaders,
   takeServerDeny,
+  takeChannelSnapshot,
+  CHANNEL_HEADER,
+  encodeSnapshot,
   dispatchServer,
   partitionUse,
   getActionResultSlot,
@@ -34,6 +37,7 @@ import {
 import type {
   ServerDenyRecord,
   ServerLoaderStream,
+  ChannelSnapshot,
 } from '@hono-preact/iso/internal';
 import { assembleDocument } from './document-shell.js';
 import { getDevGlobalCss } from './dev-global-css.js';
@@ -130,6 +134,24 @@ export async function renderPage(
     serverDeny: ServerDenyRecord | null;
   };
   let rootResult: RootOutcome | RootValue;
+  // Populated from inside runRequestScope regardless of how the root chain
+  // settles (value, outcome, or plain throw), matching loadersHandler and
+  // pageActionsHandler: a chain that publishes and then denies or redirects
+  // must still carry its snapshot. Taken while the scope is live, since the
+  // AsyncLocalStorage store backing it is not live once the scope's promise is
+  // awaited by the caller (the same constraint as takeServerDeny below).
+  let channels: ChannelSnapshot | null = null;
+  /**
+   * Carry the snapshot on a response that is not a document. A root chain that
+   * publishes and then denies or redirects has nowhere to inline the snapshot,
+   * so it rides the same header the RPC paths use. Omitting the header when
+   * nothing published is deliberate: an absent header leaves the client store
+   * alone, while `{}` reads as "every channel is now empty".
+   */
+  const withChannelHeader = (res: Response): Response => {
+    if (channels) res.headers.set(CHANNEL_HEADER, encodeSnapshot(channels));
+    return res;
+  };
   try {
     rootResult = await runRequestScope(
       async (): Promise<RootOutcome | RootValue> => {
@@ -158,59 +180,67 @@ export async function renderPage(
           location,
         };
 
-        const dispatch = await dispatchServer<RootValue, 'page'>({
-          middleware: serverMw,
-          ctx,
-          inner: async (): Promise<RootValue> => {
-            // preact-iso's `LocationProvider` reads `globalThis.location`
-            // once, synchronously, when it mounts. Set it on the same
-            // microtask as the `prerender` call so no other request can
-            // interleave and trample the global between us writing it and
-            // the provider reading it. Children resume from reducer state,
-            // never re-reading the global, so the rest of this render is
-            // safe even if another request resets `globalThis.location`
-            // while we await suspended children.
-            locationStub(reqUrl.pathname + reqUrl.search);
-            bindRequestScope = captureRequestScope();
-            const rendered = await prerender(
-              <ActionResultContext.Provider value={buildActionResultContext()}>
-                <HonoRequestContext.Provider value={{ context: c }}>
-                  <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
-                </HonoRequestContext.Provider>
-              </ActionResultContext.Provider>
-            );
-            const loaders = takeServerStreamingLoaders();
-            // A loader that denied during SSR rendered its errorFallback
-            // in-tree (see iso's DataReader / RouteBoundary) and recorded
-            // the response facts here. Must be read now, still inside
-            // runRequestScope: the AsyncLocalStorage store backing it is
-            // not live once this scope's promise is awaited by the caller.
-            const serverDeny = takeServerDeny();
-            return {
-              kind: 'value',
-              html: rendered.html,
-              streamingLoaders: loaders,
-              serverDeny,
-            };
-          },
-        });
+        try {
+          const dispatch = await dispatchServer<RootValue, 'page'>({
+            middleware: serverMw,
+            ctx,
+            inner: async (): Promise<RootValue> => {
+              // preact-iso's `LocationProvider` reads `globalThis.location`
+              // once, synchronously, when it mounts. Set it on the same
+              // microtask as the `prerender` call so no other request can
+              // interleave and trample the global between us writing it and
+              // the provider reading it. Children resume from reducer state,
+              // never re-reading the global, so the rest of this render is
+              // safe even if another request resets `globalThis.location`
+              // while we await suspended children.
+              locationStub(reqUrl.pathname + reqUrl.search);
+              bindRequestScope = captureRequestScope();
+              const rendered = await prerender(
+                <ActionResultContext.Provider
+                  value={buildActionResultContext()}
+                >
+                  <HonoRequestContext.Provider value={{ context: c }}>
+                    <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
+                  </HonoRequestContext.Provider>
+                </ActionResultContext.Provider>
+              );
+              const loaders = takeServerStreamingLoaders();
+              // A loader that denied during SSR rendered its errorFallback
+              // in-tree (see iso's DataReader / RouteBoundary) and recorded
+              // the response facts here. Must be read now, still inside
+              // runRequestScope: the AsyncLocalStorage store backing it is
+              // not live once this scope's promise is awaited by the caller.
+              const serverDeny = takeServerDeny();
+              return {
+                kind: 'value',
+                html: rendered.html,
+                streamingLoaders: loaders,
+                serverDeny,
+              };
+            },
+          });
 
-        if (dispatch.kind === 'outcome') {
-          return { kind: 'outcome', outcome: dispatch.outcome };
+          if (dispatch.kind === 'outcome') {
+            return { kind: 'outcome', outcome: dispatch.outcome };
+          }
+          return dispatch.value;
+        } finally {
+          // After the whole chain has unwound, so a middleware that publishes
+          // on its way back out (after `await next()`) is captured too.
+          channels = takeChannelSnapshot();
         }
-        return dispatch.value;
       },
       { honoContext: c }
     );
   } catch (e: unknown) {
-    if (isOutcome(e)) return translateRootOutcome(c, e);
+    if (isOutcome(e)) return withChannelHeader(translateRootOutcome(c, e));
     throw e;
   } finally {
     env.current = previousEnv;
   }
 
   if (rootResult.kind === 'outcome') {
-    return translateRootOutcome(c, rootResult.outcome);
+    return withChannelHeader(translateRootOutcome(c, rootResult.outcome));
   }
   html = rootResult.html;
   streamingLoaders = rootResult.streamingLoaders;
@@ -287,10 +317,23 @@ export async function renderPage(
     routePreloadModules: routePreload,
     routeStyleSheets,
     globalStyleSheets,
+    channels,
   });
 
-  // Non-streaming case: preserve existing single-shot behavior.
+  // A document carrying a channel bootstrap is per-visitor: one user's
+  // published snapshot is inlined into the HTML, so a shared cache that stores
+  // it hands that snapshot to the next visitor.
+  const hasSnapshot = channels !== null && Object.keys(channels).length > 0;
+  const appSetCacheControl = c.res.headers.get('Cache-Control') !== null;
+
+  // Non-streaming case: preserve existing single-shot behavior. Only set the
+  // directive when the application has not already written one: an app that
+  // has decided how its pages cache owns that decision here, and this must not
+  // silently replace it.
   if (streamingLoaders.length === 0) {
+    if (hasSnapshot && !appSetCacheControl) {
+      c.header('Cache-Control', 'private, no-store');
+    }
     return c.html(`<!doctype html>${fullHtml}`);
   }
 
@@ -304,5 +347,19 @@ export async function renderPage(
     dev: options?.dev ?? false,
     status: serverDeny ? serverDeny.status : undefined,
     denyHeaders: serverDeny ? serverDeny.headers : undefined,
+    // `no-transform` is kept alongside `private, no-store`: it is structural
+    // for a streamed document (it stops middleboxes rebuffering the stream),
+    // while the private/no-store pair is what keeps a per-visitor snapshot out
+    // of a shared cache.
+    //
+    // Unlike the single-shot path above, a snapshot forces the private
+    // directive even when the application wrote its own `Cache-Control`. The
+    // streamed response sets `Cache-Control` from a header literal that
+    // overwrites whatever the app wrote, so the app's value cannot survive
+    // this path either way; the only two reachable outcomes are "per-visitor
+    // document marked private" and "per-visitor document shared-cacheable",
+    // and correctness wins. An app that wants to own caching on a streamed
+    // page must not publish on that page.
+    cacheControl: hasSnapshot ? 'private, no-store, no-transform' : undefined,
   });
 }

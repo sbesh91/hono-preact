@@ -110,6 +110,13 @@ export function streamDocumentResponse(
      * in `renderPage`. Defaults to `{}` (no override).
      */
     denyHeaders?: Record<string, string>;
+    /**
+     * Replaces the default `Cache-Control` below. `renderPage` passes one when
+     * the document carries a per-visitor channel snapshot, which must not be
+     * stored by a shared cache. A rendered deny's own headers still win over
+     * it, for the same reason they win over the default.
+     */
+    cacheControl?: string;
   }
 ): Response {
   const {
@@ -120,6 +127,7 @@ export function streamDocumentResponse(
     dev = false,
     status = 200,
     denyHeaders = {},
+    cacheControl,
   } = opts;
 
   // Split at </body> so we can interleave per-loader chunk script tags between
@@ -281,7 +289,7 @@ export function streamDocumentResponse(
     // are spread in after it; but they must not be able to override the
     // structural headers below, which are non-negotiable for a streamed HTML
     // document, so those are spread in last and always win.
-    'Cache-Control': 'no-transform',
+    'Cache-Control': cacheControl ?? 'no-transform',
     ...denyHeaders,
     'Content-Type': 'text/html; charset=utf-8',
     'Transfer-Encoding': 'chunked',

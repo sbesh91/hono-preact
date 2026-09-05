@@ -2,6 +2,7 @@ import { defineAction, deny, redirect } from 'hono-preact';
 import { upsertUser } from '../../demo/data.js';
 import { signIn, signOut } from '../../demo/session.js';
 import { LoginSchema } from './login-schema.js';
+import { session } from '../../demo/guard.js';
 
 export const serverActions = {
   login: defineAction(
@@ -23,6 +24,11 @@ export const serverActions = {
 
   logout: defineAction<{}, { ok: true }>(async (ctx) => {
     signOut(ctx.c);
+    // Clear the client guard's hint explicitly. This action is route
+    // independent, so it runs none of the /demo/projects route-node
+    // middleware, and a response that publishes nothing leaves the client
+    // store untouched.
+    session.publish(ctx, { signedIn: false });
     return { ok: true };
   }),
 };

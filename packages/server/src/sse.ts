@@ -6,6 +6,7 @@ import {
   fanEnd,
   fanError,
   fanAbort,
+  CHANNEL_HEADER,
 } from '@hono-preact/iso/internal';
 
 /**
@@ -43,6 +44,13 @@ export type SseResponseOptions = {
   signal?: AbortSignal;
   /** Used only with `signal`; the timeout value reported in the frame. */
   timeoutMs?: number;
+  /**
+   * The encoded channel snapshot to carry on the `X-HP-Channels` response
+   * header, or `undefined` when the request's route-node chain published
+   * nothing. Must ride the `Response` init here: once the stream body starts
+   * flushing chunks there is no later point to add a header.
+   */
+  channelHeader?: string;
   /**
    * When true, a thrown stream error's real `message` and `name` ride the
    * `event: error` frame. When false (default), the frame is masked as
@@ -148,6 +156,7 @@ function buildSseResponse(
     signal,
     timeoutMs,
     dev = false,
+    channelHeader,
   } = options;
   const obs = observers ?? [];
   let chunks = 0;
@@ -218,6 +227,9 @@ function buildSseResponse(
     headers: {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
+      ...(channelHeader !== undefined
+        ? { [CHANNEL_HEADER]: channelHeader }
+        : {}),
     },
   });
 }

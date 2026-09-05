@@ -94,7 +94,11 @@ export const FEATURE_MODULES = {
     'internal/stream-observer-runner.js',
   ],
   head: ['head.js'],
-  middleware: ['define-middleware.js', 'reload-context.js'],
+  middleware: [
+    'define-middleware.js',
+    'reload-context.js',
+    'session-channel.js',
+  ],
   'signals-dx': ['for.js', 'show.js'],
 };
 

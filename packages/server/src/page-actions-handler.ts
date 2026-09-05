@@ -11,6 +11,10 @@ import {
   setActionResultSlot,
   dispatchServer,
   serializeActionOutcome,
+  takeChannelSnapshot,
+  seedChannelSnapshot,
+  CHANNEL_HEADER,
+  encodeSnapshot,
   type ActionResolution,
 } from '@hono-preact/iso/internal';
 import { composeServerChainOrFailClosed } from './compose-server-chain.js';
@@ -379,28 +383,37 @@ export function pageActionsHandler(
       | ReadableStream<unknown>
       | undefined;
 
+    // Populated from inside runRequestScope regardless of how the action
+    // chain settles (success, outcome, or plain throw): takeChannelSnapshot
+    // must run while the AsyncLocalStorage store backing it is still live
+    // (same constraint as takeServerDeny's call site in render.tsx).
+    let channels: ReturnType<typeof takeChannelSnapshot> = null;
     try {
       const value = await runRequestScope(async () => {
-        const dispatch = await dispatchServer<unknown, 'action'>({
-          middleware: serverMw,
-          ctx,
-          inner: async () => {
-            // Schema failure: short-circuit to a 422 deny carrying the
-            // normalized issues under the reserved key. The handler never
-            // runs. Caught below by `isOutcome(err)`, serialized into the
-            // envelope (JSON) or the deny re-render (PE) like any deny.
-            const effectivePayload = entry.input
-              ? await coerceActionInput(entry.input, payload)
-              : payload;
-            const inner = await fn(actionCtx, effectivePayload);
-            // Normalize return-style outcomes to throw-style so the catch
-            // path handles all outcomes uniformly.
-            if (isOutcome(inner)) throw inner;
-            return inner;
-          },
-        });
-        if (dispatch.kind === 'outcome') throw dispatch.outcome;
-        return dispatch.value;
+        try {
+          const dispatch = await dispatchServer<unknown, 'action'>({
+            middleware: serverMw,
+            ctx,
+            inner: async () => {
+              // Schema failure: short-circuit to a 422 deny carrying the
+              // normalized issues under the reserved key. The handler never
+              // runs. Caught below by `isOutcome(err)`, serialized into the
+              // envelope (JSON) or the deny re-render (PE) like any deny.
+              const effectivePayload = entry.input
+                ? await coerceActionInput(entry.input, payload)
+                : payload;
+              const inner = await fn(actionCtx, effectivePayload);
+              // Normalize return-style outcomes to throw-style so the catch
+              // path handles all outcomes uniformly.
+              if (isOutcome(inner)) throw inner;
+              return inner;
+            },
+          });
+          if (dispatch.kind === 'outcome') throw dispatch.outcome;
+          return dispatch.value;
+        } finally {
+          channels = takeChannelSnapshot();
+        }
       });
 
       if (isAsyncGenerator(value) || value instanceof ReadableStream) {
@@ -413,9 +426,12 @@ export function pageActionsHandler(
         // progressive-enhancement form post).
         if (!acceptsEventStream(c.req.header('Accept'))) {
           const message = 'Streaming actions require Accept: text/event-stream';
-          return accept === 'json'
-            ? c.json({ __outcome: 'error', message }, 405)
-            : c.text(message, 405);
+          return withChannelHeader(
+            accept === 'json'
+              ? c.json({ __outcome: 'error', message }, 405)
+              : c.text(message, 405),
+            channels
+          );
         }
         resolution = { kind: 'success', data: undefined };
       } else {
@@ -456,6 +472,9 @@ export function pageActionsHandler(
         signal: timeoutSignal,
         timeoutMs:
           typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+        // Must ride the SSE Response's init: it cannot be added after the
+        // stream starts flushing chunks.
+        channelHeader: channels ? encodeSnapshot(channels) : undefined,
       };
       if (isAsyncGenerator(streamingResult)) {
         return sseGeneratorResponse(c, streamingResult, {
@@ -472,7 +491,7 @@ export function pageActionsHandler(
     if (accept === 'json') {
       const env = serializeActionOutcome(resolution);
       applyOutcomeHeaders(c, env.headers);
-      return c.json(env.body, env.status);
+      return withChannelHeader(c.json(env.body, env.status), channels);
     }
 
     // HTML / PE path.
@@ -484,13 +503,13 @@ export function pageActionsHandler(
     ) {
       const { to, status, headers } = resolution.outcome;
       applyOutcomeHeaders(c, headers);
-      return c.redirect(to, status);
+      return withChannelHeader(c.redirect(to, status), channels);
     }
 
     // Success: POST-Redirect-GET pattern. Auto 303 to the same URL so the
     // browser re-GETs the page and loaders run fresh.
     if (resolution.kind === 'success') {
-      return c.redirect(urlPath, 303);
+      return withChannelHeader(c.redirect(urlPath, 303), channels);
     }
 
     // Timeout: plain text, no re-render needed.
@@ -498,15 +517,21 @@ export function pageActionsHandler(
       resolution.kind === 'outcome' &&
       resolution.outcome.__outcome === 'timeout'
     ) {
-      return c.text(
-        `Action timed out after ${resolution.outcome.timeoutMs}ms`,
-        504
+      return withChannelHeader(
+        c.text(`Action timed out after ${resolution.outcome.timeoutMs}ms`, 504),
+        channels
       );
     }
 
     // Deny or unexpected error: re-render the page with the resolution
     // injected into the request scope so useActionResult() reads it.
     return await runRequestScope(async () => {
+      // The action chain published in a scope this handler already drained, so
+      // seed it into the re-render's scope: renderPage takes the snapshot from
+      // its own scope to build the document's channel bootstrap, and without
+      // this the re-rendered page would boot with an empty store even though
+      // the action published.
+      seedChannelSnapshot(channels);
       setActionResultSlot({
         module,
         action,
@@ -519,11 +544,17 @@ export function pageActionsHandler(
           resolution.kind === 'outcome' &&
           resolution.outcome.__outcome === 'deny'
         ) {
-          return c.text(resolution.outcome.message, resolution.outcome.status);
+          return withChannelHeader(
+            c.text(resolution.outcome.message, resolution.outcome.status),
+            channels
+          );
         }
-        return c.text(
-          resolution.kind === 'error' ? resolution.message : 'Action failed',
-          500
+        return withChannelHeader(
+          c.text(
+            resolution.kind === 'error' ? resolution.message : 'Action failed',
+            500
+          ),
+          channels
         );
       }
       const rendered = await renderPage(c, node, { appConfig, dev });
@@ -531,15 +562,35 @@ export function pageActionsHandler(
         resolution.kind === 'outcome' &&
         resolution.outcome.__outcome === 'deny'
       ) {
-        return new Response(rendered.body, {
-          status: resolution.outcome.status,
-          headers: rendered.headers,
-        });
+        return withChannelHeader(
+          new Response(rendered.body, {
+            status: resolution.outcome.status,
+            headers: rendered.headers,
+          }),
+          channels
+        );
       }
-      return new Response(rendered.body, {
-        status: 500,
-        headers: rendered.headers,
-      });
+      return withChannelHeader(
+        new Response(rendered.body, {
+          status: 500,
+          headers: rendered.headers,
+        }),
+        channels
+      );
     });
   };
+}
+
+/**
+ * Set the channel header when this request's action chain published. Omitting
+ * it when nothing published is deliberate: an absent header leaves the client
+ * store alone, while `{}` would read as "every channel is now empty" and clear
+ * a live session hint on a response whose chain ran no publishing middleware.
+ */
+function withChannelHeader(
+  res: Response,
+  channels: ReturnType<typeof takeChannelSnapshot>
+): Response {
+  if (channels) res.headers.set(CHANNEL_HEADER, encodeSnapshot(channels));
+  return res;
 }

@@ -7,7 +7,13 @@ import {
   type ServerLoaderCtx,
   type StandardSchemaV1,
 } from '@hono-preact/iso';
-import { runRequestScope, dispatchServer } from '@hono-preact/iso/internal';
+import {
+  runRequestScope,
+  dispatchServer,
+  takeChannelSnapshot,
+  CHANNEL_HEADER,
+  encodeSnapshot,
+} from '@hono-preact/iso/internal';
 import {
   coerceLoaderLocation,
   type LooseLoaderFn,
@@ -379,51 +385,65 @@ export function loadersHandler(
     // value, by contrast, is serialized synchronously by c.json -- a
     // non-serializable return is a loader-data fault, so that one IS attributed.
     let result: unknown;
+    // Populated from inside runRequestScope regardless of how the loader chain
+    // settles (success, outcome, or plain throw), since takeChannelSnapshot
+    // must run while the AsyncLocalStorage store backing it is still live: see
+    // the same constraint documented on takeServerDeny's call site in
+    // render.tsx.
+    let channels: ReturnType<typeof takeChannelSnapshot> = null;
     try {
       result = await runRequestScope(
         async () => {
-          const dispatch = await dispatchServer<unknown, 'loader'>({
-            middleware: serverMw,
-            ctx,
-            inner: async () => {
-              const { pathParams, searchParams } = await coerceLoaderLocation(
-                {
-                  searchSchema: entry.searchSchema,
-                  paramsSchema: entry.paramsSchema,
-                },
-                validatedLocation.pathParams,
-                validatedLocation.searchParams
-              );
-              const inner = await entry.fn({
-                c,
-                location: {
-                  path: validatedLocation.path,
-                  pathParams,
-                  searchParams,
-                },
-                signal,
-                call: createCaller(c).call,
-              });
-              // A loader that does `return redirect('/login')` instead of
-              // `throw redirect('/login')` would otherwise ship the outcome
-              // JSON shape as a normal 200 response and bypass envelope
-              // translation. Normalize by re-throwing so the existing
-              // outcome-catching path translates it.
-              if (isOutcome(inner)) throw inner;
-              return inner;
-            },
-          });
-          if (dispatch.kind === 'outcome') {
-            // Throw to unify with non-outcome error translation below.
-            throw dispatch.outcome;
+          try {
+            const dispatch = await dispatchServer<unknown, 'loader'>({
+              middleware: serverMw,
+              ctx,
+              inner: async () => {
+                const { pathParams, searchParams } = await coerceLoaderLocation(
+                  {
+                    searchSchema: entry.searchSchema,
+                    paramsSchema: entry.paramsSchema,
+                  },
+                  validatedLocation.pathParams,
+                  validatedLocation.searchParams
+                );
+                const inner = await entry.fn({
+                  c,
+                  location: {
+                    path: validatedLocation.path,
+                    pathParams,
+                    searchParams,
+                  },
+                  signal,
+                  call: createCaller(c).call,
+                });
+                // A loader that does `return redirect('/login')` instead of
+                // `throw redirect('/login')` would otherwise ship the outcome
+                // JSON shape as a normal 200 response and bypass envelope
+                // translation. Normalize by re-throwing so the existing
+                // outcome-catching path translates it.
+                if (isOutcome(inner)) throw inner;
+                return inner;
+              },
+            });
+            if (dispatch.kind === 'outcome') {
+              // Throw to unify with non-outcome error translation below.
+              throw dispatch.outcome;
+            }
+            return dispatch.value;
+          } finally {
+            channels = takeChannelSnapshot();
           }
-          return dispatch.value;
         },
         { honoContext: c }
       );
     } catch (err) {
+      // A route-node chain that published, then denied or errored, must still
+      // carry the snapshot: a 401 is exactly the response that should clear a
+      // stale client-side session hint (see channel-store.ts's
+      // applyChannelSnapshot doc).
       if (isOutcome(err)) {
-        return translateOutcomeForLoader(c, err);
+        return withChannelHeader(translateOutcomeForLoader(c, err), channels);
       }
       // Distinguish a deadline-driven abort from any other thrown error.
       // AbortSignal.timeout sets signal.reason to a DOMException named
@@ -437,12 +457,17 @@ export function loadersHandler(
         timeoutSignal.reason.name === 'TimeoutError' &&
         typeof resolvedTimeoutMs === 'number'
       ) {
-        return translateOutcomeForLoader(c, timeoutOutcome(resolvedTimeoutMs));
+        return withChannelHeader(
+          translateOutcomeForLoader(c, timeoutOutcome(resolvedTimeoutMs)),
+          channels
+        );
       }
-      return loaderFailure(err);
+      return withChannelHeader(loaderFailure(err), channels);
     }
 
     if (isAsyncGenerator(result)) {
+      // The header must ride the SSE Response's init: it cannot be added
+      // after the stream starts flushing chunks.
       return sseGeneratorResponse(c, result, {
         emitResult: false,
         dev,
@@ -451,6 +476,7 @@ export function loadersHandler(
         signal: timeoutSignal,
         timeoutMs:
           typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
+        channelHeader: channelHeaderValue(channels),
       });
     }
     if (result instanceof ReadableStream) {
@@ -459,6 +485,7 @@ export function loadersHandler(
         observers,
         observerCtx: ctx,
         signal: timeoutSignal,
+        channelHeader: channelHeaderValue(channels),
         timeoutMs:
           typeof resolvedTimeoutMs === 'number' ? resolvedTimeoutMs : undefined,
       });
@@ -467,9 +494,31 @@ export function loadersHandler(
     // the loader's return): that is a loader-data fault, attributed like any
     // other loader throw rather than left to the default error handler.
     try {
-      return c.json(result);
+      return withChannelHeader(c.json(result), channels);
     } catch (err) {
-      return loaderFailure(err);
+      return withChannelHeader(loaderFailure(err), channels);
     }
   };
+}
+
+/**
+ * Set the channel header on a JSON `Response` when the request's route-node
+ * chain published. Omitting the header when nothing published is deliberate:
+ * an absent header leaves the client store alone, while `{}` would read as
+ * "every channel is now empty" and clear a live session hint on a response
+ * whose chain ran no publishing middleware at all.
+ */
+function withChannelHeader(
+  res: Response,
+  channels: ReturnType<typeof takeChannelSnapshot>
+): Response {
+  if (channels) res.headers.set(CHANNEL_HEADER, encodeSnapshot(channels));
+  return res;
+}
+
+/** The SSE options' `channelHeader` value: undefined when nothing published. */
+function channelHeaderValue(
+  channels: ReturnType<typeof takeChannelSnapshot>
+): string | undefined {
+  return channels ? encodeSnapshot(channels) : undefined;
 }

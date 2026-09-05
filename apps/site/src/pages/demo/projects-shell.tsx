@@ -9,10 +9,9 @@ import {
 } from 'hono-preact';
 import type { FunctionComponent } from 'preact';
 import { ActivityBar } from '../../components/demo/ActivityBar.js';
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef } from 'preact/hooks';
 import { serverLoaders } from './projects-shell.server.js';
 import { serverActions as loginActions } from './login.server.js';
-import { DEMO_AUTHED_KEY } from '../../demo/guard.js';
 import type { ShellData } from './projects-shell.server.js';
 
 // Per-project bullet: static (every row has one).
@@ -67,23 +66,8 @@ function Sidebar({
     ind.style.opacity = '1';
   }, [activeSlug, data.projects.length]);
 
-  // Self-heal the client guard flag on any authed render.
-  useEffect(() => {
-    if (!data.user) return;
-    try {
-      window.localStorage.setItem(DEMO_AUTHED_KEY, '1');
-    } catch {
-      // ignore (private browsing, storage full, etc.)
-    }
-  }, [data.user]);
-
   const logout = useAction(loginActions.logout, {
     onSuccess: () => {
-      try {
-        window.localStorage.removeItem(DEMO_AUTHED_KEY);
-      } catch {
-        // ignore
-      }
       navigate('/demo/login', { replace: true });
     },
   });

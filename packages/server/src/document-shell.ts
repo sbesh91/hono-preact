@@ -1,6 +1,23 @@
 import type { AppConfig } from '@hono-preact/iso';
+import type { ChannelSnapshot } from '@hono-preact/iso/internal';
 import { fontMimeType } from './font-preload.js';
 import { speculationRulesTag } from './speculation-rules.js';
+
+/**
+ * Serialize a value for interpolation into an inline `<script>`.
+ *
+ * `JSON.stringify` alone is a stored-XSS sink here: a published value is
+ * app-authored and may carry user data, and a `</script>` inside a string
+ * closes the tag the parser is in. Escaping `<` covers that and the `<!--`
+ * case; escaping the line separators covers the two code points that are legal
+ * in JSON strings but terminate a JavaScript line.
+ */
+function serializeForScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
 
 function escapeHtml(str: string): string {
   return str
@@ -94,6 +111,12 @@ export function assembleDocument(opts: {
    * routeStyleSheets (counts toward the missing-</head> warnings).
    */
   globalStyleSheets?: string[];
+  /**
+   * This request's published channel snapshot, emitted as an inline bootstrap
+   * so the client store has a server-authored value before any client
+   * middleware runs. `null` or omitted emits nothing.
+   */
+  channels?: ChannelSnapshot | null;
 }): string {
   const {
     html,
@@ -104,6 +127,7 @@ export function assembleDocument(opts: {
     routePreloadModules = [],
     routeStyleSheets = [],
     globalStyleSheets = [],
+    channels,
   } = opts;
   const { title, lang, metas = [], links = [] } = head;
 
@@ -230,7 +254,7 @@ export function assembleDocument(opts: {
   // function return value is inserted verbatim, with no pattern expansion.
   const inner = source.replace('</head>', () => `${headTags}\n      </head>`);
 
-  return startsWithHtml
+  const assembled = startsWithHtml
     ? lang != null
       ? // Same hazard as the </head> injection above (a replacer function,
         // not a template string, so `lang` cannot expand `$`-patterns); the
@@ -243,6 +267,40 @@ export function assembleDocument(opts: {
         )
       : inner
     : `<html lang="${escapeHtml(lang ?? 'en-US')}">\n${inner}\n</html>`;
+
+  // The channel bootstrap has to execute before the client entry does:
+  // `bootClient()` seeds the channel store from `window.__HP_CHANNELS__`, and a
+  // boot that runs first reads an empty store and lets a client guard redirect
+  // off a page that loaded fine. `<ClientScript />` renders `<script type="module"
+  // async>`, which is NOT deferred to end of parse: with a warm HTTP cache it can
+  // execute the moment it is ready, mid-parse. So the bootstrap goes immediately
+  // after the opening `<head>` tag, ahead of every script the document can
+  // contain, wherever the Layout chose to put `<ClientScript />`.
+  //
+  // `channels` is read here rather than during the head assembly above because
+  // it is orthogonal to it: a `null`/empty snapshot emits nothing at all.
+  const channelBootstrap =
+    channels && Object.keys(channels).length > 0
+      ? `<script>window.__HP_CHANNELS__=${serializeForScript(channels)}</script>`
+      : '';
+  if (!channelBootstrap) return assembled;
+
+  // Replacer function for the same reason as the </head> and lang injections
+  // above: the serialized snapshot is app-authored data and must not be
+  // interpreted for `$`-patterns.
+  //
+  // A fragment render (or any output with no `<head>`) has no head to open, so
+  // the bootstrap falls back to the end of the document. Nothing precedes the
+  // client script there either, because a document with no head is the custom
+  // entry case and carries no framework-injected head tags at all.
+  const headOpen = /<head(\s[^>]*)?>/i.exec(assembled);
+  if (headOpen) {
+    const at = headOpen.index + headOpen[0].length;
+    return `${assembled.slice(0, at)}\n        ${channelBootstrap}${assembled.slice(at)}`;
+  }
+  return assembled.includes('</body>')
+    ? assembled.replace('</body>', () => `${channelBootstrap}\n  </body>`)
+    : assembled.replace('</html>', () => `${channelBootstrap}\n</html>`);
 }
 
 /**
