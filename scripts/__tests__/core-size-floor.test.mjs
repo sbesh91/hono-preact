@@ -49,9 +49,10 @@ const EXTERNAL_COUNTING_SIGNALS = EXTERNAL.filter(
 // signals reached core, the fix is the import, not the budget.
 const CORE_BUDGET_BYTES = 6_200;
 // core + `FEATURE_MODULES.runtime`, the real always-loaded floor. Measured at
-// 7,961 B; the headroom matches CORE_BUDGET's (a few hundred bytes for ordinary
-// growth, far under the ~3,300 B a signals import would add).
-const FLOOR_BUDGET_BYTES = 8_400;
+// 8,406 B once the session-channel store landed; the headroom matches
+// CORE_BUDGET's (a few hundred bytes for ordinary growth, far under the
+// ~3,300 B a signals import would add).
+const FLOOR_BUDGET_BYTES = 8_600;
 
 describe('always-loaded core size floor', () => {
   it('has a built dist to measure', () => {

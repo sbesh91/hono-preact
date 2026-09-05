@@ -39,6 +39,8 @@ The optional `id` argument lets you name the channel yourself. Leave it off in a
 
 **A channel declared in a `.server.*` module silently never resolves.** It does not get an injected id: the Vite plugin skips `.server.*` modules by design, so the declaration falls back to a per-instance runtime counter, the two bundles end up with different ids, and every `read()` returns `undefined`. Nothing throws; the guard simply never sees a published value. Keep the `defineSessionChannel` call in a shared module (`auth/session-channel.ts` in the example above) and import it from both legs.
 
+**Import `defineSessionChannel` directly from `hono-preact`, not through an app-local barrel.** The id injection matches the import by source, so a module that re-exports `defineSessionChannel` from its own barrel and imports it from there gets no injected id, and the channel silently never resolves in the same way.
+
 ## A guard with both legs
 
 ```ts
@@ -96,7 +98,7 @@ export default defineRoutes([
 
 The published value ships to the client on **every** response that runs the publishing middleware: inline in the SSR document, and on a response header for every loader, action and live-loader stream response. Treat it as public. Publish a decision (`{ signedIn: true }`, a role name, a plan tier), never a token, a session secret, or anything you would not put in view-source.
 
-The value is not persisted. It lives in memory for the life of the page, and each server round-trip replaces it wholesale. That is how a logout clears it: the logout action publishes `{ signedIn: false }` and the client leg starts denying. Clearing is always an explicit publish; a response that publishes nothing says nothing about the channel and leaves the stored value alone.
+The value is not persisted. It lives in memory for the life of the page, and each server round-trip merges what it published into the store, per channel. A channel the response says nothing about keeps the value it already had, so an action that publishes on one channel never disturbs another. Clearing is always an explicit publish: the logout action publishes `{ signedIn: false }` and the client leg starts denying.
 
 `read()` returns `undefined` when no round-trip has published on this channel yet, and also when the two bundles disagree on the channel id (see [Where to declare a channel](#where-to-declare-a-channel)). A guard treats `undefined` exactly the way it treats an absent flag: not authorized. The example above spells this as `?.signedIn`, which is falsy for both the unpublished case and an explicit `{ signedIn: false }`.
 

@@ -19,10 +19,23 @@ describe('channel store', () => {
     expect(readChannelValue('b')).toBeUndefined();
   });
 
-  it('replaces rather than merges, so a dropped key clears', () => {
+  it('preserves a key the new snapshot says nothing about', () => {
     applyChannelSnapshot({ a: 1, b: 2 });
-    applyChannelSnapshot({ a: 1 });
-    expect(readChannelValue('b')).toBeUndefined();
+    applyChannelSnapshot({ a: 9 });
+    expect(readChannelValue('a')).toBe(9);
+    expect(readChannelValue('b')).toBe(2);
+  });
+
+  it('clears a channel only on an explicit falsy publish', () => {
+    applyChannelSnapshot({ a: { signedIn: true } });
+    applyChannelSnapshot({ a: null });
+    expect(readChannelValue('a')).toBeNull();
+  });
+
+  it('publishing on one channel leaves another channel alone', () => {
+    applyChannelSnapshot({ a: 'first', b: 'second' });
+    applyChannelSnapshot({ a: 'updated' });
+    expect(readChannelValue('b')).toBe('second');
   });
 
   it('ignores a null snapshot so a response without the header is not a logout', () => {

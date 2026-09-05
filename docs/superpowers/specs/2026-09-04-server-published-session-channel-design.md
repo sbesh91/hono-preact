@@ -162,9 +162,12 @@ An in-memory module-level store, keyed by channel id. Explicitly **not**
 This is the property that makes the whole design work. A cold load always
 arrives with a server-authored value in the SSR bootstrap, so there is nothing
 to persist across sessions and therefore nothing that can be stale across
-sessions. The store is written once at bootstrap and overwritten by every
-subsequent RPC response that publishes; a response that publishes nothing is a
-no-op against it.
+sessions. The store is seeded at bootstrap, and every subsequent RPC response merges its
+published keys into it: a channel the response says nothing about keeps the value
+it already had, and a response that publishes nothing at all is a no-op. Merging
+per key is what keeps a route-independent action that publishes on one channel
+from wiping an unrelated one, which would bounce the user off a page the server
+would have served.
 
 ### Channel identity
 
@@ -173,8 +176,10 @@ client bundles. It cannot be derived at runtime, since the two bundles construct
 separate objects.
 
 The Vite plugin already parses these modules for `guard-strip`, so it injects
-the id at the `defineSessionChannel()` call site, derived from the module path
-plus declaration order within the module. A runtime fallback id is needed for
+the id at the `defineSessionChannel()` call site, derived from the module's
+project-root-relative POSIX path plus declaration order within the module. It is
+root-relative and slash-normalized so the id shipped to every client carries no
+absolute build path and does not differ between platforms. A runtime fallback id is needed for
 the non-Vite paths (unit tests, the in-process `call()` path); those never cross
 a bundle boundary, so a monotonic counter suffices there.
 

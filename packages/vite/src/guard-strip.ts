@@ -157,6 +157,50 @@ function findCallsByLocalName(
   });
 }
 
+function toPosix(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
+// Small, stable, non-cryptographic hash (FNV-1a, 32-bit) used only to keep the
+// fallback id unique across two modules that share a basename.
+function shortHash(input: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * The id embedded in the bundle, and therefore shipped to every client in the
+ * SSR bootstrap and the `X-HP-Channels` header. It must be
+ *
+ *   1. identical between the server and client transforms of the same module
+ *      (both run with the same Vite `root`, so a root-relative path is safe),
+ *   2. identical across machines and platforms (forward slashes always), and
+ *   3. free of the build machine's directory layout.
+ *
+ * A module inside the project root becomes a root-relative POSIX path. A module
+ * outside the root has no root-relative spelling, so it falls back to a
+ * `node_modules/`-relative path when it lives in a dependency, and otherwise to
+ * its basename plus a short hash of the full path. Both fallbacks are stable for
+ * a given module and carry no absolute prefix.
+ */
+export function channelModuleId(moduleId: string, root: string | null): string {
+  const path = toPosix(moduleId);
+  if (root !== null) {
+    const base = toPosix(root).replace(/\/+$/, '');
+    if (path === base) return path.slice(path.lastIndexOf('/') + 1);
+    if (path.startsWith(`${base}/`)) return path.slice(base.length + 1);
+  }
+  const marker = '/node_modules/';
+  const at = path.lastIndexOf(marker);
+  if (at !== -1) return `node_modules/${path.slice(at + marker.length)}`;
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  return `${name}@${shortHash(path)}`;
+}
+
 // Vite hands the transform an id that can carry a `?v=...` / `?import` suffix,
 // and the suffix is not the same in the two bundles. The path before the `?`
 // is, so that is the identity.
@@ -205,9 +249,15 @@ export function classifyModuleId(rawId: string): {
 }
 
 export function guardStripPlugin(): Plugin {
+  // The resolved Vite project root, captured so injected channel ids can be
+  // root-relative instead of leaking the build machine's absolute paths.
+  let root: string | null = null;
   return {
     name: 'hono-preact:guard-strip',
     enforce: 'pre',
+    configResolved(config: { root: string }) {
+      root = config.root;
+    },
     transform(code: string, id: string, options?: { ssr?: boolean }) {
       const { verdict, moduleId } = classifyModuleId(id);
       if (verdict !== 'eligible') return;
@@ -238,7 +288,14 @@ export function guardStripPlugin(): Plugin {
       if (bindings.direct.size === 0 && bindings.namespaces.size === 0) return;
 
       const hits: Hit[] = [];
-      findCallsByLocalName(ast, code, moduleId, bindings, byName, hits);
+      findCallsByLocalName(
+        ast,
+        code,
+        channelModuleId(moduleId, root),
+        bindings,
+        byName,
+        hits
+      );
       if (hits.length === 0) return;
 
       // Drop any hit nested inside an earlier one: the outer rewrite already

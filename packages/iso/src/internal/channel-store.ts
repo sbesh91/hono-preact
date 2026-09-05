@@ -10,18 +10,17 @@ let current: ChannelSnapshot = {};
 /**
  * Install the snapshot from a server round-trip.
  *
- * REPLACES rather than merges. A round-trip whose chain published nothing for a
- * channel means that channel has no value now, which is how a logout clears a
- * session hint without the app writing any code. Merging would make a published
- * value permanent for the life of the page.
+ * MERGES per key. A round-trip only publishes on the channels its own chain
+ * touched, so a key the response says nothing about keeps the value it already
+ * had. Clearing a channel is an explicit publish of a falsy value, which is a
+ * statement the response actually carries.
  *
- * A `null` snapshot means the response carried no header at all, which is not
- * the same statement: plenty of responses never run a route-node chain. Those
- * leave the store untouched.
+ * A `null` snapshot means the response carried no header at all. Plenty of
+ * responses never run a route-node chain; those leave the store untouched.
  */
 export function applyChannelSnapshot(snapshot: ChannelSnapshot | null): void {
   if (snapshot === null) return;
-  current = snapshot;
+  current = { ...current, ...snapshot };
 }
 
 export function readChannelValue(id: string): unknown {

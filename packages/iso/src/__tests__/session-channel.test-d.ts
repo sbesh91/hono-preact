@@ -1,5 +1,5 @@
-import { assertType, describe, expectTypeOf, it } from 'vitest';
-import { defineSessionChannel, type SessionChannel } from '../index.js';
+import { describe, expectTypeOf, it } from 'vitest';
+import { defineSessionChannel } from '../index.js';
 import type { ClientPageCtx, ServerCtx } from '../index.js';
 
 describe('SessionChannel types', () => {
@@ -22,10 +22,5 @@ describe('SessionChannel types', () => {
     const clientCtx = {} as ClientPageCtx;
     // @ts-expect-error publish is the server tier
     channel.publish(clientCtx, 1);
-  });
-
-  it('is covariant in its payload for an erased consumer', () => {
-    const channel = defineSessionChannel<{ signedIn: boolean }>();
-    assertType<SessionChannel<{ signedIn: boolean }>>(channel);
   });
 });

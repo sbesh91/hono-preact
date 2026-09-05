@@ -47,11 +47,20 @@ describe('fetchLoaderData channel header', () => {
     expect(readChannelValue('demo')).toBe(1);
   });
 
-  it('clears a channel the new snapshot omits', async () => {
+  it('preserves a channel the new snapshot omits', async () => {
     stubFetch({ [CHANNEL_HEADER]: '{"demo":1}' });
     await runFetchLoaderData();
-    stubFetch({ [CHANNEL_HEADER]: '{}' });
+    stubFetch({ [CHANNEL_HEADER]: '{"other":2}' });
     await runFetchLoaderData();
-    expect(readChannelValue('demo')).toBeUndefined();
+    expect(readChannelValue('demo')).toBe(1);
+    expect(readChannelValue('other')).toBe(2);
+  });
+
+  it('takes an explicit falsy publish as the clear', async () => {
+    stubFetch({ [CHANNEL_HEADER]: '{"demo":{"signedIn":true}}' });
+    await runFetchLoaderData();
+    stubFetch({ [CHANNEL_HEADER]: '{"demo":{"signedIn":false}}' });
+    await runFetchLoaderData();
+    expect(readChannelValue('demo')).toEqual({ signedIn: false });
   });
 });
