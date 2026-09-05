@@ -12,6 +12,7 @@ import {
   dispatchServer,
   serializeActionOutcome,
   takeChannelSnapshot,
+  seedChannelSnapshot,
   CHANNEL_HEADER,
   encodeSnapshot,
   type ActionResolution,
@@ -425,9 +426,12 @@ export function pageActionsHandler(
         // progressive-enhancement form post).
         if (!acceptsEventStream(c.req.header('Accept'))) {
           const message = 'Streaming actions require Accept: text/event-stream';
-          return accept === 'json'
-            ? c.json({ __outcome: 'error', message }, 405)
-            : c.text(message, 405);
+          return withChannelHeader(
+            accept === 'json'
+              ? c.json({ __outcome: 'error', message }, 405)
+              : c.text(message, 405),
+            channels
+          );
         }
         resolution = { kind: 'success', data: undefined };
       } else {
@@ -487,12 +491,7 @@ export function pageActionsHandler(
     if (accept === 'json') {
       const env = serializeActionOutcome(resolution);
       applyOutcomeHeaders(c, env.headers);
-      const res = c.json(env.body, env.status);
-      // Omitting the header when nothing published is deliberate: an absent
-      // header leaves the client store alone, while `{}` would clear a live
-      // session hint on a response whose chain ran no publishing middleware.
-      if (channels) res.headers.set(CHANNEL_HEADER, encodeSnapshot(channels));
-      return res;
+      return withChannelHeader(c.json(env.body, env.status), channels);
     }
 
     // HTML / PE path.
@@ -504,13 +503,13 @@ export function pageActionsHandler(
     ) {
       const { to, status, headers } = resolution.outcome;
       applyOutcomeHeaders(c, headers);
-      return c.redirect(to, status);
+      return withChannelHeader(c.redirect(to, status), channels);
     }
 
     // Success: POST-Redirect-GET pattern. Auto 303 to the same URL so the
     // browser re-GETs the page and loaders run fresh.
     if (resolution.kind === 'success') {
-      return c.redirect(urlPath, 303);
+      return withChannelHeader(c.redirect(urlPath, 303), channels);
     }
 
     // Timeout: plain text, no re-render needed.
@@ -518,15 +517,21 @@ export function pageActionsHandler(
       resolution.kind === 'outcome' &&
       resolution.outcome.__outcome === 'timeout'
     ) {
-      return c.text(
-        `Action timed out after ${resolution.outcome.timeoutMs}ms`,
-        504
+      return withChannelHeader(
+        c.text(`Action timed out after ${resolution.outcome.timeoutMs}ms`, 504),
+        channels
       );
     }
 
     // Deny or unexpected error: re-render the page with the resolution
     // injected into the request scope so useActionResult() reads it.
     return await runRequestScope(async () => {
+      // The action chain published in a scope this handler already drained, so
+      // seed it into the re-render's scope: renderPage takes the snapshot from
+      // its own scope to build the document's channel bootstrap, and without
+      // this the re-rendered page would boot with an empty store even though
+      // the action published.
+      seedChannelSnapshot(channels);
       setActionResultSlot({
         module,
         action,
@@ -539,11 +544,17 @@ export function pageActionsHandler(
           resolution.kind === 'outcome' &&
           resolution.outcome.__outcome === 'deny'
         ) {
-          return c.text(resolution.outcome.message, resolution.outcome.status);
+          return withChannelHeader(
+            c.text(resolution.outcome.message, resolution.outcome.status),
+            channels
+          );
         }
-        return c.text(
-          resolution.kind === 'error' ? resolution.message : 'Action failed',
-          500
+        return withChannelHeader(
+          c.text(
+            resolution.kind === 'error' ? resolution.message : 'Action failed',
+            500
+          ),
+          channels
         );
       }
       const rendered = await renderPage(c, node, { appConfig, dev });
@@ -551,15 +562,35 @@ export function pageActionsHandler(
         resolution.kind === 'outcome' &&
         resolution.outcome.__outcome === 'deny'
       ) {
-        return new Response(rendered.body, {
-          status: resolution.outcome.status,
-          headers: rendered.headers,
-        });
+        return withChannelHeader(
+          new Response(rendered.body, {
+            status: resolution.outcome.status,
+            headers: rendered.headers,
+          }),
+          channels
+        );
       }
-      return new Response(rendered.body, {
-        status: 500,
-        headers: rendered.headers,
-      });
+      return withChannelHeader(
+        new Response(rendered.body, {
+          status: 500,
+          headers: rendered.headers,
+        }),
+        channels
+      );
     });
   };
+}
+
+/**
+ * Set the channel header when this request's action chain published. Omitting
+ * it when nothing published is deliberate: an absent header leaves the client
+ * store alone, while `{}` would read as "every channel is now empty" and clear
+ * a live session hint on a response whose chain ran no publishing middleware.
+ */
+function withChannelHeader(
+  res: Response,
+  channels: ReturnType<typeof takeChannelSnapshot>
+): Response {
+  if (channels) res.headers.set(CHANNEL_HEADER, encodeSnapshot(channels));
+  return res;
 }

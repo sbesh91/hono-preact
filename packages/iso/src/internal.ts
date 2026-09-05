@@ -91,6 +91,7 @@ export type { ServerDenyRecord } from './internal/server-deny-registry.js';
 export {
   publishToChannel,
   takeChannelSnapshot,
+  seedChannelSnapshot,
 } from './internal/channel-registry.js';
 export { CHANNEL_HEADER, encodeSnapshot } from './internal/channel-wire.js';
 export type { ChannelSnapshot } from './internal/channel-wire.js';

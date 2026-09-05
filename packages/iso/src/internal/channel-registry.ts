@@ -25,6 +25,19 @@ export function publishToChannel(id: string, value: unknown): void {
 }
 
 /**
+ * Merge an already-drained snapshot back into the current request scope, so a
+ * handler that took a snapshot in one scope and then opens another (the
+ * progressive-enhancement re-render in `page-actions-handler.ts`) does not lose
+ * what the first chain published. Keys the re-render publishes itself win, on
+ * the same last-write-wins rule as `publishToChannel`.
+ */
+export function seedChannelSnapshot(snapshot: ChannelSnapshot | null): void {
+  if (snapshot === null) return;
+  const current = readRequestSlot(REGISTRY_KEY);
+  writeRequestSlot(REGISTRY_KEY, { ...snapshot, ...(current ?? {}) });
+}
+
+/**
  * Take ownership of this request's snapshot, clearing it. Must be called while
  * still inside the request scope: the AsyncLocalStorage store backing it is not
  * live once the scope's promise is awaited by the caller. This is the same
