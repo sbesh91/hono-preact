@@ -96,7 +96,7 @@ export default defineRoutes([
 
 The published value ships to the client on **every** response that runs the publishing middleware: inline in the SSR document, and on a response header for every loader, action and live-loader stream response. Treat it as public. Publish a decision (`{ signedIn: true }`, a role name, a plan tier), never a token, a session secret, or anything you would not put in view-source.
 
-The value is not persisted. It lives in memory for the life of the page, and each server round-trip replaces it wholesale. That is how a logout clears it: the next round-trip publishes `{ signedIn: false }` and the client leg starts denying, with no application bookkeeping and nothing to clean up.
+The value is not persisted. It lives in memory for the life of the page, and each server round-trip replaces it wholesale. That is how a logout clears it: the logout action publishes `{ signedIn: false }` and the client leg starts denying. Clearing is always an explicit publish; a response that publishes nothing says nothing about the channel and leaves the stored value alone.
 
 `read()` returns `undefined` when no round-trip has published on this channel yet, and also when the two bundles disagree on the channel id (see [Where to declare a channel](#where-to-declare-a-channel)). A guard treats `undefined` exactly the way it treats an absent flag: not authorized. The example above spells this as `?.signedIn`, which is falsy for both the unpublished case and an explicit `{ signedIn: false }`.
 

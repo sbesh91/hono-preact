@@ -144,9 +144,15 @@ The published value has to reach the client on both kinds of server round-trip:
    reshapes no wire type.
 
 Both are required. SSR-only would mean a logout performed through an action does
-not refresh the channel until a full reload, which puts the app back to clearing
-state by hand. Carrying it on RPC responses is what makes the logout case work
-with no app code at all.
+not refresh the channel until a full reload, which puts the app back to
+reconciling state on the next page load. Carrying it on RPC responses is what
+lets an action clear the hint in the same round-trip that ends the session.
+
+Clearing is an explicit publish of a falsy value, not an inferred absence. The
+logout action publishes `{ signedIn: false }`. An absent header means "this
+response says nothing about channels" and deliberately leaves the store alone,
+because a node can carry several unrelated middlewares and silence from one of
+them is not a statement about the channel.
 
 ### Client storage
 
@@ -157,7 +163,8 @@ This is the property that makes the whole design work. A cold load always
 arrives with a server-authored value in the SSR bootstrap, so there is nothing
 to persist across sessions and therefore nothing that can be stale across
 sessions. The store is written once at bootstrap and overwritten by every
-subsequent RPC response.
+subsequent RPC response that publishes; a response that publishes nothing is a
+no-op against it.
 
 ### Channel identity
 

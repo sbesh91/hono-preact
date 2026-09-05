@@ -10,7 +10,7 @@ import { currentUser } from './session.js';
 // session truth stays in the HttpOnly signed cookie and the server guard below
 // stays authoritative; this is a UX hint so intra-app navigation does not have
 // to wait for an RPC to know it will be bounced.
-const session = defineSessionChannel<{ signedIn: boolean }>();
+export const session = defineSessionChannel<{ signedIn: boolean }>();
 
 // Server-side check (SSR / full reload + RPC requests for loaders/actions):
 // validates the signed cookie and resolves the user. Declared once as `use` on
@@ -25,10 +25,15 @@ const requireSessionServer = defineServerMiddleware(async (ctx, next) => {
 });
 
 // Client-side check (intra-app navigation): reads what the last server
-// round-trip published. On a full reload the SSR bootstrap carries it; on a
-// client navigation it is whatever the most recent loader or action RPC said.
-// Logout clears it with no bookkeeping here, because the logout response runs
-// this chain and publishes nothing.
+// round-trip published. On a full reload hydrateChannelsFromDocument in
+// boot-client.ts fills the store from the SSR bootstrap before any client
+// chain runs, so there is no window in which the value is missing and no
+// defensive `typeof window` bail is needed here. On a client navigation the
+// value is whatever the most recent loader or action RPC published.
+//
+// A response that publishes nothing leaves the store as it was, so the hint is
+// cleared by an explicit publish: the logout action in login.server.ts
+// publishes { signedIn: false } after signOut.
 const requireSessionClient = defineClientMiddleware(async (ctx, next) => {
   if (!session.read(ctx)?.signedIn) throw redirect('/demo/login');
   await next();

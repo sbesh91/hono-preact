@@ -1,4 +1,4 @@
-import type { ClientPageCtx, ServerCtx } from './define-middleware.js';
+import type { ClientPageCtx, ServerBaseCtx } from './define-middleware.js';
 import { publishToChannel } from './internal/channel-registry.js';
 import { readChannelValue } from './internal/channel-store.js';
 
@@ -20,13 +20,19 @@ export type SessionChannel<T> = {
    */
   readonly __channelId: string;
   /**
-   * Publish from a server middleware. A no-op outside a request scope.
+   * Publish from the server tier. A no-op outside a request scope.
    *
    * Takes `ctx` although the request store is ambient, because the parameter is
    * what makes the tier obvious at the call site and what stops this from being
    * callable from client code that has no ctx to hand it.
+   *
+   * Typed as `ServerBaseCtx`, the `{ c, signal }` shape every server-side
+   * context carries, so a route-independent `defineAction` handler can clear a
+   * channel from its own `ActionCtx` without going through route-node
+   * middleware. `ClientPageCtx` carries neither field, so the client tier still
+   * cannot reach this.
    */
-  publish(ctx: ServerCtx, value: T): void;
+  publish(ctx: ServerBaseCtx, value: T): void;
   /**
    * Read what the last server round-trip published, or `undefined` if no
    * round-trip has published on this channel. A guard treats `undefined` the
