@@ -4,8 +4,14 @@ import {
   defineApp,
   defineLoader,
   defineServerMiddleware,
+  redirect,
+  deny,
 } from '@hono-preact/iso';
-import { Loader, publishToChannel } from '@hono-preact/iso/internal';
+import {
+  Loader,
+  publishToChannel,
+  CHANNEL_HEADER,
+} from '@hono-preact/iso/internal';
 import type { RouteHook } from 'preact-iso';
 import { renderPage } from '../render.js';
 
@@ -101,6 +107,24 @@ describe('a publishing streamed document is not shared-cacheable either', () => 
     );
   });
 
+  it("overrides the application's own Cache-Control", async () => {
+    // The streamed response writes Cache-Control from a header literal, so the
+    // app's value cannot survive this path either way. Given that, a
+    // per-visitor document must land on the private directive rather than on
+    // the shared-cacheable default.
+    const app = new Hono();
+    app.get('*', (c) => {
+      c.header('Cache-Control', 'public, max-age=60');
+      return renderPage(c, <StreamingPage />, { appConfig });
+    });
+    const res = await app.request('http://localhost/');
+    await res.text();
+
+    expect(res.headers.get('Cache-Control')).toBe(
+      'private, no-store, no-transform'
+    );
+  });
+
   it('leaves the streamed default alone when nothing published', async () => {
     const app = new Hono();
     app.get('*', (c) => renderPage(c, <StreamingPage />, { appConfig: {} }));
@@ -108,5 +132,55 @@ describe('a publishing streamed document is not shared-cacheable either', () => 
     await res.text();
 
     expect(res.headers.get('Cache-Control')).toBe('no-transform');
+  });
+});
+
+// The RPC handlers take the snapshot in a `finally`, so a chain that publishes
+// and then denies or redirects still carries it. SSR matches them.
+describe('a snapshot survives however the root chain settles', () => {
+  it('carries the snapshot on a redirect from the publishing chain', async () => {
+    const redirecting = defineServerMiddleware(async () => {
+      publishToChannel('demo', { signedIn: false });
+      throw redirect('/login');
+    });
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, <Layout />, {
+        appConfig: defineApp({ use: [redirecting] }),
+      })
+    );
+    const res = await app.request('http://localhost/');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get(CHANNEL_HEADER)).toContain('signedIn');
+  });
+
+  it('carries the snapshot on a deny from the publishing chain', async () => {
+    const denying = defineServerMiddleware(async () => {
+      publishToChannel('demo', { signedIn: false });
+      throw deny({ status: 401, message: 'nope' });
+    });
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, <Layout />, { appConfig: defineApp({ use: [denying] }) })
+    );
+    const res = await app.request('http://localhost/');
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get(CHANNEL_HEADER)).toContain('signedIn');
+  });
+
+  it('inlines a publish made on the way back out of the chain', async () => {
+    const afterNext = defineServerMiddleware(async (_ctx, next) => {
+      await next();
+      publishToChannel('demo', { signedIn: true });
+    });
+    const app = new Hono();
+    app.get('*', (c) =>
+      renderPage(c, <Layout />, { appConfig: defineApp({ use: [afterNext] }) })
+    );
+    const res = await app.request('http://localhost/');
+
+    expect(await res.text()).toContain('__HP_CHANNELS__');
   });
 });

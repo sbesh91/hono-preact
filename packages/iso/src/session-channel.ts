@@ -144,8 +144,10 @@ export function defineSessionChannel<T extends ChannelPayload>(
       // Dev-only. `import.meta.env.DEV` is read HERE, inside the function, and
       // never hoisted to module scope: a module-scope read breaks the site
       // build, and an inline read is also what lets the whole branch fold out
-      // of a production bundle.
-      if (import.meta.env.DEV) {
+      // of a production bundle. The `typeof` guard comes first so a non-Vite
+      // consumer (plain Node, where `import.meta.env` is never injected) skips
+      // the warning instead of throwing on every server round-trip.
+      if (typeof import.meta.env === 'undefined' || import.meta.env.DEV) {
         warnOnceMissingId();
         warnIfOversized(channelId, value);
       }
@@ -154,7 +156,8 @@ export function defineSessionChannel<T extends ChannelPayload>(
       // Same diagnostic on the reading tier: the client bundle is where the
       // silent `undefined` is actually observed, and it may be the only tier a
       // developer has a console open on.
-      if (import.meta.env.DEV) warnOnceMissingId();
+      if (typeof import.meta.env === 'undefined' || import.meta.env.DEV)
+        warnOnceMissingId();
       // The wire cannot prove the stored value matches `T`. The claim is made
       // once, here, by the handle that also owns the `publish` that produced
       // it, rather than at every call site. Same boundary discipline as

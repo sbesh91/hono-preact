@@ -151,6 +151,8 @@ For a live loader, only what was published before the stream opens travels on th
 
 A page whose chain publishes gets a per-user SSR document: the snapshot is inlined into the HTML, so a shared or CDN cache that stores it would serve one visitor's snapshot to the next. When a document carries a snapshot the framework sets `Cache-Control: private, no-store` on the response, unless your own middleware already set a `Cache-Control`, in which case yours stands and the caching decision is yours. This is about cache reuse across visitors, which is a separate concern from the value being safe to read.
 
+A streamed document is stricter. A page with a streaming loader builds its response headers itself and always writes its own `Cache-Control`, so a `Cache-Control` your middleware set cannot survive that path. When a streamed document carries a snapshot the response is `Cache-Control: private, no-store, no-transform`, whether or not you set one. If you want to own caching on a streaming page, do not publish on it.
+
 The value is not persisted. It lives in memory for the life of the page, and each server round-trip merges what it published into the store, per channel. A channel the response says nothing about keeps the value it already had, so an action that publishes on one channel never disturbs another. Clearing is always an explicit publish: the logout action publishes `{ signedIn: false }`, which is a real answer the client leg acts on.
 
 ### What `undefined` means
