@@ -24,7 +24,7 @@ describe('defineSessionChannel', () => {
   it('publishes into the request snapshot under its own id', async () => {
     const channel = defineSessionChannel<{ signedIn: boolean }>();
     const snapshot = await runRequestScope(async () => {
-      channel.publishToClient(serverCtx, { signedIn: true });
+      channel.publish(serverCtx, { signedIn: true });
       return takeChannelSnapshot();
     });
     expect(snapshot).toEqual({ [channel.__channelId]: { signedIn: true } });
@@ -34,7 +34,7 @@ describe('defineSessionChannel', () => {
     resetChannelStore();
     const channel = defineSessionChannel<{ signedIn: boolean }>();
     const snapshot = await runRequestScope(async () => {
-      channel.publishToClient(serverCtx, { signedIn: true });
+      channel.publish(serverCtx, { signedIn: true });
       return takeChannelSnapshot();
     });
     applyChannelSnapshot(snapshot);
@@ -51,7 +51,7 @@ describe('defineSessionChannel', () => {
     const a = defineSessionChannel<number>();
     const b = defineSessionChannel<number>();
     const snapshot = await runRequestScope(async () => {
-      a.publishToClient(serverCtx, 1);
+      a.publish(serverCtx, 1);
       return takeChannelSnapshot();
     });
     applyChannelSnapshot(snapshot);
@@ -72,7 +72,7 @@ describe('oversized payload warning', () => {
     const channel = defineSessionChannel<{ blob: string }>();
     const value = { blob: 'x'.repeat(400) };
     const snapshot = await runRequestScope(async () => {
-      channel.publishToClient(serverCtx, value);
+      channel.publish(serverCtx, value);
       return takeChannelSnapshot();
     });
 
@@ -88,7 +88,7 @@ describe('oversized payload warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const channel = defineSessionChannel<{ signedIn: boolean }>();
     await runRequestScope(async () => {
-      channel.publishToClient(serverCtx, { signedIn: true });
+      channel.publish(serverCtx, { signedIn: true });
     });
     expect(warn).not.toHaveBeenCalled();
   });

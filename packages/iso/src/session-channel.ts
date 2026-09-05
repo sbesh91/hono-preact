@@ -20,13 +20,7 @@ export type SessionChannel<T> = {
    */
   readonly __channelId: string;
   /**
-   * Publish from the server tier, shipping the value to the browser. A no-op
-   * outside a request scope.
-   *
-   * The destination is in the name because it is the whole safety story: every
-   * published value goes out inline in the SSR document and on a response
-   * header for each subsequent RPC, so a reviewer reading a call site can see
-   * that it leaves the server without knowing anything else about channels.
+   * Publish from the server tier. A no-op outside a request scope.
    *
    * Takes `ctx` although the request store is ambient, because the parameter is
    * what makes the tier obvious at the call site and what stops this from being
@@ -38,7 +32,7 @@ export type SessionChannel<T> = {
    * middleware. `ClientPageCtx` carries neither field, so the client tier still
    * cannot reach this.
    */
-  publishToClient(ctx: ServerBaseCtx, value: T): void;
+  publish(ctx: ServerBaseCtx, value: T): void;
   /**
    * Read what the last server round-trip published, or `undefined` if no
    * round-trip has published on this channel. A guard treats `undefined` the
@@ -89,7 +83,7 @@ export function defineSessionChannel<T>(id?: string): SessionChannel<T> {
   const channelId = id ?? `hp-channel-${++fallbackId}`;
   return {
     __channelId: channelId,
-    publishToClient(_ctx, value) {
+    publish(_ctx, value) {
       publishToChannel(channelId, value);
       // Dev-only. `import.meta.env.DEV` is read HERE, inside the function, and
       // never hoisted to module scope: a module-scope read breaks the site
@@ -99,8 +93,8 @@ export function defineSessionChannel<T>(id?: string): SessionChannel<T> {
     },
     read(_ctx) {
       // The wire cannot prove the stored value matches `T`. The claim is made
-      // once, here, by the handle that also owns the `publishToClient` that
-      // produced it, rather than at every call site. Same boundary discipline as
+      // once, here, by the handle that also owns the `publish` that produced
+      // it, rather than at every call site. Same boundary discipline as
       // `decodeActionResponse` projecting a deny into its declared type.
       return readChannelValue(channelId) as T | undefined;
     },
