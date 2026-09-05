@@ -3,6 +3,7 @@ import light from '@/styles/fonts/selawik-light.woff2?url';
 import semibold from '@/styles/fonts/selawik-semibold.woff2?url';
 import bold from '@/styles/fonts/selawik-bold.woff2?url';
 import { streamAudit } from './demo/stream-audit.js';
+import { publishSession } from './demo/guard.js';
 
 // Dogfood the framework's Speculation Rules emitter: the docs site is navigation-
 // heavy with same-origin, idempotent GET routes, so prefetch-on-moderate-eagerness
@@ -18,7 +19,11 @@ import { streamAudit } from './demo/stream-audit.js';
 // preload gives the brand font a real chance to win the optional window without
 // risking layout shift.
 export default defineApp({
-  use: [streamAudit],
+  // publishSession is app-level on purpose: the demo's client guard denies on
+  // an unpublished channel, so the session hint has to be published from a
+  // scope at least as broad as every page a navigation into /demo/projects can
+  // start from. Enforcement stays on the /demo/projects node in routes.ts.
+  use: [streamAudit, publishSession],
   speculation: true,
   fonts: [light, semibold, bold],
 });

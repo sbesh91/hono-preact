@@ -56,6 +56,16 @@ The optional `id` argument lets you name the channel yourself. Leave it off in a
 
 **A channel declared in a `.server.*` module silently never resolves.** It does not get an injected id: the Vite plugin skips `.server.*` modules by design, so the declaration falls back to a per-instance runtime counter, the two bundles end up with different ids, and every `read()` returns `undefined`. Nothing throws; the guard simply never sees a published value. Keep the `defineSessionChannel` call in a shared module (`auth/session-channel.ts` in the example above) and import it from both legs.
 
+**Publish from a scope at least as broad as every page a navigation can start from.** This is the placement rule that decides whether the guard works, and it is separate from where you enforce. A client leg reads the store as it stands when the navigation begins, before any loader RPC for the destination has been sent. Publish only on the guarded subtree and a signed-in visitor who cold-loads a page outside it and then navigates in reads `undefined` and is bounced to the login page, because nothing on that first response ever published. Put the publishing middleware in app-level `use` (see [Middleware](/docs/middleware)) and keep the redirect on the route node:
+
+```ts
+// src/app-config.ts
+import { defineApp } from 'hono-preact';
+import { publishSession } from './auth/require-session.js';
+
+export default defineApp({ use: [publishSession] });
+```
+
 **Import `defineSessionChannel` directly from `hono-preact`, not through an app-local barrel.** The id injection matches the import by source, so a module that re-exports `defineSessionChannel` from its own barrel and imports it from there gets no injected id, and the channel silently never resolves in the same way.
 
 ## A guard with both legs
@@ -70,8 +80,17 @@ import {
 import { sessionChannel } from './session-channel.js';
 import { currentUser } from './session.js';
 
-// Server check (SSR + RPC): validates the signed cookie via Hono helpers,
-// then publishes the answer for the client leg.
+// App-level publisher: runs on every render and every RPC in the app, so a
+// cold load of any page seeds the client store. Goes in app config's `use`.
+export const publishSession = defineServerMiddleware(async (ctx, next) => {
+  const user = await currentUser(ctx.c);
+  sessionChannel.publish(ctx, { signedIn: Boolean(user) });
+  await next();
+});
+
+// Server check (SSR + RPC): validates the signed cookie via Hono helpers and
+// is the authoritative redirect. It publishes too, so a round-trip that finds
+// an expired cookie clears the client hint on its way out.
 const server = defineServerMiddleware(async (ctx, next) => {
   const user = await currentUser(ctx.c);
   sessionChannel.publish(ctx, { signedIn: Boolean(user) });
@@ -119,11 +138,20 @@ For a live loader, only what was published before the stream opens travels on th
 
 ### Publishing makes the document per-user
 
-A page whose chain publishes gets a per-user SSR document: the snapshot is inlined into the HTML. Never serve such a document from a shared or CDN cache, and set response caching accordingly (`private`, or no store at all). This is about cache reuse across visitors, which is a separate concern from the value being safe to read.
+A page whose chain publishes gets a per-user SSR document: the snapshot is inlined into the HTML, so a shared or CDN cache that stores it would serve one visitor's snapshot to the next. When a document carries a snapshot the framework sets `Cache-Control: private, no-store` on the response, unless your own middleware already set a `Cache-Control`, in which case yours stands and the caching decision is yours. This is about cache reuse across visitors, which is a separate concern from the value being safe to read.
 
 The value is not persisted. It lives in memory for the life of the page, and each server round-trip merges what it published into the store, per channel. A channel the response says nothing about keeps the value it already had, so an action that publishes on one channel never disturbs another. Clearing is always an explicit publish: the logout action publishes `{ signedIn: false }` and the client leg starts denying.
 
-`read()` returns `undefined` when no round-trip has published on this channel yet, and also when the two bundles disagree on the channel id (see [Where to declare a channel](#where-to-declare-a-channel)). A guard treats `undefined` exactly the way it treats an absent flag: not authorized. The example above spells this as `?.signedIn`, which is falsy for both the unpublished case and an explicit `{ signedIn: false }`.
+### What `undefined` means
+
+`read()` returns `undefined` when no round-trip has published on this channel yet, and also when the two bundles disagree on the channel id (see [Where to declare a channel](#where-to-declare-a-channel)). That is **unknown**, not **unauthorized**. The channel says nothing about the visitor; it says nothing has spoken yet.
+
+Your guard chooses how to read that, and the two readings trade different things:
+
+- **Treat unknown as denied**, the way the example above does with `?.signedIn` (falsy for both the unpublished case and an explicit `{ signedIn: false }`). Then you must publish broadly enough that a signed-in visitor can never hit the unknown case, which means app-level publishing per the rule above. Publish too narrowly and the guard is a false bounce waiting to happen.
+- **Let unknown pass and defer to the server guard.** The navigation proceeds, the loader RPC runs the authoritative server middleware, and an unauthenticated visitor is redirected a beat later. You trade the flash of a page that is about to be refused for never bouncing a visitor who is genuinely signed in.
+
+A channel that never received a build-time id produces the same `undefined` forever. In dev the framework warns on the console the first time such a channel publishes or is read, naming the channel, so this failure is visible rather than silent.
 
 ## The client leg is not a security boundary
 
