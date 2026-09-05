@@ -13,10 +13,10 @@ export const sessionChannel = defineSessionChannel<{ signedIn: boolean }>();
 
 ## The API
 
-`defineSessionChannel<T>(id?)` returns a `SessionChannel<T>`:
+`defineSessionChannel<T extends ChannelPayload>(id?)` returns a `SessionChannel<T>`:
 
 ```ts
-type SessionChannel<T> = {
+type SessionChannel<T extends ChannelPayload> = {
   readonly __channelId: string;
   publish(ctx, value: T): void;
   read(ctx): T | undefined;
@@ -30,6 +30,23 @@ type SessionChannel<T> = {
 | `__channelId` | The cross-bundle identity of the channel. It appears on the wire, so a value you see while debugging traces back to a declaration.        |
 
 The type argument is explicit rather than inferred: a channel payload is declared once and read by one paired middleware, so there is nothing to infer it from.
+
+## What a channel may carry
+
+`T` is constrained to `ChannelPayload`: a bare primitive, an array of primitives, or a flat record whose values are primitives or arrays of primitives.
+
+```ts
+type ChannelPrimitive = string | number | boolean | null;
+
+type ChannelPayload =
+  | ChannelPrimitive
+  | readonly ChannelPrimitive[]
+  | { readonly [key: string]: ChannelPrimitive | readonly ChannelPrimitive[] };
+```
+
+A channel payload is a hint about a decision, and depth is what turns a hint into a record. One level is enough for `{ signedIn: true }`, `{ role: 'admin', plan: 'pro' }` or `{ roles: ['admin', 'editor'] }`, while the `user` object your guard already holds stops compiling the moment it carries a nested profile, a `Date`, or a method.
+
+Be clear about what this buys you: it narrows the blast radius, it does not make the channel safe. A flat record of primitives is still publishable, and no type can tell a role string from a session token string. The constraint stops the accidental object dump. The rule below (publish a decision, not a record) covers the rest, and a dev-only warning fires when a published value grows past a few hundred bytes.
 
 The optional `id` argument lets you name the channel yourself. Leave it off in application code. The framework's Vite plugin derives a stable id from the declaring module and injects it at the call site, which is what makes the server bundle and the client bundle agree on the same channel.
 

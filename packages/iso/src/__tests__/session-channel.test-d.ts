@@ -23,4 +23,29 @@ describe('SessionChannel types', () => {
     // @ts-expect-error publish is the server tier
     channel.publish(clientCtx, 1);
   });
+
+  it('accepts a flat record of primitives', () => {
+    defineSessionChannel<{ signedIn: boolean }>();
+    defineSessionChannel<{ role: string; plan: string }>();
+    defineSessionChannel<{ roles: readonly string[] }>();
+  });
+
+  it('accepts a bare primitive', () => {
+    defineSessionChannel<boolean>();
+  });
+
+  it('rejects a nested object', () => {
+    // @ts-expect-error a channel carries one level, not a record
+    defineSessionChannel<{ user: { id: string } }>();
+  });
+
+  it('rejects a Date field', () => {
+    // @ts-expect-error a Date is not a channel primitive
+    defineSessionChannel<{ expiresAt: Date }>();
+  });
+
+  it('rejects a method', () => {
+    // @ts-expect-error a channel carries data, not behaviour
+    defineSessionChannel<{ isAdmin(): boolean }>();
+  });
 });

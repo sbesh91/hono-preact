@@ -2,6 +2,29 @@ import type { ClientPageCtx, ServerBaseCtx } from './define-middleware.js';
 import { publishToChannel } from './internal/channel-registry.js';
 import { readChannelValue } from './internal/channel-store.js';
 
+type ChannelPrimitive = string | number | boolean | null;
+
+/**
+ * What a channel may carry. A flat record of primitives, an array of
+ * primitives, or a bare primitive.
+ *
+ * A channel payload is a hint about a decision, and depth is what turns a hint
+ * into a record. One level admits `{ signedIn: true }`, `{ role: 'admin', plan:
+ * 'pro' }` and `{ roles: ['admin', 'editor'] }`, while the `user` object a
+ * guard already holds stops compiling as soon as it carries a nested profile, a
+ * `Date`, or a method.
+ *
+ * This narrows the blast radius; it does not make the channel safe. A flat
+ * record of primitives is still publishable, and no type can tell a role string
+ * from a session token. The constraint exists to stop the accidental object
+ * dump. The dev-only size warning below and the documented rule (publish a
+ * decision, not a record) cover the rest.
+ */
+export type ChannelPayload =
+  | ChannelPrimitive
+  | readonly ChannelPrimitive[]
+  | { readonly [key: string]: ChannelPrimitive | readonly ChannelPrimitive[] };
+
 /**
  * A typed value a server middleware publishes on each round-trip and its paired
  * client middleware reads.
@@ -12,7 +35,7 @@ import { readChannelValue } from './internal/channel-store.js';
  * once and read by one paired middleware, and this repo has already established
  * that a type-argument spelling is inference-dead.
  */
-export type SessionChannel<T> = {
+export type SessionChannel<T extends ChannelPayload> = {
   /**
    * The cross-bundle identity of this channel. Public because the Vite plugin
    * rewrites it at the call site and the wire encoding is keyed by it, so a
@@ -79,7 +102,9 @@ function warnIfOversized(channelId: string, value: unknown): void {
   );
 }
 
-export function defineSessionChannel<T>(id?: string): SessionChannel<T> {
+export function defineSessionChannel<T extends ChannelPayload>(
+  id?: string
+): SessionChannel<T> {
   const channelId = id ?? `hp-channel-${++fallbackId}`;
   return {
     __channelId: channelId,
