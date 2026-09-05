@@ -102,10 +102,41 @@ function warnIfOversized(channelId: string, value: unknown): void {
   );
 }
 
+/**
+ * Warn that this channel is running on the fallback counter rather than a
+ * build-time id. The counter increments in module evaluation order, which the
+ * server and client bundles do not share, so the two tiers key the same channel
+ * differently and nothing ever lines up.
+ *
+ * Called only from inside an `import.meta.env.DEV` branch, so the whole
+ * function drops out of a production bundle with its only callers.
+ */
+function warnMissingBuildTimeId(channelId: string): void {
+  console.warn(
+    `[hono-preact] session channel "${channelId}" did not receive a ` +
+      'build-time id. The server and client bundles will key it differently, ' +
+      'so read() always returns undefined. Declare the channel in a .ts/.tsx ' +
+      'module that is not a .server.* module, import defineSessionChannel ' +
+      'directly from "hono-preact", or pass an explicit id.'
+  );
+}
+
 export function defineSessionChannel<T extends ChannelPayload>(
   id?: string
 ): SessionChannel<T> {
+  // No `id` argument means neither the application nor the Vite plugin named
+  // this channel, so the fallback counter below is the identity, and the two
+  // bundles cannot agree on it. See `warnMissingBuildTimeId`.
+  const hasStableId = id !== undefined;
   const channelId = id ?? `hp-channel-${++fallbackId}`;
+  // Per handle, so the diagnostic is one line per broken declaration rather
+  // than one line per round-trip.
+  let warnedMissingId = false;
+  const warnOnceMissingId = (): void => {
+    if (hasStableId || warnedMissingId) return;
+    warnedMissingId = true;
+    warnMissingBuildTimeId(channelId);
+  };
   return {
     __channelId: channelId,
     publish(_ctx, value) {
@@ -114,9 +145,16 @@ export function defineSessionChannel<T extends ChannelPayload>(
       // never hoisted to module scope: a module-scope read breaks the site
       // build, and an inline read is also what lets the whole branch fold out
       // of a production bundle.
-      if (import.meta.env.DEV) warnIfOversized(channelId, value);
+      if (import.meta.env.DEV) {
+        warnOnceMissingId();
+        warnIfOversized(channelId, value);
+      }
     },
     read(_ctx) {
+      // Same diagnostic on the reading tier: the client bundle is where the
+      // silent `undefined` is actually observed, and it may be the only tier a
+      // developer has a console open on.
+      if (import.meta.env.DEV) warnOnceMissingId();
       // The wire cannot prove the stored value matches `T`. The claim is made
       // once, here, by the handle that also owns the `publish` that produced
       // it, rather than at every call site. Same boundary discipline as

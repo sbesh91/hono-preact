@@ -69,7 +69,9 @@ describe('oversized payload warning', () => {
 
   it('warns and still publishes when the encoded value is over 256 bytes', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const channel = defineSessionChannel<{ blob: string }>();
+    // An explicit id keeps this test on the payload-size warning alone: an
+    // unnamed channel also warns about its missing build-time id.
+    const channel = defineSessionChannel<{ blob: string }>('test/oversized');
     const value = { blob: 'x'.repeat(400) };
     const snapshot = await runRequestScope(async () => {
       channel.publish(serverCtx, value);
@@ -86,10 +88,56 @@ describe('oversized payload warning', () => {
 
   it('stays quiet for a decision-sized value', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const channel = defineSessionChannel<{ signedIn: boolean }>();
+    const channel = defineSessionChannel<{ signedIn: boolean }>('test/small');
     await runRequestScope(async () => {
       channel.publish(serverCtx, { signedIn: true });
     });
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+// The Vite plugin injects a module-derived id at every `defineSessionChannel`
+// call site it can see. A call site it cannot see (a `.mts`/`.cjs` module, a
+// `.server.*` module, a pre-bundled dependency) falls back to the eval-order
+// counter, which the two bundles do not share, so the channel silently never
+// resolves. Dev-only, like the oversized-payload warning above.
+describe('missing build-time id warning', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('warns once per channel when no id was supplied', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const channel = defineSessionChannel<{ signedIn: boolean }>();
+
+    await runRequestScope(async () => {
+      channel.publish(serverCtx, { signedIn: true });
+      channel.publish(serverCtx, { signedIn: false });
+    });
+    channel.read(clientCtx);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    const message = String(warn.mock.calls[0]?.[0]);
+    expect(message).toContain(channel.__channelId);
+    expect(message).toContain('build-time id');
+    expect(message).toContain('undefined');
+  });
+
+  it('warns from read() alone, which is the tier that observes the failure', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    defineSessionChannel<number>().read(clientCtx);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays quiet when the call site was given an id', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const channel = defineSessionChannel<{ signedIn: boolean }>(
+      'src/auth/session-channel.ts:0'
+    );
+    await runRequestScope(async () => {
+      channel.publish(serverCtx, { signedIn: true });
+    });
+    channel.read(clientCtx);
     expect(warn).not.toHaveBeenCalled();
   });
 });
