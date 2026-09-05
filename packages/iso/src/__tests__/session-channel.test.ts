@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ServerPageCtx, ClientPageCtx } from '../define-middleware.js';
 import { runRequestScope } from '../cache.js';
 import { defineSessionChannel } from '../session-channel.js';
@@ -24,7 +24,7 @@ describe('defineSessionChannel', () => {
   it('publishes into the request snapshot under its own id', async () => {
     const channel = defineSessionChannel<{ signedIn: boolean }>();
     const snapshot = await runRequestScope(async () => {
-      channel.publish(serverCtx, { signedIn: true });
+      channel.publishToClient(serverCtx, { signedIn: true });
       return takeChannelSnapshot();
     });
     expect(snapshot).toEqual({ [channel.__channelId]: { signedIn: true } });
@@ -34,7 +34,7 @@ describe('defineSessionChannel', () => {
     resetChannelStore();
     const channel = defineSessionChannel<{ signedIn: boolean }>();
     const snapshot = await runRequestScope(async () => {
-      channel.publish(serverCtx, { signedIn: true });
+      channel.publishToClient(serverCtx, { signedIn: true });
       return takeChannelSnapshot();
     });
     applyChannelSnapshot(snapshot);
@@ -51,11 +51,45 @@ describe('defineSessionChannel', () => {
     const a = defineSessionChannel<number>();
     const b = defineSessionChannel<number>();
     const snapshot = await runRequestScope(async () => {
-      a.publish(serverCtx, 1);
+      a.publishToClient(serverCtx, 1);
       return takeChannelSnapshot();
     });
     applyChannelSnapshot(snapshot);
     expect(a.read(clientCtx)).toBe(1);
     expect(b.read(clientCtx)).toBeUndefined();
+  });
+});
+
+// The warning is gated on `import.meta.env.DEV`, which vitest leaves true, so
+// this exercises the branch a production bundle folds away.
+describe('oversized payload warning', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('warns and still publishes when the encoded value is over 256 bytes', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const channel = defineSessionChannel<{ blob: string }>();
+    const value = { blob: 'x'.repeat(400) };
+    const snapshot = await runRequestScope(async () => {
+      channel.publishToClient(serverCtx, value);
+      return takeChannelSnapshot();
+    });
+
+    expect(snapshot).toEqual({ [channel.__channelId]: value });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const message = String(warn.mock.calls[0]?.[0]);
+    expect(message).toContain(channel.__channelId);
+    expect(message).toContain('411 bytes');
+    expect(message).toContain('decision');
+  });
+
+  it('stays quiet for a decision-sized value', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const channel = defineSessionChannel<{ signedIn: boolean }>();
+    await runRequestScope(async () => {
+      channel.publishToClient(serverCtx, { signedIn: true });
+    });
+    expect(warn).not.toHaveBeenCalled();
   });
 });

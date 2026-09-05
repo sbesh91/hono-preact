@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { env } from '../../is-browser.js';
 import {
   applyChannelSnapshot,
   hydrateChannelsFromDocument,
@@ -88,5 +89,32 @@ describe('hydrateChannelsFromDocument', () => {
     };
     expect(() => hydrateChannelsFromDocument()).not.toThrow();
     expect(readChannelValue('demo')).toBe(1);
+  });
+});
+
+// The store is module scope and this module is reachable from the server graph,
+// where module scope means per-isolate rather than per-request.
+describe('server tier', () => {
+  const originalEnv = env.current;
+  beforeEach(() => {
+    resetChannelStore();
+    env.current = 'server';
+  });
+  afterEach(() => {
+    env.current = originalEnv;
+    resetChannelStore();
+  });
+
+  it('does not write shared isolate state', () => {
+    applyChannelSnapshot({ a: 1 });
+    env.current = 'browser';
+    expect(readChannelValue('a')).toBeUndefined();
+  });
+
+  it('reads undefined rather than another request value', () => {
+    env.current = 'browser';
+    applyChannelSnapshot({ a: 1 });
+    env.current = 'server';
+    expect(readChannelValue('a')).toBeUndefined();
   });
 });

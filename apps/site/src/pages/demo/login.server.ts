@@ -28,7 +28,7 @@ export const serverActions = {
     // independent, so it runs none of the /demo/projects route-node
     // middleware, and a response that publishes nothing leaves the client
     // store untouched.
-    session.publish(ctx, { signedIn: false });
+    session.publishToClient(ctx, { signedIn: false });
     return { ok: true };
   }),
 };

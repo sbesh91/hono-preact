@@ -18,16 +18,16 @@ export const sessionChannel = defineSessionChannel<{ signedIn: boolean }>();
 ```ts
 type SessionChannel<T> = {
   readonly __channelId: string;
-  publish(ctx, value: T): void;
+  publishToClient(ctx, value: T): void;
   read(ctx): T | undefined;
 };
 ```
 
-| Member        | Description                                                                                                                        |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `publish`     | Publish from a server middleware, passing its context. The value ships with the response. A no-op outside a request scope.         |
-| `read`        | Read from a client middleware, passing its context. Returns what the last server round-trip published, or `undefined` if none has. |
-| `__channelId` | The cross-bundle identity of the channel. It appears on the wire, so a value you see while debugging traces back to a declaration. |
+| Member            | Description                                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `publishToClient` | Publish from a server middleware, passing its context. The value ships to the browser with the response. A no-op outside a request scope. |
+| `read`            | Read from a client middleware, passing its context. Returns what the last server round-trip published, or `undefined` if none has.        |
+| `__channelId`     | The cross-bundle identity of the channel. It appears on the wire, so a value you see while debugging traces back to a declaration.        |
 
 The type argument is explicit rather than inferred: a channel payload is declared once and read by one paired middleware, so there is nothing to infer it from.
 
@@ -57,7 +57,7 @@ import { currentUser } from './session.js';
 // then publishes the answer for the client leg.
 const server = defineServerMiddleware(async (ctx, next) => {
   const user = await currentUser(ctx.c);
-  sessionChannel.publish(ctx, { signedIn: Boolean(user) });
+  sessionChannel.publishToClient(ctx, { signedIn: Boolean(user) });
   if (!user) throw redirect('/login');
   await next();
 });

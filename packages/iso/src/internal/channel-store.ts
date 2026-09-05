@@ -7,6 +7,16 @@ import { decodeSnapshot, type ChannelSnapshot } from './channel-wire.js';
 // this in localStorage would reintroduce the exact drift #398 exists to remove.
 let current: ChannelSnapshot = {};
 
+// Every accessor below is browser-gated, and that gate is load-bearing rather
+// than tidiness. This module sits in the SERVER graph too: `form.tsx` and
+// `action.ts` both import `applyChannelSnapshot` statically and both run during
+// SSR. `current` is module scope, so on the server it is per-isolate, not
+// per-request: one Cloudflare Workers isolate or one long-lived Node process
+// serves many users off the same binding, and a server-side write would be
+// cross-user state. The server tier has its own per-request store
+// (`channel-registry.ts`, backed by AsyncLocalStorage); this one is the client
+// tier's, so off the browser a write is a no-op and a read is `undefined`.
+
 /**
  * Install the snapshot from a server round-trip.
  *
@@ -19,11 +29,13 @@ let current: ChannelSnapshot = {};
  * responses never run a route-node chain; those leave the store untouched.
  */
 export function applyChannelSnapshot(snapshot: ChannelSnapshot | null): void {
+  if (!isBrowser()) return;
   if (snapshot === null) return;
   current = { ...current, ...snapshot };
 }
 
 export function readChannelValue(id: string): unknown {
+  if (!isBrowser()) return undefined;
   return current[id];
 }
 

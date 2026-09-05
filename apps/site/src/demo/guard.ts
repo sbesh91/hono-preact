@@ -24,7 +24,7 @@ export const session = defineSessionChannel<{ signedIn: boolean }>();
 // the client leg waving navigations through on a stale { signedIn: true }.
 const requireSessionServer = defineServerMiddleware(async (ctx, next) => {
   const user = await currentUser(ctx.c);
-  session.publish(ctx, { signedIn: Boolean(user) });
+  session.publishToClient(ctx, { signedIn: Boolean(user) });
   if (!user) throw redirect('/demo/login');
   await next();
 });

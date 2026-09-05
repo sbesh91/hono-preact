@@ -139,7 +139,7 @@
     "ServerSocket.data",
     "ServerSocket.raw",
     "ServerSocket.send",
-    "SessionChannel.publish",
+    "SessionChannel.publishToClient",
     "SessionChannel.read",
     "ShowProps.children",
     "ShowProps.fallback",

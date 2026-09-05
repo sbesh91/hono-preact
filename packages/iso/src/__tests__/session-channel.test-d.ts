@@ -14,13 +14,13 @@ describe('SessionChannel types', () => {
     const channel = defineSessionChannel<{ signedIn: boolean }>();
     const ctx = {} as ServerCtx;
     // @ts-expect-error a number is not the declared payload
-    channel.publish(ctx, 3);
+    channel.publishToClient(ctx, 3);
   });
 
-  it('rejects a client ctx on publish', () => {
+  it('rejects a client ctx on publishToClient', () => {
     const channel = defineSessionChannel<number>();
     const clientCtx = {} as ClientPageCtx;
-    // @ts-expect-error publish is the server tier
-    channel.publish(clientCtx, 1);
+    // @ts-expect-error publishToClient is the server tier
+    channel.publishToClient(clientCtx, 1);
   });
 });
