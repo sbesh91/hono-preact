@@ -268,10 +268,17 @@ export function assembleDocument(opts: {
       : inner
     : `<html lang="${escapeHtml(lang ?? 'en-US')}">\n${inner}\n</html>`;
 
-  // The channel bootstrap goes last, immediately before the body closes, so it
-  // runs after everything else the document needs to paint. `channels` is
-  // read here rather than earlier because it is orthogonal to the head
-  // assembly above: a `null`/empty snapshot emits nothing at all.
+  // The channel bootstrap has to execute before the client entry does:
+  // `bootClient()` seeds the channel store from `window.__HP_CHANNELS__`, and a
+  // boot that runs first reads an empty store and lets a client guard redirect
+  // off a page that loaded fine. `<ClientScript />` renders `<script type="module"
+  // async>`, which is NOT deferred to end of parse: with a warm HTTP cache it can
+  // execute the moment it is ready, mid-parse. So the bootstrap goes immediately
+  // after the opening `<head>` tag, ahead of every script the document can
+  // contain, wherever the Layout chose to put `<ClientScript />`.
+  //
+  // `channels` is read here rather than during the head assembly above because
+  // it is orthogonal to it: a `null`/empty snapshot emits nothing at all.
   const channelBootstrap =
     channels && Object.keys(channels).length > 0
       ? `<script>window.__HP_CHANNELS__=${serializeForScript(channels)}</script>`
@@ -281,6 +288,16 @@ export function assembleDocument(opts: {
   // Replacer function for the same reason as the </head> and lang injections
   // above: the serialized snapshot is app-authored data and must not be
   // interpreted for `$`-patterns.
+  //
+  // A fragment render (or any output with no `<head>`) has no head to open, so
+  // the bootstrap falls back to the end of the document. Nothing precedes the
+  // client script there either, because a document with no head is the custom
+  // entry case and carries no framework-injected head tags at all.
+  const headOpen = /<head(\s[^>]*)?>/i.exec(assembled);
+  if (headOpen) {
+    const at = headOpen.index + headOpen[0].length;
+    return `${assembled.slice(0, at)}\n        ${channelBootstrap}${assembled.slice(at)}`;
+  }
   return assembled.includes('</body>')
     ? assembled.replace('</body>', () => `${channelBootstrap}\n  </body>`)
     : assembled.replace('</html>', () => `${channelBootstrap}\n</html>`);
