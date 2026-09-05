@@ -56,15 +56,22 @@ The optional `id` argument lets you name the channel yourself. Leave it off in a
 
 **A channel declared in a `.server.*` module silently never resolves.** It does not get an injected id: the Vite plugin skips `.server.*` modules by design, so the declaration falls back to a per-instance runtime counter, the two bundles end up with different ids, and every `read()` returns `undefined`. Nothing throws; the guard simply never sees a published value. Keep the `defineSessionChannel` call in a shared module (`auth/session-channel.ts` in the example above) and import it from both legs.
 
-**Publish from a scope at least as broad as every page a navigation can start from.** This is the placement rule that decides whether the guard works, and it is separate from where you enforce. A client leg reads the store as it stands when the navigation begins, before any loader RPC for the destination has been sent. Publish only on the guarded subtree and a signed-in visitor who cold-loads a page outside it and then navigates in reads `undefined` and is bounced to the login page, because nothing on that first response ever published. Put the publishing middleware in app-level `use` (see [Middleware](/docs/middleware)) and keep the redirect on the route node:
+**Publish from a scope at least as broad as every page a navigation can start from.** This is the placement rule that decides whether a guard works, and it is separate from where you enforce. A client leg reads the store as it stands when the navigation begins, before any loader RPC for the destination has been sent, so a channel published only on the guarded subtree reads `undefined` for a visitor arriving from outside it. What that costs you depends on how your client leg reads `undefined` (see [What `undefined` means](#what-undefined-means)): a leg that denies on unknown bounces a signed-in visitor, and a leg that defers on unknown renders the shell for a beat.
+
+Publish one level above where you enforce, on the subtree a navigation realistically starts inside:
 
 ```ts
-// src/app-config.ts
-import { defineApp } from 'hono-preact';
-import { publishSession } from './auth/require-session.js';
-
-export default defineApp({ use: [publishSession] });
+// src/routes.ts
+{
+  path: '/app',
+  use: [publishSession],       // publishes on every page under /app
+  children: [
+    { path: 'dashboard', use: requireSession, /* enforces */ },
+  ],
+}
 ```
+
+Broader is not automatically better. App-level `use` publishes on every page in the app, which makes every document per-visitor and therefore uncacheable by a shared cache (see [Publishing makes the document per-user](#publishing-makes-the-document-per-user)). Scope the publish to the subtree that needs it.
 
 **Import `defineSessionChannel` directly from `hono-preact`, not through an app-local barrel.** The id injection matches the import by source, so a module that re-exports `defineSessionChannel` from its own barrel and imports it from there gets no injected id, and the channel silently never resolves in the same way.
 
@@ -80,8 +87,8 @@ import {
 import { sessionChannel } from './session-channel.js';
 import { currentUser } from './session.js';
 
-// App-level publisher: runs on every render and every RPC in the app, so a
-// cold load of any page seeds the client store. Goes in app config's `use`.
+// Publisher for the guarded subtree: runs on every render and every RPC under
+// the node it is attached to, one level above where the session is enforced.
 export const publishSession = defineServerMiddleware(async (ctx, next) => {
   const user = await currentUser(ctx.c);
   sessionChannel.publish(ctx, { signedIn: Boolean(user) });
@@ -99,8 +106,12 @@ const server = defineServerMiddleware(async (ctx, next) => {
 });
 
 // Client check (intra-app navigation): reads what the last round-trip said.
+// `undefined` means nothing has published yet, which is unknown rather than
+// unauthorized, so it defers to the server guard; a published negative is a
+// real answer and redirects now.
 const client = defineClientMiddleware(async (ctx, next) => {
-  if (!sessionChannel.read(ctx)?.signedIn) throw redirect('/login');
+  const hint = sessionChannel.read(ctx);
+  if (hint !== undefined && !hint.signedIn) throw redirect('/login');
   await next();
 });
 
@@ -140,7 +151,7 @@ For a live loader, only what was published before the stream opens travels on th
 
 A page whose chain publishes gets a per-user SSR document: the snapshot is inlined into the HTML, so a shared or CDN cache that stores it would serve one visitor's snapshot to the next. When a document carries a snapshot the framework sets `Cache-Control: private, no-store` on the response, unless your own middleware already set a `Cache-Control`, in which case yours stands and the caching decision is yours. This is about cache reuse across visitors, which is a separate concern from the value being safe to read.
 
-The value is not persisted. It lives in memory for the life of the page, and each server round-trip merges what it published into the store, per channel. A channel the response says nothing about keeps the value it already had, so an action that publishes on one channel never disturbs another. Clearing is always an explicit publish: the logout action publishes `{ signedIn: false }` and the client leg starts denying.
+The value is not persisted. It lives in memory for the life of the page, and each server round-trip merges what it published into the store, per channel. A channel the response says nothing about keeps the value it already had, so an action that publishes on one channel never disturbs another. Clearing is always an explicit publish: the logout action publishes `{ signedIn: false }`, which is a real answer the client leg acts on.
 
 ### What `undefined` means
 
@@ -148,8 +159,17 @@ The value is not persisted. It lives in memory for the life of the page, and eac
 
 Your guard chooses how to read that, and the two readings trade different things:
 
-- **Treat unknown as denied**, the way the example above does with `?.signedIn` (falsy for both the unpublished case and an explicit `{ signedIn: false }`). Then you must publish broadly enough that a signed-in visitor can never hit the unknown case, which means app-level publishing per the rule above. Publish too narrowly and the guard is a false bounce waiting to happen.
-- **Let unknown pass and defer to the server guard.** The navigation proceeds, the loader RPC runs the authoritative server middleware, and an unauthenticated visitor is redirected a beat later. You trade the flash of a page that is about to be refused for never bouncing a visitor who is genuinely signed in.
+- **Defer on unknown, enforce on a published negative.** `undefined` passes through and the navigation proceeds; the loader RPC then runs the authoritative server middleware, which redirects an unauthenticated visitor a beat later. A published `{ signedIn: false }` is a real answer from a round-trip that checked, so that one redirects immediately. You trade a brief shell render for a visitor who was going to be refused anyway against never bouncing a visitor who is genuinely signed in. This is what the [demo](/demo/projects) does:
+
+  ```ts
+  const client = defineClientMiddleware(async (ctx, next) => {
+    const hint = sessionChannel.read(ctx);
+    if (hint !== undefined && !hint.signedIn) throw redirect('/login');
+    await next();
+  });
+  ```
+
+- **Treat unknown as denied**, folding both cases together (`if (!sessionChannel.read(ctx)?.signedIn) throw redirect('/login')`). Nothing renders that the server is going to refuse. The price is that you must now publish from a scope broad enough that a signed-in visitor can never reach the guard with an unpublished channel, which is the placement rule above taken to its strictest reading. Publish too narrowly and this leg bounces people who are signed in.
 
 A channel that never received a build-time id produces the same `undefined` forever. In dev the framework warns on the console the first time such a channel publishes or is read, naming the channel, so this failure is visible rather than silent.
 

@@ -11,7 +11,7 @@ import {
 import { resetDemoData, getTask } from '../../../demo/data.js';
 import { __resetSimHeartbeatForTesting } from '../../../demo/activity-sim.js';
 import routes from '../../../routes.js';
-import { requireSession } from '../../../demo/guard.js';
+import { publishSession, requireSession } from '../../../demo/guard.js';
 import { signIn } from '../../../demo/session.js';
 
 // A cookie set on the response is not readable on the same request, so the
@@ -151,10 +151,13 @@ describe('the bound subtree pattern resolves the projects gates from the site ma
   it('the bound pattern is a routeUse key carrying exactly the layout chain', () => {
     const byPattern = new Map(routes.routeUse.map((r) => [r.path, r.use]));
     // The seam the RPC guard resolution walks: declared pattern -> routeUse
-    // key -> the projects layout's own composed chain (requireSession).
-    expect(byPattern.get(serverLoaders.default.__routeId!)).toEqual(
-      requireSession
-    );
+    // key -> the composed chain for this subtree, outermost first. The /demo
+    // node's publishSession is inherited, then the projects layout's own
+    // requireSession pair: publishing is scoped one level above enforcement.
+    expect(byPattern.get(serverLoaders.default.__routeId!)).toEqual([
+      publishSession,
+      ...requireSession,
+    ]);
   });
 });
 

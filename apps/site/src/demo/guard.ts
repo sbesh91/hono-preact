@@ -12,15 +12,15 @@ import { currentUser } from './session.js';
 // to wait for an RPC to know it will be bounced.
 export const session = defineSessionChannel<{ signedIn: boolean }>();
 
-// App-level publisher (AppConfig.use in app-config.ts): runs on every render
-// and every loader/action RPC in the whole site, so any cold load of any page
-// seeds the client store before a navigation can reach the guarded subtree.
+// Publisher for the whole demo subtree (`use` on the /demo node in routes.ts),
+// one level above where the session is enforced. Publishing is deliberately
+// broader than enforcing: a navigation that starts on any demo page carries a
+// real answer into /demo/projects instead of arriving with an empty store.
 //
-// Publishing has to be broader than enforcing. The client leg treats an
-// unpublished channel as "not signed in", so a hint published only under
-// /demo/projects would be missing for a signed-in visitor who cold-loads /
-// and then navigates in: the client chain runs before the first loader RPC,
-// reads undefined, and bounces them to /demo/login.
+// It is scoped to /demo rather than the app, because a document that carries a
+// published snapshot is per-visitor and must not be stored by a shared cache.
+// Publishing app-wide would make every docs page uncacheable to buy one demo
+// guard a slightly earlier redirect.
 //
 // The session lookup runs again in requireSessionServer below on the guarded
 // subtree. Caching it across the two would mean a per-request memo keyed on the
@@ -54,15 +54,28 @@ const requireSessionServer = defineServerMiddleware(async (ctx, next) => {
 // Client-side check (intra-app navigation): reads what the last server
 // round-trip published. On a full reload hydrateChannelsFromDocument in
 // boot-client.ts fills the store from the SSR bootstrap before any client
-// chain runs, so there is no window in which the value is missing and no
-// defensive `typeof window` bail is needed here. On a client navigation the
-// value is whatever the most recent loader or action RPC published.
+// chain runs. On a client navigation the value is whatever the most recent
+// loader or action RPC published.
 //
-// A response that publishes nothing leaves the store as it was, so the hint is
-// cleared by an explicit publish: the logout action in login.server.ts
-// publishes { signedIn: false } after signOut.
+// The three cases are spelled out rather than folded into one optional chain,
+// because "no answer" and "a negative answer" are different facts:
+//
+//   undefined            no round-trip has published on this channel. That is
+//                        UNKNOWN, not unauthorized, and this leg defers: the
+//                        navigation proceeds and the loader RPC's server guard
+//                        (which is the authority) redirects if it has to. The
+//                        cost is a brief shell render for a signed-out visitor
+//                        arriving from outside /demo. Redirecting instead would
+//                        falsely bounce a genuinely signed-in visitor, which
+//                        breaks the app rather than looking untidy.
+//   { signedIn: false }  a real answer, from a round-trip that checked. Redirect
+//                        immediately; there is nothing to wait for. The logout
+//                        action in login.server.ts publishes exactly this after
+//                        signOut, which is what clears a stale hint.
+//   { signedIn: true }   proceed.
 const requireSessionClient = defineClientMiddleware(async (ctx, next) => {
-  if (!session.read(ctx)?.signedIn) throw redirect('/demo/login');
+  const hint = session.read(ctx);
+  if (hint !== undefined && !hint.signedIn) throw redirect('/demo/login');
   await next();
 });
 
