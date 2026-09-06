@@ -10,10 +10,7 @@ import { createRoomWsEvents } from './rooms-handler.js';
 import { makeServerSocketHandle } from './server-socket-handle.js';
 import { assertPageUseResolver } from './page-use-guard.js';
 import { resolveConnection } from './socket-resolution.js';
-import type {
-  ResolvedConnection,
-  SocketsHandlerOptions,
-} from './socket-resolution.js';
+import type { SocketsHandlerOptions } from './socket-resolution.js';
 
 // Re-export the resolution surface so existing `./sockets-handler.js` importers
 // (create-server-entry, the CF internal entry, tests) keep their import paths.
@@ -49,11 +46,8 @@ export function socketsHandler(opts: SocketsHandlerOptions): MiddlewareHandler {
     surface: 'socket upgrade path',
   });
   return async (c, next) => {
-    const createEvents = async (
-      ctx: Context,
-      preResolved?: ResolvedConnection
-    ): Promise<WSEvents> => {
-      const resolved = preResolved ?? (await resolveConnection(ctx, opts));
+    const createEvents = async (ctx: Context): Promise<WSEvents> => {
+      const resolved = await resolveConnection(ctx, opts);
 
       if (resolved.kind === 'unknown') {
         return {

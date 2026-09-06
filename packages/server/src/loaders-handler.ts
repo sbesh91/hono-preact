@@ -106,6 +106,33 @@ async function buildLoadersMap(
   return result;
 }
 
+/**
+ * Copy a wire params object, denying (returning null) if ANY value is not a
+ * string.
+ *
+ * `SerializedLocation`'s param records are typed `Record<string, string>` and
+ * read as such downstream (a guard's `params.id.startsWith(...)`), but they
+ * come off untrusted client JSON, so without this check that type is a lie:
+ * a number, object or null reaches a loader where a string is declared.
+ *
+ * A bad value denies the WHOLE payload rather than dropping the offending
+ * entry, matching `resolveRoomKey` / `parseKeyParams` (param-parse.ts). The
+ * distinction matters: a dropped entry turns a bad value into an ABSENT
+ * param, which is precisely the shape a presence-checking guard reads as "no
+ * such param" -- so silent dropping converts a contract violation into a
+ * potential authorization decision.
+ */
+function copyStringParams(
+  source: Record<string, unknown>
+): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(source)) {
+    if (typeof value !== 'string') return null;
+    out[name] = value;
+  }
+  return out;
+}
+
 function validateLocation(loc: unknown): SerializedLocation | null {
   if (typeof loc !== 'object' || loc === null) return null;
   const o = loc as Record<string, unknown>;
@@ -113,6 +140,12 @@ function validateLocation(loc: unknown): SerializedLocation | null {
   if (typeof o.pathParams !== 'object' || o.pathParams === null) return null;
   if (typeof o.searchParams !== 'object' || o.searchParams === null)
     return null;
+  const pathParams = copyStringParams(o.pathParams as Record<string, unknown>);
+  if (!pathParams) return null;
+  const searchParams = copyStringParams(
+    o.searchParams as Record<string, unknown>
+  );
+  if (!searchParams) return null;
   return {
     path: o.path,
     // pathParams/searchParams come straight off the untrusted client-JSON RPC
@@ -125,8 +158,8 @@ function validateLocation(loc: unknown): SerializedLocation | null {
     // object), so these are ordinary objects. The prototype-chain hazard for
     // route-bound params is closed structurally: no route can DECLARE a
     // reserved param name (`isReservedParamName`).
-    pathParams: { ...(o.pathParams as Record<string, string>) },
-    searchParams: { ...(o.searchParams as Record<string, string>) },
+    pathParams,
+    searchParams,
   };
 }
 
@@ -468,7 +501,7 @@ export function loadersHandler(
     if (isAsyncGenerator(result)) {
       // The header must ride the SSE Response's init: it cannot be added
       // after the stream starts flushing chunks.
-      return sseGeneratorResponse(c, result, {
+      return sseGeneratorResponse(result, {
         emitResult: false,
         dev,
         observers,
@@ -480,7 +513,7 @@ export function loadersHandler(
       });
     }
     if (result instanceof ReadableStream) {
-      return sseReadableStreamResponse(c, result, {
+      return sseReadableStreamResponse(result, {
         dev,
         observers,
         observerCtx: ctx,

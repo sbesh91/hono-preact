@@ -46,6 +46,9 @@ export type {
   SocketForwardContext,
   DenyContext,
 } from './internal/realtime-connector.js';
+// Structural async-generator predicate shared with @hono-preact/server's SSE
+// and loader/action handlers, which branch stream-vs-JSON on it.
+export { isAsyncGenerator } from './internal/async-generator.js';
 export { __$createLoaderStub_hpiso } from './internal/loader-stub.js';
 // Subtree-pattern key construction shared with @hono-preact/server's boot
 // validator (route-binding-guard.ts); users spell the pattern as a literal

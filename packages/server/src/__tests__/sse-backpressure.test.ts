@@ -29,7 +29,7 @@ describe('SSE backpressure and abort', () => {
     })();
 
     const app = new Hono();
-    app.get('/', (c) => sseGeneratorResponse(c, source));
+    app.get('/', () => sseGeneratorResponse(source));
 
     const res = await app.request('http://localhost/');
     const reader = res.body!.getReader();
@@ -60,8 +60,8 @@ describe('SSE backpressure and abort', () => {
     })();
 
     const app = new Hono();
-    app.get('/', (c) =>
-      sseGeneratorResponse(c, source, {
+    app.get('/', () =>
+      sseGeneratorResponse(source, {
         observers: [observer],
         observerCtx,
       })
@@ -94,8 +94,8 @@ describe('SSE backpressure and abort', () => {
     })();
 
     const app = new Hono();
-    app.get('/', (c) =>
-      sseGeneratorResponse(c, source, {
+    app.get('/', () =>
+      sseGeneratorResponse(source, {
         observers: [observer],
         observerCtx,
       })
@@ -127,7 +127,7 @@ describe('SSE backpressure and abort', () => {
     })();
 
     const app = new Hono();
-    app.get('/', (c) => sseGeneratorResponse(c, source));
+    app.get('/', () => sseGeneratorResponse(source));
 
     const res = await app.request('http://localhost/');
     const reader = res.body!.getReader();

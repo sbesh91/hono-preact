@@ -1,4 +1,3 @@
-import type { Context } from 'hono';
 import type { StreamObserver, ServerStreamCtx } from '@hono-preact/iso';
 import {
   fanStart,
@@ -8,6 +7,7 @@ import {
   fanAbort,
   CHANNEL_HEADER,
 } from '@hono-preact/iso/internal';
+import { maskStreamError } from './stream-error.js';
 
 /**
  * Options shared by both SSE response helpers. Encodes the lifecycle the SSE
@@ -62,9 +62,6 @@ export type SseResponseOptions = {
   dev?: boolean;
 };
 
-/** Alias retained for source compatibility with earlier code. */
-export type SseGeneratorOptions = SseResponseOptions;
-
 type SSEFrame = { event?: string; id?: string; data: string };
 
 function sseEncodeTransform(): TransformStream<SSEFrame, Uint8Array> {
@@ -86,29 +83,6 @@ function isTimeoutAbort(signal?: AbortSignal): boolean {
     signal.reason instanceof DOMException &&
     signal.reason.name === 'TimeoutError'
   );
-}
-
-/**
- * Mask a thrown error's detail unless `dev` is true. Shared by every
- * mid-stream error surface that puts an error's `message`/`name` directly on
- * the wire: the SSE `event: error` frame here and the SSR streaming pump's
- * per-loader error script (`stream-pump.ts`). Production masks to `{ message:
- * 'Stream failed', name: 'Error' }` (mirroring the JSON paths' 'Loader
- * failed' / 'Action failed' masking); dev passes the real message and name
- * through. Callers that also run stream observers (fanError) still receive
- * the real error for the observability side channel regardless of `dev`.
- */
-export function maskStreamError(
-  err: unknown,
-  dev: boolean
-): { message: string; name: string } {
-  if (!dev) {
-    return { message: 'Stream failed', name: 'Error' };
-  }
-  return {
-    message: err instanceof Error ? err.message : String(err),
-    name: err instanceof Error ? err.name : 'Error',
-  };
 }
 
 function encodeErrorPayload(err: unknown, dev: boolean): string {
@@ -245,7 +219,6 @@ function buildSseResponse(
  * `onEnd` / `onError` / `onAbort`) fire from inside the pump.
  */
 export function sseGeneratorResponse(
-  _c: Context,
   gen: AsyncGenerator<unknown, unknown, unknown>,
   options: SseResponseOptions = {}
 ): Response {
@@ -260,7 +233,6 @@ export function sseGeneratorResponse(
  * ignored.
  */
 export function sseReadableStreamResponse(
-  _c: Context,
   source: ReadableStream<unknown>,
   options: SseResponseOptions = {}
 ): Response {
@@ -270,15 +242,7 @@ export function sseReadableStreamResponse(
   });
 }
 
-export function isAsyncGenerator(
-  value: unknown
-): value is AsyncGenerator<unknown, unknown, unknown> {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    typeof (value as { [Symbol.asyncIterator]?: unknown })[
-      Symbol.asyncIterator
-    ] === 'function' &&
-    typeof (value as { next?: unknown }).next === 'function'
-  );
-}
+// Re-exported (not redefined) so `loaders-handler` / `page-actions-handler`
+// keep importing it from here while sharing one definition with iso's loader
+// runner. See `@hono-preact/iso` `internal/async-generator.ts`.
+export { isAsyncGenerator } from '@hono-preact/iso/internal/runtime';

@@ -69,7 +69,7 @@ describe('serverOnlyPlugin', () => {
     const result = transform(code, '/Users/me/repo/src/pages/movies.tsx');
     expect(result?.code).toContain('const serverActions = new Proxy(');
     expect(result?.code).toContain('__module: "src/pages/movies"');
-    expect(result?.code).toContain('__action: String(action)');
+    expect(result?.code).toContain('__action: String(name)');
     // The stub also exposes useAction wired via the iso re-export.
     expect(result?.code).toContain(
       "import { useAction as __$useAction_hpiso } from 'hono-preact';"

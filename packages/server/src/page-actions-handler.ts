@@ -477,13 +477,13 @@ export function pageActionsHandler(
         channelHeader: channels ? encodeSnapshot(channels) : undefined,
       };
       if (isAsyncGenerator(streamingResult)) {
-        return sseGeneratorResponse(c, streamingResult, {
+        return sseGeneratorResponse(streamingResult, {
           ...sseOpts,
           emitResult: true,
         });
       }
       if (streamingResult instanceof ReadableStream) {
-        return sseReadableStreamResponse(c, streamingResult, sseOpts);
+        return sseReadableStreamResponse(streamingResult, sseOpts);
       }
     }
 

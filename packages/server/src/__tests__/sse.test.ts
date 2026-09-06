@@ -14,9 +14,7 @@ describe('sseGeneratorResponse', () => {
     async function* gen() {
       yield { a: 1 };
     }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request(
-      '/x'
-    );
+    const res = await makeApp(() => sseGeneratorResponse(gen())).request('/x');
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
     expect(res.headers.get('Cache-Control')).toBe('no-cache');
   });
@@ -26,9 +24,7 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       yield { a: 2 };
     }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request(
-      '/x'
-    );
+    const res = await makeApp(() => sseGeneratorResponse(gen())).request('/x');
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
     expect(body).toContain('data: {"a":2}');
@@ -39,8 +35,8 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       return { ok: true };
     }
-    const res = await makeApp((c) =>
-      sseGeneratorResponse(c, gen(), { emitResult: true })
+    const res = await makeApp(() =>
+      sseGeneratorResponse(gen(), { emitResult: true })
     ).request('/x');
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
@@ -53,8 +49,8 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       return { ignored: true };
     }
-    const res = await makeApp((c) =>
-      sseGeneratorResponse(c, gen(), { emitResult: false })
+    const res = await makeApp(() =>
+      sseGeneratorResponse(gen(), { emitResult: false })
     ).request('/x');
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
@@ -67,8 +63,8 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       throw new Error('bad');
     }
-    const res = await makeApp((c) =>
-      sseGeneratorResponse(c, gen(), { dev: true })
+    const res = await makeApp(() =>
+      sseGeneratorResponse(gen(), { dev: true })
     ).request('/x');
     const body = await res.text();
     expect(body).toContain('data: {"a":1}');
@@ -82,9 +78,7 @@ describe('sseGeneratorResponse', () => {
       yield { a: 1 };
       throw new Error('DB error: connection refused at 10.0.0.5');
     }
-    const res = await makeApp((c) => sseGeneratorResponse(c, gen())).request(
-      '/x'
-    );
+    const res = await makeApp(() => sseGeneratorResponse(gen())).request('/x');
     const body = await res.text();
     expect(body).toContain('event: error');
     expect(body).toContain('"message":"Stream failed"');
@@ -102,9 +96,9 @@ describe('sseReadableStreamResponse', () => {
         controller.close();
       },
     });
-    const res = await makeApp((c) =>
-      sseReadableStreamResponse(c, source)
-    ).request('/x');
+    const res = await makeApp(() => sseReadableStreamResponse(source)).request(
+      '/x'
+    );
     const body = await res.text();
     expect(body).toContain('data: {"tick":1}');
     expect(body).toContain('data: {"tick":2}');

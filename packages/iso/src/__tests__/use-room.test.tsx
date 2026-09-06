@@ -127,6 +127,22 @@ const roomRef: TestRoomRef = {
   useRoom: (...args) => useRoom(roomRef, ...args),
 };
 
+// A two-param room, for the key-serialization ordering tests. Kept separate
+// from `roomRef` so the single-param ref every other test uses keeps its
+// narrower `key` type.
+type MultiKeyRoomRef = RoomRef<
+  ChatMsg,
+  ChatMsg,
+  Presence,
+  { roomId: string; tenant: string }
+>;
+
+const multiKeyRoomRef: MultiKeyRoomRef = {
+  [FORM_MODULE_FIELD]: 'pages/board.server',
+  [FORM_ROOM_FIELD]: 'board',
+  useRoom: (...args) => useRoom(multiKeyRoomRef, ...args),
+};
+
 // Envelope/frame aliases for assertions.
 type TestEnvelope = RoomEnvelope<ChatMsg, Presence>;
 type TestFrame = RoomClientFrame<ChatMsg, Presence>;
@@ -150,6 +166,15 @@ function Harness({
 }) {
   const result = useRoom(roomRef, opts);
   onResult(result);
+  return null;
+}
+
+function MultiKeyHarness({
+  opts,
+}: {
+  opts: Parameters<typeof useRoom<MultiKeyRoomRef>>[1];
+}) {
+  useRoom(multiKeyRoomRef, opts);
   return null;
 }
 
@@ -178,6 +203,51 @@ describe('useRoom', () => {
     expect(url.searchParams.get(SOCKET_KEY_PARAM)).toBe(
       JSON.stringify({ roomId: 'r1' })
     );
+  });
+
+  it('serializes key params in a canonical order, so author key order does not change the URL', async () => {
+    // Two renders whose key params are IDENTICAL but written in a different
+    // literal order. An insertion-ordered JSON.stringify makes these two
+    // distinct strings, which both changes the `r=` param the server parses
+    // and (because the string is a `deps` entry) tears down and reopens the
+    // socket on a re-render that only reordered the object literal.
+    await act(async () => {
+      render(
+        <MultiKeyHarness opts={{ key: { roomId: 'r1', tenant: 't1' } }} />
+      );
+    });
+    const first = new URL(lastWS!.url).searchParams.get(SOCKET_KEY_PARAM);
+    cleanup();
+
+    await act(async () => {
+      render(
+        <MultiKeyHarness opts={{ key: { tenant: 't1', roomId: 'r1' } }} />
+      );
+    });
+    const second = new URL(lastWS!.url).searchParams.get(SOCKET_KEY_PARAM);
+
+    expect(second).toBe(first);
+    expect(first).toBe(JSON.stringify({ roomId: 'r1', tenant: 't1' }));
+  });
+
+  it('does not reconnect when a re-render only reorders the key literal', async () => {
+    let rerender!: ReturnType<typeof render>['rerender'];
+    await act(async () => {
+      ({ rerender } = render(
+        <MultiKeyHarness opts={{ key: { roomId: 'r1', tenant: 't1' } }} />
+      ));
+    });
+    expect(wsInstances.length).toBe(1);
+
+    // Same params, reordered literal, re-rendered into the SAME tree: the deps
+    // entry must be unchanged, so the existing socket is kept rather than torn
+    // down and reopened (which would drop this connection's presence).
+    await act(async () => {
+      rerender(
+        <MultiKeyHarness opts={{ key: { tenant: 't1', roomId: 'r1' } }} />
+      );
+    });
+    expect(wsInstances.length).toBe(1);
   });
 
   it('status goes connecting -> open on open event', async () => {
