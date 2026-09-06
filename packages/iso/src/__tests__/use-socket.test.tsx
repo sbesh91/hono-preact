@@ -556,6 +556,7 @@ describe('useSocket params wire encoding', () => {
         <MultiParamHarness opts={{ params: { id: 'b1', tenant: 't1' } }} />
       );
     });
+    expect(wsInstances.length).toBe(1);
     const first = new URL(lastWS!.url).searchParams.get('r');
     cleanup();
 
@@ -564,6 +565,12 @@ describe('useSocket params wire encoding', () => {
         <MultiParamHarness opts={{ params: { tenant: 't1', id: 'b1' } }} />
       );
     });
+    // `lastWS` is module-scoped and reset only in `beforeEach` (`cleanup()`
+    // does not clear it), so assert the second render actually connected.
+    // Without this, a second render that stopped connecting would leave
+    // `lastWS` pointing at the FIRST socket and the comparison below would
+    // pass vacuously.
+    expect(wsInstances.length).toBe(2);
     const second = new URL(lastWS!.url).searchParams.get('r');
 
     expect(second).toBe(first);
