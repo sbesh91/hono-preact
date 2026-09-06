@@ -124,6 +124,18 @@ const boardRef: SocketRef<ChatMsg, ServerMsg, { id: string }> = {
   useSocket: (...args) => useSocket(boardRef, ...args),
 };
 
+// A ref carrying TWO params, so the key-ordering tests below have something to
+// reorder (a single-param object serializes identically either way).
+const multiParamRef: SocketRef<
+  ChatMsg,
+  ServerMsg,
+  { id: string; tenant: string }
+> = {
+  [FORM_MODULE_FIELD]: 'pages/board.server',
+  [FORM_SOCKET_FIELD]: 'board',
+  useSocket: (...args) => useSocket(multiParamRef, ...args),
+};
+
 // ---------------------------------------------------------------------------
 // Helper component + result capture
 // ---------------------------------------------------------------------------
@@ -162,6 +174,15 @@ function BoardHarness({
 }) {
   const result = useSocket(socketRef, opts);
   onResult(result);
+  return null;
+}
+
+function MultiParamHarness({
+  opts,
+}: {
+  opts: Parameters<typeof useSocket<typeof multiParamRef>>[1];
+}) {
+  useSocket(multiParamRef, opts);
   return null;
 }
 
@@ -522,6 +543,51 @@ describe('useSocket params wire encoding', () => {
     expect(lastWS).not.toBeNull();
     expect(lastWS!.url).not.toContain('&r=');
     void result;
+  });
+
+  it('serializes params in a canonical order, so author key order does not change the URL', async () => {
+    // Two renders whose params are IDENTICAL but written in a different literal
+    // order. An insertion-ordered JSON.stringify makes these two distinct
+    // strings, which both changes the `r=` param the server parses and (because
+    // the string is a `deps` entry) tears the socket down on a re-render that
+    // only reordered the object literal.
+    await act(async () => {
+      render(
+        <MultiParamHarness opts={{ params: { id: 'b1', tenant: 't1' } }} />
+      );
+    });
+    const first = new URL(lastWS!.url).searchParams.get('r');
+    cleanup();
+
+    await act(async () => {
+      render(
+        <MultiParamHarness opts={{ params: { tenant: 't1', id: 'b1' } }} />
+      );
+    });
+    const second = new URL(lastWS!.url).searchParams.get('r');
+
+    expect(second).toBe(first);
+    expect(first).toBe(JSON.stringify({ id: 'b1', tenant: 't1' }));
+  });
+
+  it('does not reconnect when a re-render only reorders the params literal', async () => {
+    let rerender!: ReturnType<typeof render>['rerender'];
+    await act(async () => {
+      ({ rerender } = render(
+        <MultiParamHarness opts={{ params: { id: 'b1', tenant: 't1' } }} />
+      ));
+    });
+    expect(wsInstances.length).toBe(1);
+
+    // Same params, reordered literal, re-rendered into the SAME tree: the deps
+    // entry must be unchanged, so the existing socket is kept rather than torn
+    // down and reopened (which would drop in-flight frames).
+    await act(async () => {
+      rerender(
+        <MultiParamHarness opts={{ params: { tenant: 't1', id: 'b1' } }} />
+      );
+    });
+    expect(wsInstances.length).toBe(1);
   });
 
   it('changing params reconnects (a new WebSocket is opened)', async () => {
