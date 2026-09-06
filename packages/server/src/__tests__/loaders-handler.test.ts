@@ -819,6 +819,65 @@ describe('loadersHandler: location validation', () => {
     expect(res.status).toBe(400);
   });
 
+  it('rejects a location whose pathParams carries a non-string value', async () => {
+    // `SerializedLocation.pathParams` is typed `Record<string, string>`, and a
+    // guard or loader reads it as such (`params.id.startsWith(...)`). The wire
+    // is untrusted client JSON, so a non-string value under any key makes that
+    // type a lie and hands the loader a number/object/null where a string is
+    // declared. Matching `resolveRoomKey`'s policy, the WHOLE payload denies
+    // rather than the bad entry being silently dropped: a dropped entry would
+    // turn a bad value into an ABSENT param, which is exactly the shape a
+    // presence-checking guard treats as "no such param".
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        serverLoaders: { default: async () => ({}) },
+      },
+    });
+    for (const bad of [3, null, { nested: 'o' }, ['a'], true]) {
+      const res = await post(app, {
+        module: 'x',
+        loader: 'default',
+        location: { path: '/x', pathParams: { id: bad }, searchParams: {} },
+      });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it('rejects a location whose searchParams carries a non-string value', async () => {
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        serverLoaders: { default: async () => ({}) },
+      },
+    });
+    const res = await post(app, {
+      module: 'x',
+      loader: 'default',
+      location: { path: '/x', pathParams: {}, searchParams: { page: 3 } },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('still accepts a location whose params are all strings', async () => {
+    const app = makeApp({
+      './pages/x.server.ts': {
+        __moduleKey: 'x',
+        serverLoaders: { default: async () => ({ ok: true }) },
+      },
+    });
+    const res = await post(app, {
+      module: 'x',
+      loader: 'default',
+      location: {
+        path: '/x',
+        pathParams: { id: 'abc' },
+        searchParams: { page: '3' },
+      },
+    });
+    expect(res.status).toBe(200);
+  });
+
   it('rejects a route-bound loader whose route declares a reserved param name at definition (structural prototype-chain fix)', () => {
     // The prototype-chain bypass class (a guard reading
     // `ctx.location.pathParams.constructor` for a route bound to

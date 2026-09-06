@@ -162,6 +162,37 @@ export type UseRoomArgs<R extends AnyRoomRefShape> =
     : [opts: UseRoomOptions<R>];
 
 /**
+ * Serialize the room's key params to the canonical string that rides the `r=`
+ * query param and doubles as a connection-identity dep.
+ *
+ * Keys are sorted, so the string depends on the params' VALUES and not on the
+ * order the author happened to write the object literal in. Insertion order is
+ * observable through `JSON.stringify`, and a room key is typically built inline
+ * at the call site, so `{ roomId, tenant }` and `{ tenant, roomId }` are the
+ * same room described two ways. Without the sort they serialize differently,
+ * and since the string is a `useWsLifecycle` dep, a re-render that merely
+ * reordered the literal would tear the socket down and reopen it (dropping
+ * presence for every member of that connection).
+ *
+ * The server JSON-parses this back into an object before resolving the topic,
+ * so key order is not part of the wire contract; only the resulting params are.
+ *
+ * The parameter is `unknown` because `Params<R>` is an inferred phantom type
+ * that resolves to `unknown` inside this generic function; narrowing here
+ * keeps the widening castless at the call site.
+ */
+function serializeRoomKey(key: unknown): string {
+  if (typeof key !== 'object' || key === null) return '{}';
+  const sorted: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(key).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0
+  )) {
+    sorted[name] = value;
+  }
+  return JSON.stringify(sorted);
+}
+
+/**
  * Presence-aware room client hook: the room counterpart to `useSocket`. Opens
  * the same `/__sockets` connection with an extra `&r=<JSON key params>` query
  * param, decodes each `RoomEnvelope`, and maintains the presence roster
@@ -193,7 +224,7 @@ export function useRoom<R extends AnyRoomRefShape>(
   const enabled = opts?.enabled ?? true;
   // JSON-encode the key params once per render so the dep array is a stable
   // primitive; the server interpolates the topic from these params.
-  const keyJson = JSON.stringify(opts?.key ?? {});
+  const keyJson = serializeRoomKey(opts?.key);
 
   const lifecycle = useWsLifecycle({
     enabled,

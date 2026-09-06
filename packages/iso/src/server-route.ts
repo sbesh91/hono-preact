@@ -50,6 +50,32 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
  * generator is an `AsyncGenerator<T>`, driving the `LoaderRef<T, true>` type
  * discriminant.
  *
+ * `topic` and `load` are contextually typed from the `route.loader(...)` /
+ * `defineLoader(...)` call they are passed to, so writing them INLINE needs no
+ * annotation and `ctx.location.pathParams` is typed from the route's pattern:
+ *
+ * ```ts
+ * serverRoute('/board/:boardId').loader(
+ *   liveStream({
+ *     topic: (ctx) => boardChannel.key({ boardId: ctx.location.pathParams.boardId }),
+ *     load: (ctx) => loadBoard(ctx.location.pathParams.boardId),
+ *   })
+ * )
+ * ```
+ *
+ * That contextual type only flows into a callback written in place. Pull one
+ * out into a named `const` (or a helper two loaders share) and TypeScript has
+ * no call to infer `C` from, so `ctx` becomes implicitly `any` (or errors under
+ * `noImplicitAny`). Annotate it with `LoaderCtx` and the route's params to get
+ * the same type back:
+ *
+ * ```ts
+ * const load = (ctx: LoaderCtx<RouteParams<'/board/:boardId'>>) =>
+ *   loadBoard(ctx.location.pathParams.boardId);
+ *
+ * serverRoute('/board/:boardId').loader(liveStream({ topic, load }))
+ * ```
+ *
  * Implementation note: the function is tagged at runtime with `LIVE_STREAM_MARKER`
  * via `Object.assign`. `makeLoaderRef` reads the marker via `isLiveStreamFn`
  * (plain `in` check, cast-free) to auto-set `live: true`. The declared return

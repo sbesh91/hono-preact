@@ -17,19 +17,7 @@ import {
   fanEnd,
   fanError,
 } from './stream-observer-runner.js';
-
-function isAsyncGenerator(
-  value: unknown
-): value is AsyncGenerator<unknown, unknown, unknown> {
-  return (
-    value != null &&
-    typeof value === 'object' &&
-    typeof (value as { [Symbol.asyncIterator]?: unknown })[
-      Symbol.asyncIterator
-    ] === 'function' &&
-    typeof (value as { next?: unknown }).next === 'function'
-  );
-}
+import { isAsyncGenerator } from './async-generator.js';
 
 /**
  * The direct-fn loader path: invoke the loader function in-process (SSR or

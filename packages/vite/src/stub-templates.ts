@@ -37,52 +37,67 @@ export function loaderStubSource(
   );
 }
 
-// Source for the `serverActions` client stub. Each `serverActions.<name>` read
-// constructs a fresh descriptor record (module + action), so the stub is not a
-// stable singleton; callers that key a Map on the stub will be surprised. The
-// contract is "stubs are descriptor records, not singletons."
+/**
+ * The one descriptor-stub template, shared by actions, sockets and rooms.
+ *
+ * All three emit the same Proxy: every `<export>.<name>` read constructs a
+ * fresh descriptor record (the module key plus the kind's name field) and
+ * attaches the kind's hook method, which delegates to the framework hook the
+ * matching `STUB_IMPORTS` entry prepends. The three differ ONLY in the three
+ * fields below, so they are one template with three configurations rather than
+ * three templates: a fix to the emitted shape (or a new field on the
+ * descriptor) has exactly one place to land, and the kinds cannot drift apart.
+ *
+ * The stub is a descriptor record, not a stable singleton: each read builds a
+ * new object, so a caller keying a Map on the stub will be surprised. The
+ * contract is "stubs are descriptor records, not singletons."
+ */
+function descriptorStubSource(
+  localName: string,
+  moduleKey: string,
+  kind: {
+    /** Contract field naming this kind on the descriptor (e.g. `__action`). */
+    nameField: string;
+    /** Method the stub exposes (e.g. `useAction`). */
+    method: string;
+    /** Framework hook the method delegates to (e.g. `__$useAction_hpiso`). */
+    hook: string;
+  }
+): string {
+  return (
+    `const ${localName} = new Proxy({}, {\n` +
+    `  get(_, name) {\n` +
+    `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${kind.nameField}: String(name) };\n` +
+    `    stub.${kind.method} = (opts) => ${kind.hook}(stub, opts);\n` +
+    `    return stub;\n` +
+    `  }\n` +
+    `});`
+  );
+}
+
+/** Source for the `serverActions` client stub. */
 export function actionStubSource(localName: string, moduleKey: string): string {
-  return (
-    `const ${localName} = new Proxy({}, {\n` +
-    `  get(_, action) {\n` +
-    `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_ACTION_FIELD}: String(action) };\n` +
-    `    stub.useAction = (opts) => __$useAction_hpiso(stub, opts);\n` +
-    `    return stub;\n` +
-    `  }\n` +
-    `});`
-  );
+  return descriptorStubSource(localName, moduleKey, {
+    nameField: FORM_ACTION_FIELD,
+    method: 'useAction',
+    hook: '__$useAction_hpiso',
+  });
 }
 
-// Source for the `serverSockets` client stub. Each `serverSockets.<name>` read
-// constructs a descriptor record (module + socket name) and attaches a
-// `.useSocket` method that delegates to `__$useSocket_hpiso`, mirroring the
-// pattern used by `actionStubSource` for `.useAction`. Like actions, the stub
-// is a descriptor, not a singleton.
+/** Source for the `serverSockets` client stub. */
 export function socketStubSource(localName: string, moduleKey: string): string {
-  return (
-    `const ${localName} = new Proxy({}, {\n` +
-    `  get(_, name) {\n` +
-    `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_SOCKET_FIELD}: String(name) };\n` +
-    `    stub.useSocket = (opts) => __$useSocket_hpiso(stub, opts);\n` +
-    `    return stub;\n` +
-    `  }\n` +
-    `});`
-  );
+  return descriptorStubSource(localName, moduleKey, {
+    nameField: FORM_SOCKET_FIELD,
+    method: 'useSocket',
+    hook: '__$useSocket_hpiso',
+  });
 }
 
-// Source for the `serverRooms` client stub. Each `serverRooms.<name>` read
-// constructs a descriptor record (module + room name) and attaches a
-// `.useRoom` method that delegates to `__$useRoom_hpiso`, mirroring the
-// pattern used by `socketStubSource` for `.useSocket`. Like sockets, the stub
-// is a descriptor, not a singleton.
+/** Source for the `serverRooms` client stub. */
 export function roomStubSource(localName: string, moduleKey: string): string {
-  return (
-    `const ${localName} = new Proxy({}, {\n` +
-    `  get(_, name) {\n` +
-    `    const stub = { ${FORM_MODULE_FIELD}: ${JSON.stringify(moduleKey)}, ${FORM_ROOM_FIELD}: String(name) };\n` +
-    `    stub.useRoom = (opts) => __$useRoom_hpiso(stub, opts);\n` +
-    `    return stub;\n` +
-    `  }\n` +
-    `});`
-  );
+  return descriptorStubSource(localName, moduleKey, {
+    nameField: FORM_ROOM_FIELD,
+    method: 'useRoom',
+    hook: '__$useRoom_hpiso',
+  });
 }

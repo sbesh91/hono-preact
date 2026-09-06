@@ -11,9 +11,8 @@ async function bodyToString(res: Response): Promise<string> {
 describe('SSE wire format', () => {
   it('generator response: byte-stable for a representative stream', async () => {
     const app = new Hono();
-    app.get('/', (c) =>
+    app.get('/', () =>
       sseGeneratorResponse(
-        c,
         (async function* () {
           yield 'first';
           yield { n: 2 };
@@ -35,7 +34,7 @@ describe('SSE wire format', () => {
 
   it('readable-stream response: byte-stable for a representative stream', async () => {
     const app = new Hono();
-    app.get('/', (c) => {
+    app.get('/', () => {
       const source = new ReadableStream<unknown>({
         start(controller) {
           controller.enqueue('alpha');
@@ -43,7 +42,7 @@ describe('SSE wire format', () => {
           controller.close();
         },
       });
-      return sseReadableStreamResponse(c, source);
+      return sseReadableStreamResponse(source);
     });
 
     const res = await app.request('http://localhost/');
@@ -53,9 +52,8 @@ describe('SSE wire format', () => {
 
   it('generator error path: emits event: error frame', async () => {
     const app = new Hono();
-    app.get('/', (c) =>
+    app.get('/', () =>
       sseGeneratorResponse(
-        c,
         (async function* () {
           yield 'before';
           throw new Error('boom');
@@ -73,9 +71,8 @@ describe('SSE wire format', () => {
 
   it('generator error path (dev): emits the raw message on the error frame', async () => {
     const app = new Hono();
-    app.get('/', (c) =>
+    app.get('/', () =>
       sseGeneratorResponse(
-        c,
         (async function* () {
           yield 'before';
           throw new Error('boom');

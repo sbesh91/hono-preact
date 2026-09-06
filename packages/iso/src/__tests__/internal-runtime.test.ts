@@ -21,6 +21,7 @@ const PLUMBING = [
   'getRealtimeConnector',
   '__resetRealtimeConnectorForTesting',
   '__$createLoaderStub_hpiso',
+  'isAsyncGenerator',
 ] as const;
 
 describe('iso /internal/runtime door', () => {
