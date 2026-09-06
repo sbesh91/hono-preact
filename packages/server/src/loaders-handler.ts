@@ -122,9 +122,7 @@ async function buildLoadersMap(
  * such param" -- so silent dropping converts a contract violation into a
  * potential authorization decision.
  */
-function copyStringParams(
-  source: Record<string, unknown>
-): Record<string, string> | null {
+function copyStringParams(source: object): Record<string, string> | null {
   const out: Record<string, string> = {};
   for (const [name, value] of Object.entries(source)) {
     if (typeof value !== 'string') return null;
@@ -140,11 +138,11 @@ function validateLocation(loc: unknown): SerializedLocation | null {
   if (typeof o.pathParams !== 'object' || o.pathParams === null) return null;
   if (typeof o.searchParams !== 'object' || o.searchParams === null)
     return null;
-  const pathParams = copyStringParams(o.pathParams as Record<string, unknown>);
+  // `typeof x === 'object' && x !== null` above narrows each to `object`, so
+  // these need no cast: `Object.entries` reads an `object` directly.
+  const pathParams = copyStringParams(o.pathParams);
   if (!pathParams) return null;
-  const searchParams = copyStringParams(
-    o.searchParams as Record<string, unknown>
-  );
+  const searchParams = copyStringParams(o.searchParams);
   if (!searchParams) return null;
   return {
     path: o.path,
