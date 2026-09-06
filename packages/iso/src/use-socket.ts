@@ -9,6 +9,7 @@ import {
   FORM_SOCKET_FIELD,
 } from './internal/contract.js';
 import { useWsLifecycle } from './internal/ws-lifecycle.js';
+import { serializeSocketKey } from './internal/socket-key.js';
 import type {
   SocketStatus,
   SocketCloseInfo,
@@ -141,13 +142,17 @@ export function useSocket<R extends AnySocketRefShape>(
 
   const enabled = opts?.enabled ?? true;
 
-  // JSON-encode route params (bound sockets) once per render so the dep array
+  // Encode route params (bound sockets) once per render so the dep array
   // stays a stable primitive. Read `opts?.params` DIRECTLY, with no cast: both
   // branches of `ParamsOption` declare a `params` property, so it is accessible
   // on the generic intersection. This mirrors use-room.ts, which reads
   // `opts?.key` off the identical `KeyOption` shape castless. A bare socket
   // types `params` as absent, so this is `undefined` there.
-  const paramsJson = opts?.params ? JSON.stringify(opts.params) : undefined;
+  // `serializeSocketKey` sorts keys, so a re-render that reorders the params
+  // literal produces the identical string and does NOT tear the connection
+  // down. Absence is handled here rather than in the helper: a bare socket
+  // omits the query param entirely, where `useRoom` normalizes to `'{}'`.
+  const paramsJson = opts?.params ? serializeSocketKey(opts.params) : undefined;
 
   const lifecycle = useWsLifecycle({
     enabled,
