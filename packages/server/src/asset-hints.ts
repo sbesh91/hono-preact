@@ -11,10 +11,14 @@ import { selectRoutePreload } from './route-preload-match.js';
  * The asset hints for one document render: what goes in the head as
  * `modulepreload`/stylesheet tags, and what goes in the `Link` response header.
  *
- * Every field is a function of the request URL and the app's font config
- * alone. Nothing here depends on the rendered HTML, the channel snapshot, or a
- * loader's deny record, which is why it can be resolved independently of the
- * render itself.
+ * These are derived from the request URL, the app's font config, and the
+ * process-global build artifacts installed at boot (the preload manifest and,
+ * under `vite dev`, the dev global CSS seam). Nothing here depends on the
+ * rendered HTML, the channel snapshot, or a loader's deny record, which is why
+ * it can be resolved independently of the render itself.
+ *
+ * Note the install-time state: this is not a pure function of the URL, so it
+ * must not be memoized per path across a manifest or dev-seam install.
  */
 export interface AssetHints {
   /** The client entry's static-import closure. */
