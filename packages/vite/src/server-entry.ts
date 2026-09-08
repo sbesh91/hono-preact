@@ -1,15 +1,12 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { parse } from '@babel/parser';
-import traverse from '@babel/traverse';
-import type { NodePath } from '@babel/traverse';
-import type { CallExpression } from '@babel/types';
 import type { Plugin, ViteDevServer } from 'vite';
+import { findApiShadowingRoutes, hasDefaultExport } from './ast-diagnostics.js';
 import {
-  LOADERS_RPC_PATH,
-  SOCKETS_RPC_PATH,
-} from '@hono-preact/iso/internal/contract';
-import { BABEL_PARSER_PLUGINS } from './parser-options.js';
+  probeOptionalFile,
+  watchProbeFlips,
+  type EntryProbes,
+} from './entry-probes.js';
 import type { HonoPreactAdapter } from './adapter.js';
 import { createRootRef, type RootRef } from './root.js';
 
@@ -111,145 +108,6 @@ export function generateCoreAppModule(
   );
 }
 
-export type ApiShadowingRoute =
-  | {
-      kind: 'wildcard';
-      method: string;
-      pattern: string;
-      line: number | undefined;
-      severity: 'error';
-    }
-  | {
-      kind: 'reserved';
-      method: string;
-      pattern: string;
-      line: number | undefined;
-      severity: 'error';
-    }
-  | { kind: 'notFound'; line: number | undefined; severity: 'warning' };
-
-// Framework-reserved request paths. A literal registration of any of these in
-// api.ts shadows the framework's RPC handlers now that the user app mounts
-// ahead of them.
-const RESERVED_PATHS = new Set([LOADERS_RPC_PATH, SOCKETS_RPC_PATH]);
-
-const HONO_METHODS = new Set([
-  'get',
-  'post',
-  'put',
-  'patch',
-  'delete',
-  'options',
-  'head',
-  'all',
-  'on',
-]);
-
-const WILDCARD_PATTERNS = new Set(['*', '/*']);
-
-export function findApiShadowingRoutes(source: string): ApiShadowingRoute[] {
-  const found: ApiShadowingRoute[] = [];
-
-  let ast: ReturnType<typeof parse>;
-  try {
-    ast = parse(source, {
-      sourceType: 'module',
-      plugins: BABEL_PARSER_PLUGINS,
-      errorRecovery: true,
-    });
-  } catch (err) {
-    // If api.ts won't parse, the build will fail elsewhere with a clearer
-    // error. Surface a note so the framework user can correlate a missing
-    // shadowing warning with a parse-time syntax issue rather than wondering
-    // why nothing was reported.
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(
-      `[hono-preact] Failed to parse api.ts for shadowing-route detection: ${msg}. ` +
-        `The build will surface the real syntax error; this warning explains why ` +
-        `route-overlap diagnostics may be missing.`
-    );
-    return found;
-  }
-
-  traverse(ast, {
-    // Handler bodies are opaque: their contents are user code, not route
-    // registrations, so skip every function subtree. This keeps e.g.
-    // `c.notFound()` inside a handler from being read as `app.notFound(...)`.
-    // (The original walker skipped only a function's `body`; pruning the whole
-    // function additionally ignores the absurd case of a route registration in
-    // a param default / decorator, which is the safe direction.)
-    Function(path) {
-      path.skip();
-    },
-    CallExpression(path: NodePath<CallExpression>) {
-      const { node } = path;
-      if (
-        node.callee.type !== 'MemberExpression' ||
-        node.callee.property.type !== 'Identifier'
-      ) {
-        return;
-      }
-      const method = node.callee.property.name;
-      const line = node.loc?.start.line;
-
-      if (method === 'notFound') {
-        found.push({ kind: 'notFound', line, severity: 'warning' });
-        return;
-      }
-      if (!HONO_METHODS.has(method)) return;
-
-      // `app.on(method, path, ...)` puts the path at argument index 1; every
-      // other Hono routing method takes the path as argument 0.
-      const pathArg = node.arguments[method === 'on' ? 1 : 0];
-      if (pathArg?.type !== 'StringLiteral') return;
-      if (WILDCARD_PATTERNS.has(pathArg.value)) {
-        found.push({
-          kind: 'wildcard',
-          method,
-          pattern: pathArg.value,
-          line,
-          severity: 'error',
-        });
-      } else if (RESERVED_PATHS.has(pathArg.value)) {
-        found.push({
-          kind: 'reserved',
-          method,
-          pattern: pathArg.value,
-          line,
-          severity: 'error',
-        });
-      }
-    },
-  });
-  return found;
-}
-
-// Returns true if the parsed program contains a top-level
-// `export default ...`. The app-config diagnostic uses this to detect a
-// common mistake: writing `export const appConfig = defineApp(...)`
-// instead of `export default defineApp(...)`. Without a default the
-// generated `import appConfig from '...'` binds to undefined and the
-// app-level middleware chain silently never runs.
-function hasDefaultExport(source: string): boolean {
-  let ast: ReturnType<typeof parse>;
-  try {
-    ast = parse(source, {
-      sourceType: 'module',
-      plugins: BABEL_PARSER_PLUGINS,
-      errorRecovery: true,
-    });
-  } catch {
-    // Fall back to "true" on parse failure so we don't pile a misleading
-    // app-config error on top of an obvious syntax error elsewhere in the
-    // file. The real parse error surfaces from the Vite build itself.
-    return true;
-  }
-  for (const node of ast.program.body) {
-    if (node.type === 'ExportDefaultDeclaration') return true;
-  }
-  return false;
-}
-
 // Both generated files live in the Vite cache dir. The wrapper keeps the
 // `server-entry.tsx` name because that is the file the adapter's build/dev
 // plugins (and wrangler.jsonc `main`) point at; the core app module is a
@@ -322,15 +180,10 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
   // per hook call would defeat the first-writer-wins memoization the type
   // documents.
   const rootRef = opts.rootRef ?? createRootRef();
-  let apiAbsPath: string | undefined;
-  let appConfigAbsPath: string | undefined;
-  // The candidate paths the config-hook existence probes checked, retained so
-  // the dev-server watcher (configureServer below) can detect when a probe's
-  // answer changes mid-session.
-  let candidateApiAbsPath = '';
-  let candidateAppConfigAbsPath = '';
-  let serverDirAbsPath = '';
-  let serverDirExisted = false;
+  // What the `config` hook's existence probes found, retained so the
+  // dev-server watcher (configureServer below) can detect when a probe's
+  // answer changes mid-session. See `entry-probes.ts`.
+  let probes: EntryProbes | undefined;
 
   return {
     name: 'hono-preact:server-entry',
@@ -348,28 +201,25 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
       const routesAbsPath = path.isAbsolute(opts.routes)
         ? opts.routes
         : path.resolve(root, opts.routes);
-      candidateApiAbsPath = path.isAbsolute(opts.api)
-        ? opts.api
-        : path.resolve(root, opts.api);
-      apiAbsPath = fs.existsSync(candidateApiAbsPath)
-        ? candidateApiAbsPath
-        : undefined;
-      candidateAppConfigAbsPath = path.isAbsolute(opts.appConfig)
-        ? opts.appConfig
-        : path.resolve(root, opts.appConfig);
-      appConfigAbsPath = fs.existsSync(candidateAppConfigAbsPath)
-        ? candidateAppConfigAbsPath
-        : undefined;
+      const api = probeOptionalFile(root, opts.api);
+      const appConfig = probeOptionalFile(root, opts.appConfig);
+      const apiAbsPath = api.resolved;
+      const appConfigAbsPath = appConfig.resolved;
 
       // Build the registry glob only when the folder exists, so a project
       // without a `src/server` dir emits `serverRegistry = []` (no glob at all)
       // rather than a glob that matches nothing. `import.meta.glob` needs a
       // root-relative literal, so normalize to `/<dir>/**/*.server.{...}` with
       // posix separators.
-      serverDirAbsPath = path.isAbsolute(opts.serverDir)
+      const serverDirAbsPath = path.isAbsolute(opts.serverDir)
         ? opts.serverDir
         : path.resolve(root, opts.serverDir);
-      serverDirExisted = fs.existsSync(serverDirAbsPath);
+      const serverDirExisted = fs.existsSync(serverDirAbsPath);
+      probes = {
+        api,
+        appConfig,
+        serverDir: { abs: serverDirAbsPath, existed: serverDirExisted },
+      };
       const serverRegistryGlob = serverDirExisted
         ? '/' +
           path.relative(root, serverDirAbsPath).split(path.sep).join('/') +
@@ -410,53 +260,16 @@ export function serverEntryPlugin(opts: ServerEntryPluginOptions): Plugin {
       });
       fs.writeFileSync(entryWrapperPath, wrapper, 'utf8');
     },
-    // The existence probes above run only in the `config` hook, so creating
-    // or deleting api.ts / app-config.ts (or adding the first module under a
-    // src/server folder that was absent at startup) mid dev-session would
-    // otherwise change nothing until a manual restart. Watch for those
-    // existence flips and restart the dev server: the restart re-runs
-    // `config`, which regenerates the core app module against the new file
-    // reality. Deliberately NOT addWatchFile: under Vite 8 it doubles as an
-    // import registration, and watching an absent file 500s the module that
-    // "imports" it (see route-server-autodiscovery.ts for the same trade).
     configureServer(server: ViteDevServer) {
-      const flipsGeneratedEntry = (
-        event: 'add' | 'unlink',
-        file: string
-      ): boolean => {
-        const abs = path.resolve(file);
-        if (abs === candidateApiAbsPath) {
-          return event === 'add'
-            ? apiAbsPath === undefined
-            : apiAbsPath !== undefined;
-        }
-        if (abs === candidateAppConfigAbsPath) {
-          return event === 'add'
-            ? appConfigAbsPath === undefined
-            : appConfigAbsPath !== undefined;
-        }
-        // When src/server existed at startup, the emitted import.meta.glob is
-        // live in dev and picks up new modules itself. When it was absent,
-        // the generated entry has no glob at all, so only a restart can add
-        // one.
-        return (
-          event === 'add' &&
-          !serverDirExisted &&
-          abs.startsWith(serverDirAbsPath + path.sep)
-        );
-      };
-      const restartOn = (event: 'add' | 'unlink') => (file: string) => {
-        if (!flipsGeneratedEntry(event, file)) return;
-        void server.restart();
-      };
-      server.watcher.on('add', restartOn('add'));
-      server.watcher.on('unlink', restartOn('unlink'));
+      watchProbeFlips(server, () => probes);
     },
     buildStart() {
       // The api.ts shadowing diagnostic stays in buildStart: it needs
       // this.warn / this.error, which the `config` hook context lacks.
       // The app-config default-export diagnostic lives here for the same
       // reason.
+      const appConfigAbsPath = probes?.appConfig.resolved;
+      const apiAbsPath = probes?.api.resolved;
       if (appConfigAbsPath) {
         const appConfigSource = fs.readFileSync(appConfigAbsPath, 'utf8');
         if (!hasDefaultExport(appConfigSource)) {
