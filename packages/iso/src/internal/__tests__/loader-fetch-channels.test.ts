@@ -83,4 +83,27 @@ describe('fetchLoaderData channel header', () => {
     await runFetchLoaderData();
     expect(readChannelValue('demo')).toBeUndefined();
   });
+
+  it('does not seed from the SSR bootstrap after dropping a round-trip', async () => {
+    // A channel declared in a lazily-loaded chunk: the seam was inert for a
+    // round-trip, so the bootstrap global is older than an answer nobody
+    // recorded. Seeding from it would reinstate the value that round-trip
+    // cleared, which for a session hint means waving through a visitor the
+    // response just signed out. UNKNOWN is the safe reading; the server guard
+    // is the authority either way.
+    resetChannelStore();
+    vi.stubGlobal('__HP_CHANNELS__', { demo: { signedIn: true } });
+    stubFetch({ [CHANNEL_HEADER]: '{"demo":{"signedIn":false}}' });
+    await runFetchLoaderData();
+
+    defineSessionChannel('demo');
+    expect(readChannelValue('demo')).toBeUndefined();
+  });
+
+  it('seeds from the SSR bootstrap when no round-trip was dropped', async () => {
+    resetChannelStore();
+    vi.stubGlobal('__HP_CHANNELS__', { demo: { signedIn: true } });
+    defineSessionChannel('demo');
+    expect(readChannelValue('demo')).toEqual({ signedIn: true });
+  });
 });

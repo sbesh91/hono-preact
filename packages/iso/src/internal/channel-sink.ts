@@ -24,6 +24,12 @@ type ChannelSink = (headers: Headers) => void;
 
 let sink: ChannelSink | null = null;
 
+// Whether a response carrying channel headers arrived while the seam was inert.
+// Only possible when a channel is declared in a lazily-loaded chunk: the store
+// misses those round-trips, so the SSR bootstrap it would otherwise seed from
+// is no longer known to be current. See `channelHeadersMissed`.
+let missed = false;
+
 /**
  * Point the seam at the real store. Idempotent from the caller's side: the
  * store guards its own install, so repeated `defineSessionChannel()` calls
@@ -33,9 +39,24 @@ export function installChannelSink(fn: ChannelSink): void {
   sink = fn;
 }
 
+/**
+ * Whether any round-trip was dropped before the store installed.
+ *
+ * The store uses this to decide whether seeding from the SSR bootstrap is
+ * still sound. It is not: a dropped round-trip may have published the very
+ * thing the bootstrap now contradicts (a logout, say), and seeding would
+ * reinstate the value the response cleared. An empty store instead reads as
+ * `undefined`, which the documented client-guard contract treats as UNKNOWN
+ * and defers to the server verdict on, rather than as a stale answer it acts on.
+ */
+export function channelHeadersMissed(): boolean {
+  return missed;
+}
+
 /** Test-only. Restores the uninstalled state a fresh module graph starts in. */
 export function clearChannelSink(): void {
   sink = null;
+  missed = false;
 }
 
 /**
@@ -46,5 +67,9 @@ export function clearChannelSink(): void {
  * `channel-wire.js` out of the always-loaded graph too.
  */
 export function applyChannelHeaders(headers: Headers): void {
-  sink?.(headers);
+  if (sink === null) {
+    missed = true;
+    return;
+  }
+  sink(headers);
 }

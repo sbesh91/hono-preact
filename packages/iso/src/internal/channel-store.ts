@@ -4,7 +4,11 @@ import {
   decodeSnapshot,
   type ChannelSnapshot,
 } from './channel-wire.js';
-import { installChannelSink, clearChannelSink } from './channel-sink.js';
+import {
+  installChannelSink,
+  clearChannelSink,
+  channelHeadersMissed,
+} from './channel-sink.js';
 
 // In-memory and deliberately NOT persisted. A cold load always arrives with a
 // server-authored snapshot in the SSR bootstrap, so there is nothing to carry
@@ -68,14 +72,22 @@ let installed = false;
  * channel declared in the entry's static graph installs before boot, and one
  * declared in a lazily-loaded route chunk installs when that chunk evaluates.
  * The SSR bootstrap global is static, so it reads the same either way.
+ *
+ * The exception is an install that happened AFTER a round-trip the seam had to
+ * drop, which only a lazily-declared channel can reach. The bootstrap is then
+ * older than an answer nobody recorded, so seeding from it could reinstate a
+ * value that round-trip cleared. The store stays empty instead: `undefined`
+ * reads as UNKNOWN, which the client guard defers on, rather than as a stale
+ * answer it would act on.
  */
 export function installChannelStore(): void {
   if (installed) return;
   installed = true;
+  const missed = channelHeadersMissed();
   installChannelSink((headers) =>
     applyChannelSnapshot(decodeSnapshot(headers.get(CHANNEL_HEADER)))
   );
-  hydrateChannelsFromDocument();
+  if (!missed) hydrateChannelsFromDocument();
 }
 
 /**
