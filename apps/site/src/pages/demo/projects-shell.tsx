@@ -11,7 +11,7 @@ import type { FunctionComponent } from 'preact';
 import { ActivityBar } from '../../components/demo/ActivityBar.js';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { serverLoaders } from './projects-shell.server.js';
-import { serverActions as loginActions } from './login.server.js';
+import { serverActions as authActions } from '../../server/session/auth.server.js';
 import type { ShellData } from './projects-shell.server.js';
 
 // Per-project bullet: static (every row has one).
@@ -66,7 +66,7 @@ function Sidebar({
     ind.style.opacity = '1';
   }, [activeSlug, data.projects.length]);
 
-  const logout = useAction(loginActions.logout, {
+  const logout = useAction(authActions.logout, {
     onSuccess: () => {
       navigate('/demo/login', { replace: true });
     },

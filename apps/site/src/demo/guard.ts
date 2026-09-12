@@ -70,7 +70,7 @@ const requireSessionServer = defineServerMiddleware(async (ctx, next) => {
 //                        breaks the app rather than looking untidy.
 //   { signedIn: false }  a real answer, from a round-trip that checked. Redirect
 //                        immediately; there is nothing to wait for. The logout
-//                        action in login.server.ts publishes exactly this after
+//                        action in src/server/session/auth.server.ts publishes exactly this after
 //                        signOut, which is what clears a stale hint.
 //   { signedIn: true }   proceed.
 const requireSessionClient = defineClientMiddleware(async (ctx, next) => {
