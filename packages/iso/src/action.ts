@@ -8,10 +8,8 @@ import type {
   DenyOf,
 } from './internal/use-types.js';
 import { beginSubmit, endSubmit } from './internal/form-submit-store.js';
-import {
-  setLastActionResult,
-  type StoredActionResult,
-} from './internal/action-result-store.js';
+import { createActionOutcomeRecorder } from './internal/action-outcome-recorder.js';
+import { runSchemaGate } from './internal/action-schema-gate.js';
 import {
   decodeActionResponse,
   toDenyRecord,
@@ -21,19 +19,10 @@ import { applyDecodedOutcome } from './internal/decoded-outcome.js';
 import { validateTimeoutMs, timeoutMessage } from './internal/timeout.js';
 import type { Serialize } from './internal/serialize.js';
 import type { ServerCaller } from './server-caller.js';
-import {
-  FORM_MODULE_FIELD,
-  FORM_ACTION_FIELD,
-  VALIDATION_ISSUES_KEY,
-  VALIDATION_FAILED_MESSAGE,
-} from './internal/contract.js';
+import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 import { toError } from './internal/to-error.js';
 import { CHANNEL_HEADER, decodeSnapshot } from './internal/channel-wire.js';
 import { applyChannelSnapshot } from './internal/channel-store.js';
-// Type-only: the validate.js runtime is loaded lazily inside the schema gate
-// (see mutate) so useAction consumers without a `schema` do not pull it into
-// the base chunk.
-import type { ValidationResult } from './validate.js';
 
 export type ActionRef<
   TPayload,
@@ -328,14 +317,6 @@ export type UseActionResult<TPayload, TResult, TDenyData = unknown> = {
   data: Serialize<TResult> | null;
 };
 
-function recordOutcome(
-  module: string,
-  action: string,
-  result: StoredActionResult
-): void {
-  setLastActionResult(module, action, result);
-}
-
 function hasFileValues(payload: unknown): boolean {
   if (typeof File === 'undefined') return false;
   if (typeof payload !== 'object' || payload === null) return false;
@@ -454,69 +435,45 @@ export function useAction<
       payload: TPayload,
       opts?: { signal?: AbortSignal }
     ): Promise<MutateResult<TResult, TDenyData>> => {
-      // Client pre-validation gate: reject a known-invalid payload before any
-      // side effect (no onMutate, no optimistic, no request), surfacing it as
-      // the same deny(422)+issues the server produces. Fail open on a throwing
-      // schema. pending never flips true on this path.
+      // Client pre-validation gate: see `internal/action-schema-gate.ts`.
+      // The `!aborted` guard is load-bearing: a signal that was already
+      // aborted before mutate was called must fall through to the request
+      // path, which unwinds the abort through the in-flight machinery.
       const gateStub = stubRef.current;
       const schema = optionsRef.current?.schema;
       if (schema && !opts?.signal?.aborted) {
-        let validated: ValidationResult<TPayload> | undefined;
-        try {
-          // Only a schema-using mutate needs validate.js; import it lazily to
-          // keep it out of the base useAction chunk (mirrors the sse-decoder
-          // import). Fail open if the chunk itself cannot load: the server
-          // validates authoritatively, so a validator that will not load must
-          // not block the request.
-          const { validateWithSchema, logClientSchemaThrew } =
-            await import('./validate.js');
-          try {
-            validated = await validateWithSchema(schema, payload);
-          } catch (err) {
-            logClientSchemaThrew(err);
-          }
-        } catch {
-          // validate.js failed to load; fail open (validated stays undefined).
-        }
-        // If the caller aborted while an async schema was validating, the mutate
-        // is cancelled: do not record a deny or flip error state (mirrors the
-        // request path's post-await abort guard). A cold gate has no request in
-        // flight, so there is nothing else to unwind.
-        if (opts?.signal?.aborted) {
-          // A cold gate has no request in flight and no local `denied`: there
-          // is nothing that could have already decided a deny, so this is
-          // unconditionally the aborted arm.
+        const decision = await runSchemaGate({
+          schema,
+          payload,
+          signal: opts?.signal,
+          recorder: createActionOutcomeRecorder(
+            gateStub.__module,
+            gateStub.__action,
+            payload
+          ),
+        });
+        if (decision.kind === 'aborted') {
           return {
             ok: false,
             kind: 'aborted',
-            error: toError(opts.signal.reason),
+            error: toError(opts?.signal?.reason),
           };
         }
-        if (validated && !validated.ok) {
-          const error = new Error(VALIDATION_FAILED_MESSAGE);
-          recordOutcome(gateStub.__module, gateStub.__action, {
-            kind: 'deny',
-            status: 422,
-            message: VALIDATION_FAILED_MESSAGE,
-            data: { [VALIDATION_ISSUES_KEY]: validated.issues },
-            submittedPayload: payload,
-          });
-          setError(error);
+        if (decision.kind === 'denied') {
+          setError(new Error(decision.message));
           // The deny arm, for parity with the server's authoritative 422: the
           // same logical failure must not report a different `kind` (or a
           // different field) depending on whether the client happened to catch
           // it first. The issues ride `issues`, never `data`: `data` is typed
           // as the action's inferred deny type, which the framework's
-          // validation envelope is not. The store record is unchanged, so
-          // `useActionResult()` / `getValidationIssues()` behave exactly as
-          // before.
+          // validation envelope is not.
           return {
             ok: false,
             kind: 'deny',
             deny: {
               status: 422,
-              message: VALIDATION_FAILED_MESSAGE,
-              issues: validated.issues,
+              message: decision.message,
+              issues: decision.issues,
             },
           };
         }
@@ -603,10 +560,15 @@ export function useAction<
       // when `denied` is set and only returns the aborted arm otherwise.
       const abortedFailure = (e: Error): MutateResult<TResult, TDenyData> =>
         denied ? failure(e) : { ok: false, kind: 'aborted', error: e };
-      // Tracks whether a branch has already written to the action-result store.
-      // The outer catch writes for unclassified errors (network failures, parse
-      // errors) only when no branch has already recorded the outcome.
-      let outcomeRecorded = false;
+      // Binds (module, action, payload) once and tracks whether any branch has
+      // written to the store, so the outer catch's "only if nothing recorded"
+      // rule cannot drift from the branches that set it. See
+      // `internal/action-outcome-recorder.ts`.
+      const recorder = createActionOutcomeRecorder(
+        currentStub.__module,
+        currentStub.__action,
+        payload
+      );
       beginSubmit(currentStub.__module, currentStub.__action);
       try {
         let response: Response;
@@ -666,12 +628,7 @@ export function useAction<
             );
 
           if (streamError) {
-            recordOutcome(currentStub.__module, currentStub.__action, {
-              kind: 'error',
-              message: streamError.message,
-              submittedPayload: payload,
-            });
-            outcomeRecorded = true;
+            recorder.error(streamError.message);
             throw streamError;
           }
           if (resultValue !== undefined) {
@@ -679,12 +636,7 @@ export function useAction<
             setError(null);
             invokeSuccess(resultValue);
             finalResult = resultValue;
-            recordOutcome(currentStub.__module, currentStub.__action, {
-              kind: 'success',
-              data: resultValue,
-              submittedPayload: payload,
-            });
-            outcomeRecorded = true;
+            recorder.success(resultValue);
           } else {
             // Streaming action closed without emitting a `result` event;
             // resolve with `data: undefined`. `onSuccess` is not called
@@ -708,46 +660,23 @@ export function useAction<
               setError(null);
               invokeSuccess(result);
               finalResult = result;
-              recordOutcome(currentStub.__module, currentStub.__action, {
-                kind: 'success',
-                data: result,
-                submittedPayload: payload,
-              });
-              outcomeRecorded = true;
+              recorder.success(result);
             },
             navigated: () => {},
             crossOriginRedirect: (message) => {
               throw new Error(message);
             },
             deny: (status, message, data, code) => {
-              recordOutcome(currentStub.__module, currentStub.__action, {
-                kind: 'deny',
-                status,
-                message,
-                data,
-                ...(code !== undefined ? { code } : {}),
-                submittedPayload: payload,
-              });
-              outcomeRecorded = true;
+              recorder.deny({ status, message, data, code });
               denied = toDenyRecord<TDenyData>({ status, message, data, code });
               throw new Error(message);
             },
             error: (message) => {
-              recordOutcome(currentStub.__module, currentStub.__action, {
-                kind: 'error',
-                message,
-                submittedPayload: payload,
-              });
-              outcomeRecorded = true;
+              recorder.error(message);
               throw new Error(message);
             },
             timeout: (timeoutMs, message) => {
-              recordOutcome(currentStub.__module, currentStub.__action, {
-                kind: 'error',
-                message,
-                submittedPayload: payload,
-              });
-              outcomeRecorded = true;
+              recorder.error(message);
               throw new TimeoutError(timeoutMs);
             },
             unknown: (outcome) => {
@@ -788,14 +717,9 @@ export function useAction<
           return abortedFailure(e);
         }
         // Write to the store only for unclassified errors (network failures,
-        // parse errors). Per-branch errors set outcomeRecorded before throwing.
-        if (!outcomeRecorded) {
-          recordOutcome(currentStub.__module, currentStub.__action, {
-            kind: 'error',
-            message: e.message,
-            submittedPayload: payload,
-          });
-        }
+        // parse errors); a branch that already classified this keeps its
+        // richer record.
+        recorder.fallbackError(e.message);
         setError(e);
         invokeError(e);
         setPending(false);
