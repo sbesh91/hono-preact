@@ -161,10 +161,27 @@ export async function walkBootGraph(
 
   while (queue.length > 0 && checked.length < maxModules) {
     const { url, via, depth } = queue.shift()!;
-    const res = await fetch(url);
+    checked.push(url);
+
+    // A module the server refuses outright is a graph failure like any other,
+    // not a harness crash: letting the fetch throw would abort the walk and
+    // report a bare network error instead of naming the module and its
+    // importer.
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch (e) {
+      failures.push({
+        url,
+        status: 0,
+        contentType: '',
+        via,
+        bodyHead: e instanceof Error ? e.message : String(e),
+      });
+      continue;
+    }
     const contentType = res.headers.get('content-type') ?? '';
     const body = await res.text();
-    checked.push(url);
 
     if (res.status !== 200 || !JS_CONTENT_TYPE.test(contentType)) {
       failures.push({

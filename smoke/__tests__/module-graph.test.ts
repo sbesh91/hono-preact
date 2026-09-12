@@ -207,4 +207,21 @@ describe('walkBootGraph', () => {
     );
     expect(result.checked).toEqual([`${base}/entry.js`]);
   });
+
+  it('records a refused connection as a failure rather than throwing', async () => {
+    // A closed port: the fetch rejects. The walk must still name the module and
+    // its importer instead of aborting with a bare network error.
+    const base = await serveFixture({});
+    const port = Number(new URL(base).port);
+    await new Promise((r) => server!.close(r));
+    server = undefined;
+
+    const result = await walkBootGraph(
+      `http://localhost:${port}/`,
+      page(`<script type="module" src="/entry.js"></script>`)
+    );
+    expect(result.checked).toEqual([`http://localhost:${port}/entry.js`]);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]).toMatchObject({ status: 0, via: '<document>' });
+  });
 });
