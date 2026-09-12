@@ -49,7 +49,7 @@ import { useEffect } from 'preact/hooks';
 import { useAction } from '../action.js';
 import { ReloadContext } from '../reload-context.js';
 import { ActiveLoaderIdContext } from '../internal/contexts.js';
-import type { ActionRef, MutateResult } from '../action.js';
+import type { ActionRef, MutateResult, UseActionOptions } from '../action.js';
 import type { Serialize } from '../internal/serialize.js';
 import { defineLoader } from '../define-loader.js';
 import { effect } from '@preact/signals';
@@ -541,7 +541,10 @@ describe('useAction', () => {
     const methodStub: ActionRef<{ x: number }, { ok: true }> = {
       __module: 'm',
       __action: 'go',
-      useAction(opts) {
+      // `ActionRef.useAction` is overloaded (see the note on the type), so an
+      // implementation of it gets no single contextual signature and annotates
+      // its parameter. Call sites, which are the common case, keep inference.
+      useAction(opts?: UseActionOptions<{ x: number }, { ok: true }>) {
         return useAction(this as ActionRef<{ x: number }, { ok: true }>, opts);
       },
     };
