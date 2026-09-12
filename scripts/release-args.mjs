@@ -86,3 +86,64 @@ export function otpFailureHint(command) {
     'interpret, so the code has to be passed in.)',
   ].join('\n');
 }
+
+/**
+ * Confirm a version actually reached the registry, retrying while it
+ * propagates.
+ *
+ * `pnpm publish` can exit 0 having uploaded nothing. That is not theoretical:
+ * on the v0.14.0 cut it silently no-op'd for two of the three packages while
+ * reporting success, so the driver went on to publish the scaffolder and push
+ * both tags. For a while `npm create hono-preact@latest` was broken on the
+ * registry, because the published scaffolder pinned a `hono-preact` version
+ * that did not exist.
+ *
+ * So the exit code is not evidence. The registry is. This runs BEFORE tagging,
+ * which is what keeps a tag (and the docs deploy it triggers) from being
+ * created for a release that did not happen.
+ *
+ * IO is injected so the retry policy is testable without publishing anything or
+ * waiting in real time.
+ *
+ * @param {object} opts
+ * @param {() => boolean} opts.isPublished - probes the registry; true when the
+ *   version is visible
+ * @param {(ms: number) => void} opts.sleep - blocks for `ms`
+ * @param {number} [opts.attempts] - total probes, including the first
+ * @param {number} [opts.delayMs] - wait between probes
+ * @returns {boolean} whether the version showed up
+ */
+export function verifyPublished({
+  isPublished,
+  sleep,
+  attempts = 5,
+  delayMs = 3000,
+}) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    if (isPublished()) return true;
+    // No sleep after the last probe: nothing would read the result.
+    if (attempt < attempts) sleep(delayMs);
+  }
+  return false;
+}
+
+/**
+ * What to print when a publish reports success but the version never appears.
+ *
+ * @param {string} name
+ * @param {string} version
+ * @returns {string}
+ */
+export function missingAfterPublishMessage(name, version) {
+  return [
+    `${name}@${version} reported a successful publish but is not on the registry.`,
+    '',
+    '`pnpm publish` can exit 0 without uploading anything, so its exit code is',
+    'not proof. Nothing has been tagged: fix the publish first, with npm rather',
+    'than pnpm, then re-run this script (already-published packages are skipped):',
+    '',
+    `  cd packages/... && npm publish --access public --otp=<code>`,
+    '',
+    `Confirm with: npm view ${name} version`,
+  ].join('\n');
+}

@@ -3,6 +3,8 @@ import {
   parseOtp,
   buildPublishArgs,
   otpFailureHint,
+  verifyPublished,
+  missingAfterPublishMessage,
 } from '../release-args.mjs';
 
 // These back the 2FA path of `pnpm release` / `pnpm release:ui`, which is run
@@ -86,5 +88,83 @@ describe('otpFailureHint', () => {
     const hint = otpFailureHint('pnpm release:ui');
     expect(hint).toMatch(/pnpm release:ui -- --otp=123456/);
     expect(hint).not.toMatch(/\bpnpm release --/);
+  });
+});
+
+describe('verifyPublished', () => {
+  /** A probe that reports "not there" until the nth call. */
+  const landsOnCall = (n) => {
+    let calls = 0;
+    return () => ++calls >= n;
+  };
+
+  it('accepts a version that is already visible, without waiting', () => {
+    const sleeps = [];
+    expect(
+      verifyPublished({
+        isPublished: () => true,
+        sleep: (ms) => sleeps.push(ms),
+      })
+    ).toBe(true);
+    expect(sleeps).toEqual([]);
+  });
+
+  it('retries while the version propagates', () => {
+    const sleeps = [];
+    expect(
+      verifyPublished({
+        isPublished: landsOnCall(3),
+        sleep: (ms) => sleeps.push(ms),
+        delayMs: 1000,
+      })
+    ).toBe(true);
+    expect(sleeps).toEqual([1000, 1000]);
+  });
+
+  it('gives up after the configured attempts', () => {
+    let probes = 0;
+    const sleeps = [];
+    expect(
+      verifyPublished({
+        isPublished: () => {
+          probes++;
+          return false;
+        },
+        sleep: (ms) => sleeps.push(ms),
+        attempts: 4,
+        delayMs: 500,
+      })
+    ).toBe(false);
+    expect(probes).toBe(4);
+    // No sleep after the final probe: nothing would read the result, and the
+    // operator is already waiting on a failed release.
+    expect(sleeps).toEqual([500, 500, 500]);
+  });
+
+  it('probes once when told to try once', () => {
+    let probes = 0;
+    const sleeps = [];
+    verifyPublished({
+      isPublished: () => {
+        probes++;
+        return false;
+      },
+      sleep: (ms) => sleeps.push(ms),
+      attempts: 1,
+    });
+    expect(probes).toBe(1);
+    expect(sleeps).toEqual([]);
+  });
+});
+
+describe('missingAfterPublishMessage', () => {
+  it('names the package, says nothing was tagged, and points at npm', () => {
+    const msg = missingAfterPublishMessage('hono-preact', '0.14.0');
+    expect(msg).toMatch(/hono-preact@0\.14\.0/);
+    expect(msg).toMatch(/not on the registry/);
+    // The two facts that make the failure actionable: the tag has not gone out,
+    // and pnpm is the thing that lied.
+    expect(msg).toMatch(/Nothing has been tagged/);
+    expect(msg).toMatch(/npm publish/);
   });
 });

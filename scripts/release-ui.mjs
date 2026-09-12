@@ -30,6 +30,8 @@ import {
   parseOtp,
   buildPublishArgs,
   otpFailureHint,
+  verifyPublished,
+  missingAfterPublishMessage,
 } from './release-args.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -74,9 +76,16 @@ if (uiPin !== expectedPin) {
 
 console.log(`Releasing ${name}@${version}${dryRun ? ' (dry-run)' : ''}`);
 
-const alreadyPublished = (name, ver) => {
+// Synchronous sleep. The driver is sync end to end (spawnSync/execSync), and
+// going async just to wait between registry probes would restructure it.
+const sleepSync = (ms) => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+};
+
+const alreadyPublished = (name, ver, { preferOnline = false } = {}) => {
   try {
-    const out = execSync(`npm view ${name}@${ver} version`, {
+    const flag = preferOnline ? ' --prefer-online' : '';
+    const out = execSync(`npm view ${name}@${ver} version${flag}`, {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()
@@ -98,6 +107,19 @@ const publish = (name, pkgDir) => {
     cwd: join(ROOT, pkgDir),
     stdio: 'inherit',
   });
+  if (result.status === 0 && !dryRun) {
+    // The exit code is not evidence; ask the registry. See verifyPublished.
+    const landed = verifyPublished({
+      isPublished: () => alreadyPublished(name, version, { preferOnline: true }),
+      sleep: sleepSync,
+    });
+    if (!landed) {
+      console.error('');
+      console.error(missingAfterPublishMessage(name, version));
+      process.exit(1);
+    }
+    console.log(`  ${name}@${version} confirmed on the registry`);
+  }
   if (result.status !== 0) {
     console.error(`  ${name} publish failed (exit ${result.status})`);
     if (!otp) console.error(otpFailureHint('pnpm release:ui'));
