@@ -102,6 +102,12 @@ You do not register the action handler directly. The framework's Vite plugin gen
 
 If you ever need a custom server entry, see [`renderPage`](/docs/render-page) for the manual wiring contract.
 
+## Where an action can be invoked from
+
+The POST goes to the current page URL, and the handler resolves `(module, action)` in two steps: the URL's route contributes its own `serverActions` plus its ancestors', and a miss there falls back to a module-key lookup over the [`src/server` registry](/docs/routes#the-srcserver-registry). So an action declared in a route's own `.server.ts` is addressable only from that route's URL, which is what keeps its route `use` chain in force on every invocation.
+
+An action a shared shell or layout fires from many pages therefore belongs in the `src/server` registry, where it is module-key addressable from any page (gate it with a unit-level `use`, since it runs no route node's page-layer `use`). Invoking a route's own action from a different page answers `404` with `Action '<name>' not found on '<path>'`.
+
 ## Calling from a form: `<Form action={stub}>`
 
 `<Form action={stub}>` is the primary way to invoke an action. Pass the action stub directly to the `action` prop. On the client, `<Form>` intercepts the submit event, serializes the form fields, and fires a JSON POST to the page URL. Without JS, the form falls back to a native POST to the same URL and the page re-renders with the action result available via `useActionResult()`.

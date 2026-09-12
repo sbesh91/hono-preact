@@ -30,7 +30,10 @@ import { fileURLToPath } from 'node:url';
  * open WebSockets against it.
  *
  * This suite is deliberately shallow and broad: status codes only, no DOM
- * assertions. Its whole job is "the server can render its pages at all".
+ * assertions. Its whole job is "the server can render its pages at all", plus
+ * the same shallow question for the two other things a page needs from the real
+ * server stack and no unit test can ask -- a declared asset comes back as the
+ * asset, and an action POST reaches its handler.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,6 +53,27 @@ type SmokeTarget = {
    * catch-all rather than falling through to the not-found page.
    */
   assetProbe?: string;
+  /**
+   * A two-step action round-trip run against the real dev server: sign in, then
+   * invoke a shell-wide action from a DIFFERENT page than the one whose server
+   * module declares it. That cross-route step is the whole point (#401): an
+   * action declared in a route's own `.server.ts` is addressable only from that
+   * route's URL, so the demo's `log out` button 404'd from every project page
+   * while every unit test (which stubs the transport) stayed green.
+   */
+  actionProbe?: {
+    signIn: ActionCall;
+    /** Invoked from `path`, which must not be the action's declaring route. */
+    invoke: ActionCall;
+  };
+};
+
+type ActionCall = {
+  /** URL the POST goes to; actions post to the current page path. */
+  path: string;
+  module: string;
+  action: string;
+  payload: unknown;
 };
 
 const TARGETS: SmokeTarget[] = [
@@ -76,12 +100,26 @@ const TARGETS: SmokeTarget[] = [
       '/llms.txt',
     ],
     assetProbe: '/llms.txt',
+    actionProbe: {
+      signIn: {
+        path: '/demo/login',
+        module: 'src/pages/demo/login',
+        action: 'login',
+        payload: { email: 'smoke@example.com', name: 'Smoke' },
+      },
+      invoke: {
+        path: '/demo/projects',
+        module: 'src/server/session/auth',
+        action: 'logout',
+        payload: {},
+      },
+    },
   },
 ];
 
 describe.each(TARGETS)(
   'page render smoke: $name',
-  ({ root, routes, assetProbe }) => {
+  ({ root, routes, assetProbe, actionProbe }) => {
     let server: ViteDevServer;
     let originalCwd: string;
     let port: number;
@@ -139,6 +177,46 @@ describe.each(TARGETS)(
           contentType,
           `${assetProbe} -> content-type ${contentType}, looks like the SSR page`
         ).not.toMatch(/text\/html/);
+      }
+    );
+
+    it.skipIf(!actionProbe)(
+      'reaches a shell-wide action from a page outside its declaring route',
+      async () => {
+        // skipIf already guarantees this; the guard is how the narrowing
+        // carries into the body without an assertion.
+        if (!actionProbe) return;
+        const probe = actionProbe;
+        const post = (call: ActionCall, cookie?: string) =>
+          fetch(`http://localhost:${port}${call.path}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+              ...(cookie ? { Cookie: cookie } : {}),
+            },
+            body: JSON.stringify({
+              module: call.module,
+              action: call.action,
+              payload: call.payload,
+            }),
+          });
+
+        const signedIn = await post(probe.signIn);
+        expect(signedIn.status, await signedIn.text()).toBeLessThan(400);
+        // Strip attributes; only the name=value pair goes back up.
+        const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0];
+        expect(cookie).not.toBe('');
+
+        const res = await post(probe.invoke, cookie);
+        const body = await res.text();
+        // A 404 here is the #401 failure mode exactly: the action resolver found
+        // nothing for (module, action) at this URL, so the mutation silently
+        // never ran.
+        expect(
+          res.status,
+          `${probe.invoke.action} from ${probe.invoke.path} -> ${res.status}\n${body}`
+        ).toBe(200);
       }
     );
   }

@@ -7,11 +7,12 @@ import {
   useRouteMatch,
   useViewTransitionName,
 } from 'hono-preact';
+import { toast } from 'hono-preact-ui';
 import type { FunctionComponent } from 'preact';
 import { ActivityBar } from '../../components/demo/ActivityBar.js';
 import { useLayoutEffect, useRef } from 'preact/hooks';
 import { serverLoaders } from './projects-shell.server.js';
-import { serverActions as loginActions } from './login.server.js';
+import { serverActions as authActions } from '../../server/session/auth.server.js';
 import type { ShellData } from './projects-shell.server.js';
 
 // Per-project bullet: static (every row has one).
@@ -66,10 +67,17 @@ function Sidebar({
     ind.style.opacity = '1';
   }, [activeSlug, data.projects.length]);
 
-  const logout = useAction(loginActions.logout, {
+  const logout = useAction(authActions.logout, {
     onSuccess: () => {
       navigate('/demo/login', { replace: true });
     },
+    // A failed sign-out has no visible symptom of its own: the page stays put,
+    // which is also what a slow one looks like. Say so rather than leaving the
+    // visitor to discover on the next page load that they are still signed in.
+    // `err` is annotated because `UseActionOptions` is a union discriminated
+    // on `onMutate`, and TS does not contextually type a callback parameter
+    // through it when `onMutate` is absent (see #411).
+    onError: (err: Error) => toast.error(`Sign out failed: ${err.message}`),
   });
 
   return (
