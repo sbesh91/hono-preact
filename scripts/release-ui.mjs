@@ -11,6 +11,13 @@
 //   node scripts/release-ui.mjs --dry-run    # preview, no upload, no tag
 //   node scripts/release-ui.mjs              # real publish + tag
 //   node scripts/release-ui.mjs --skip-tag   # publish only (e.g. re-running after partial failure)
+//   node scripts/release-ui.mjs --otp 123456  # supply a 2FA one-time password
+//
+// 2FA: an account with two-factor auth set to `auth-and-writes` must pass
+// `--otp`. `pnpm publish` prompts only when npm answers `401 EOTP`; a
+// web-login session token gets a bare `404 Not Found - PUT` instead, which
+// pnpm cannot interpret, so the code has to come in on the command line:
+//   pnpm release:ui -- --otp=123456
 //
 // Idempotency: if the version is already on the npm registry, the publish is
 // skipped with a note. Lets you re-run after a partial failure.
@@ -19,11 +26,23 @@ import { execSync, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  parseOtp,
+  buildPublishArgs,
+  otpFailureHint,
+} from './release-args.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run');
 const skipTag = args.has('--skip-tag');
+let otp;
+try {
+  otp = parseOtp(process.argv.slice(2));
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
 
 const readPkg = (rel) => JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
 
@@ -74,14 +93,14 @@ const publish = (name, pkgDir) => {
     return;
   }
   console.log(`  publishing ${name}@${version}...`);
-  const pnpmArgs = ['publish', '--access', 'public', '--no-git-checks'];
-  if (dryRun) pnpmArgs.push('--dry-run');
+  const pnpmArgs = buildPublishArgs({ dryRun, otp });
   const result = spawnSync('pnpm', pnpmArgs, {
     cwd: join(ROOT, pkgDir),
     stdio: 'inherit',
   });
   if (result.status !== 0) {
     console.error(`  ${name} publish failed (exit ${result.status})`);
+    if (!otp) console.error(otpFailureHint());
     process.exit(result.status ?? 1);
   }
 };
