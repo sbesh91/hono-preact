@@ -1,7 +1,18 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHANNEL_HEADER } from '../channel-wire.js';
 import { readChannelValue, resetChannelStore } from '../channel-store.js';
 import { fetchLoaderData } from '../loader-fetch.js';
+import { defineSessionChannel } from '../../session-channel.js';
+
+// Declaring a channel is what installs the store behind the RPC seam, so these
+// go through `defineSessionChannel` rather than reaching for the store's
+// installer: the contract under test is what an application does, and a test
+// that installed it directly would keep passing if declaring a channel stopped
+// installing anything.
+beforeEach(() => {
+  resetChannelStore();
+  defineSessionChannel('demo');
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -39,7 +50,6 @@ describe('fetchLoaderData channel header', () => {
   });
 
   it('leaves the store alone when the response carries no header', async () => {
-    resetChannelStore();
     stubFetch({ [CHANNEL_HEADER]: '{"demo":1}' });
     await runFetchLoaderData();
     stubFetch({});
@@ -62,5 +72,15 @@ describe('fetchLoaderData channel header', () => {
     stubFetch({ [CHANNEL_HEADER]: '{"demo":{"signedIn":false}}' });
     await runFetchLoaderData();
     expect(readChannelValue('demo')).toEqual({ signedIn: false });
+  });
+
+  it('ignores the header entirely when no channel is declared (#400)', async () => {
+    // The always-loaded seam is inert until an application declares a channel.
+    // With none declared there is no reader, so dropping the snapshot costs
+    // nothing -- and this is what keeps the store out of every app's bundle.
+    resetChannelStore();
+    stubFetch({ [CHANNEL_HEADER]: '{"demo":{"signedIn":true}}' });
+    await runFetchLoaderData();
+    expect(readChannelValue('demo')).toBeUndefined();
   });
 });

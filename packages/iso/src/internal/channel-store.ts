@@ -1,5 +1,10 @@
 import { isBrowser } from '../is-browser.js';
-import { decodeSnapshot, type ChannelSnapshot } from './channel-wire.js';
+import {
+  CHANNEL_HEADER,
+  decodeSnapshot,
+  type ChannelSnapshot,
+} from './channel-wire.js';
+import { installChannelSink, clearChannelSink } from './channel-sink.js';
 
 // In-memory and deliberately NOT persisted. A cold load always arrives with a
 // server-authored snapshot in the SSR bootstrap, so there is nothing to carry
@@ -42,12 +47,42 @@ export function readChannelValue(id: string): unknown {
 /** Test-only reset. Not exported from the package index. */
 export function resetChannelStore(): void {
   current = {};
+  installed = false;
+  clearChannelSink();
+}
+
+// Whether this module has claimed the RPC seam yet. Module scope, so the work
+// happens once however many channels an application declares.
+let installed = false;
+
+/**
+ * Claim the RPC seam and seed the store, called by `defineSessionChannel`.
+ *
+ * This is what makes the store conditional (#400). The always-loaded RPC paths
+ * reach the store only through `channel-sink.js`, which does nothing until an
+ * application declares a channel; declaring one runs this, and from that point
+ * every loader and action response merges its snapshot as before.
+ *
+ * Hydration happens here rather than in `bootClient` because this is the
+ * earliest moment a channel can be read, and it is correct for both orders: a
+ * channel declared in the entry's static graph installs before boot, and one
+ * declared in a lazily-loaded route chunk installs when that chunk evaluates.
+ * The SSR bootstrap global is static, so it reads the same either way.
+ */
+export function installChannelStore(): void {
+  if (installed) return;
+  installed = true;
+  installChannelSink((headers) =>
+    applyChannelSnapshot(decodeSnapshot(headers.get(CHANNEL_HEADER)))
+  );
+  hydrateChannelsFromDocument();
 }
 
 /**
- * Seed the store from the SSR bootstrap global. Called once during client boot,
- * before any client middleware chain runs, so a guard on the initial load reads
- * a server-authored value rather than an empty store.
+ * Seed the store from the SSR bootstrap global. Called once, from
+ * `installChannelStore`, before any client middleware chain can read it, so a
+ * guard on the initial load sees a server-authored value rather than an empty
+ * store.
  */
 export function hydrateChannelsFromDocument(): void {
   if (!isBrowser()) return;

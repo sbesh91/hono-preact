@@ -52,10 +52,10 @@ const requireSessionServer = defineServerMiddleware(async (ctx, next) => {
 });
 
 // Client-side check (intra-app navigation): reads what the last server
-// round-trip published. On a full reload hydrateChannelsFromDocument in
-// boot-client.ts fills the store from the SSR bootstrap before any client
-// chain runs. On a client navigation the value is whatever the most recent
-// loader or action RPC published.
+// round-trip published. On a full reload the store seeds itself from the SSR
+// bootstrap when the channel above is declared, which happens as this module
+// evaluates and so before any client chain runs. On a client navigation the
+// value is whatever the most recent loader or action RPC published.
 //
 // The three cases are spelled out rather than folded into one optional chain,
 // because "no answer" and "a negative answer" are different facts:
