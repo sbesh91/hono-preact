@@ -33,7 +33,7 @@ export type ActionRef<
   readonly __module: string;
   readonly __action: string;
   readonly __phantom?: readonly [TPayload, TResult, TChunk];
-  // Two call signatures rather than one taking the options union: TypeScript
+  // One signature per options arm rather than one taking the union: TypeScript
   // resolves a contextual callback parameter against a single signature, but
   // gives up (leaving the parameter an implicit `any`) when the options type is
   // a union offering two callback arities. Splitting on the `onMutate`
