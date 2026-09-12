@@ -33,6 +33,21 @@ export type ActionRef<
   readonly __module: string;
   readonly __action: string;
   readonly __phantom?: readonly [TPayload, TResult, TChunk];
+  // Two call signatures rather than one taking the options union: TypeScript
+  // resolves a contextual callback parameter against a single signature, but
+  // gives up (leaving the parameter an implicit `any`) when the options type is
+  // a union offering two callback arities. Splitting on the `onMutate`
+  // discriminant is what types `onError: (err) => ...` as `Error`.
+  useAction<TSnapshot = unknown>(
+    options: UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot>
+  ): UseActionResult<TPayload, TResult, TDenyData>;
+  useAction(
+    options?: UseActionWithoutMutate<TPayload, TResult, TChunk>
+  ): UseActionResult<TPayload, TResult, TDenyData>;
+  // Third signature, for a caller forwarding an options value that is already
+  // typed as the union (a wrapper hook, say). Object literals never reach it:
+  // they match one of the two arms above first, which is what keeps their
+  // callback parameters inferred.
   useAction<TSnapshot = unknown>(
     options?: UseActionOptions<TPayload, TResult, TChunk, TSnapshot>
   ): UseActionResult<TPayload, TResult, TDenyData>;
@@ -229,7 +244,7 @@ type UseActionOptionsCommon<TPayload, TChunk = never> = {
  * value `onMutate` returned for this specific mutation as the second
  * parameter, so concurrent calls can be paired with their own snapshot.
  */
-type UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot> =
+export type UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot> =
   UseActionOptionsCommon<TPayload, TChunk> & {
     onMutate: (payload: TPayload) => TSnapshot;
     onError?: (err: Error, snapshot: TSnapshot) => void;
@@ -240,14 +255,12 @@ type UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot> =
  * Options when `onMutate` is not provided. `onSuccess` / `onError` take
  * only the result / error — there is no snapshot to thread through.
  */
-type UseActionWithoutMutate<TPayload, TResult, TChunk> = UseActionOptionsCommon<
-  TPayload,
-  TChunk
-> & {
-  onMutate?: undefined;
-  onError?: (err: Error) => void;
-  onSuccess?: (data: Serialize<TResult>) => void;
-};
+export type UseActionWithoutMutate<TPayload, TResult, TChunk> =
+  UseActionOptionsCommon<TPayload, TChunk> & {
+    onMutate?: undefined;
+    onError?: (err: Error) => void;
+    onSuccess?: (data: Serialize<TResult>) => void;
+  };
 
 /**
  * Discriminated by `onMutate`. Providing `onMutate` requires the
@@ -395,6 +408,51 @@ async function decodeActionStream<TResult, TChunk>(
   return { result, error };
 }
 
+/**
+ * Overloaded on the presence of `onMutate` rather than taking the options union
+ * directly. A contextual callback parameter resolves against a single candidate
+ * signature; offered a union with two callback arities, TypeScript resolves
+ * nothing and the parameter falls back to an implicit `any`. Each overload
+ * hands the checker one shape, so `onError: (err) => ...` types as `Error` and
+ * the `onMutate` arm still threads its snapshot through as the second argument.
+ *
+ * A third signature accepts the options union itself, so a wrapper forwarding
+ * an already-typed options value still resolves; an object literal matches one
+ * of the two arms above first and never reaches it.
+ *
+ * The type-parameter list is identical across all three so an explicit type
+ * argument means the same thing whichever one resolves.
+ */
+export function useAction<
+  TPayload,
+  TResult,
+  TChunk = never,
+  TSnapshot = unknown,
+  TDenyData = unknown,
+>(
+  stub: ActionRef<TPayload, TResult, TChunk, TDenyData>,
+  options: UseActionWithMutate<TPayload, TResult, TChunk, TSnapshot>
+): UseActionResult<TPayload, TResult, TDenyData>;
+export function useAction<
+  TPayload,
+  TResult,
+  TChunk = never,
+  TSnapshot = unknown,
+  TDenyData = unknown,
+>(
+  stub: ActionRef<TPayload, TResult, TChunk, TDenyData>,
+  options?: UseActionWithoutMutate<TPayload, TResult, TChunk>
+): UseActionResult<TPayload, TResult, TDenyData>;
+export function useAction<
+  TPayload,
+  TResult,
+  TChunk = never,
+  TSnapshot = unknown,
+  TDenyData = unknown,
+>(
+  stub: ActionRef<TPayload, TResult, TChunk, TDenyData>,
+  options?: UseActionOptions<TPayload, TResult, TChunk, TSnapshot>
+): UseActionResult<TPayload, TResult, TDenyData>;
 export function useAction<
   TPayload,
   TResult,

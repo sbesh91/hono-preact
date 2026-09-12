@@ -74,10 +74,7 @@ function Sidebar({
     // A failed sign-out has no visible symptom of its own: the page stays put,
     // which is also what a slow one looks like. Say so rather than leaving the
     // visitor to discover on the next page load that they are still signed in.
-    // `err` is annotated because `UseActionOptions` is a union discriminated
-    // on `onMutate`, and TS does not contextually type a callback parameter
-    // through it when `onMutate` is absent (see #411).
-    onError: (err: Error) => toast.error(`Sign out failed: ${err.message}`),
+    onError: (err) => toast.error(`Sign out failed: ${err.message}`),
   });
 
   return (
