@@ -19,6 +19,10 @@
 // pnpm cannot interpret, so the code has to come in on the command line:
 //   pnpm release:ui -- --otp=123456
 //
+// Verification: a publish that reports success is confirmed against the
+// registry before anything is tagged. `pnpm publish` can exit 0 having
+// uploaded nothing, so its exit code is not evidence.
+//
 // Idempotency: if the version is already on the npm registry, the publish is
 // skipped with a note. Lets you re-run after a partial failure.
 
@@ -82,10 +86,15 @@ const sleepSync = (ms) => {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 };
 
-const alreadyPublished = (name, ver, { preferOnline = false } = {}) => {
+// `--prefer-online` on BOTH uses, not just the post-publish check. A stale
+// packument in npm's cache would otherwise make the skip path report a version
+// as already published when it is not, which skips the publish AND the
+// verification below and then tags: the exact failure this guard exists to
+// stop, arrived at from the other side. A release runs a few times a year, so
+// the extra round trip costs nothing worth counting.
+const alreadyPublished = (name, ver) => {
   try {
-    const flag = preferOnline ? ' --prefer-online' : '';
-    const out = execSync(`npm view ${name}@${ver} version${flag}`, {
+    const out = execSync(`npm view ${name}@${ver} version --prefer-online`, {
       stdio: ['ignore', 'pipe', 'ignore'],
     })
       .toString()
@@ -110,12 +119,12 @@ const publish = (name, pkgDir) => {
   if (result.status === 0 && !dryRun) {
     // The exit code is not evidence; ask the registry. See verifyPublished.
     const landed = verifyPublished({
-      isPublished: () => alreadyPublished(name, version, { preferOnline: true }),
+      isPublished: () => alreadyPublished(name, version),
       sleep: sleepSync,
     });
     if (!landed) {
       console.error('');
-      console.error(missingAfterPublishMessage(name, version));
+      console.error(missingAfterPublishMessage(name, version, pkgDir));
       process.exit(1);
     }
     console.log(`  ${name}@${version} confirmed on the registry`);

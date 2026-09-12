@@ -132,9 +132,12 @@ export function verifyPublished({
  *
  * @param {string} name
  * @param {string} version
+ * @param {string} pkgDir - repo-relative package directory, so the suggested
+ *   command is runnable as printed rather than needing to be reconstructed
+ *   by someone in the middle of a failed release
  * @returns {string}
  */
-export function missingAfterPublishMessage(name, version) {
+export function missingAfterPublishMessage(name, version, pkgDir) {
   return [
     `${name}@${version} reported a successful publish but is not on the registry.`,
     '',
@@ -142,7 +145,7 @@ export function missingAfterPublishMessage(name, version) {
     'not proof. Nothing has been tagged: fix the publish first, with npm rather',
     'than pnpm, then re-run this script (already-published packages are skipped):',
     '',
-    `  cd packages/... && npm publish --access public --otp=<code>`,
+    `  cd ${pkgDir} && npm publish --access public --otp=<code>`,
     '',
     `Confirm with: npm view ${name} version`,
   ].join('\n');

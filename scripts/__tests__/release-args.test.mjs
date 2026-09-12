@@ -159,12 +159,29 @@ describe('verifyPublished', () => {
 
 describe('missingAfterPublishMessage', () => {
   it('names the package, says nothing was tagged, and points at npm', () => {
-    const msg = missingAfterPublishMessage('hono-preact', '0.14.0');
+    const msg = missingAfterPublishMessage(
+      'hono-preact',
+      '0.14.0',
+      'packages/hono-preact'
+    );
     expect(msg).toMatch(/hono-preact@0\.14\.0/);
     expect(msg).toMatch(/not on the registry/);
     // The two facts that make the failure actionable: the tag has not gone out,
     // and pnpm is the thing that lied.
     expect(msg).toMatch(/Nothing has been tagged/);
     expect(msg).toMatch(/npm publish/);
+  });
+
+  it('prints a command that can be run as-is', () => {
+    // Reconstructing the right directory is not something to ask of someone
+    // mid-failed-release, and the ui package does not live where a reader
+    // would guess from the package name.
+    const msg = missingAfterPublishMessage(
+      'hono-preact-ui',
+      '0.5.0',
+      'packages/ui'
+    );
+    expect(msg).toMatch(/cd packages\/ui && npm publish/);
+    expect(msg).not.toMatch(/packages\/\.\.\./);
   });
 });
