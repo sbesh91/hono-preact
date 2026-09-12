@@ -49,17 +49,23 @@ const EXTERNAL_COUNTING_SIGNALS = EXTERNAL.filter(
 // signals reached core, the fix is the import, not the budget.
 const CORE_BUDGET_BYTES = 6_200;
 // core + `FEATURE_MODULES.runtime`, the real always-loaded floor. Measured at
-// 8,406 B, up from 7,961 B: the session-channel client store sits in the
-// always-loaded graph, so every route pays its ~445 B whether or not the build
-// declares a channel. That consumed the headroom the 8,400 B budget had, hence
-// 8,600 B. Making the store conditional on a build actually declaring a channel
-// is a known follow-up; the budget is not the place to absorb it.
+// 8,249 B with the session-channel client store gated behind an actual
+// `defineSessionChannel()` call (#400): the always-loaded RPC paths now reach
+// the store through an inert seam (`internal/channel-sink.js`), so an app that
+// declares no channel ships neither the store, the wire decoder, nor the
+// document hydrate. That reverts the 8,400 -> 8,600 raise #399 needed.
+//
+// 8,249 B is the same number a pre-#398 build measures under today's probe, so
+// the store's cost is gone rather than moved. It does not match the 7,961 B
+// #399 recorded because the probe itself changed in #383 (eager/deferred split
+// rather than concatenating every chunk); only measurements from one probe
+// version are comparable to each other.
 //
 // The headroom here matches CORE_BUDGET's (a few hundred bytes for ordinary
 // growth, far under the ~3,300 B a signals import would add). If this is ever
 // being raised because signals reached the runtime bucket, the fix is the
 // import, not the budget.
-const FLOOR_BUDGET_BYTES = 8_600;
+const FLOOR_BUDGET_BYTES = 8_500;
 
 describe('always-loaded core size floor', () => {
   it('has a built dist to measure', () => {

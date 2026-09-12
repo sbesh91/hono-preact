@@ -21,8 +21,7 @@ import type { Serialize } from './internal/serialize.js';
 import type { ServerCaller } from './server-caller.js';
 import { FORM_MODULE_FIELD, FORM_ACTION_FIELD } from './internal/contract.js';
 import { toError } from './internal/to-error.js';
-import { CHANNEL_HEADER, decodeSnapshot } from './internal/channel-wire.js';
-import { applyChannelSnapshot } from './internal/channel-store.js';
+import { applyChannelHeaders } from './internal/channel-sink.js';
 
 export type ActionRef<
   TPayload,
@@ -673,9 +672,7 @@ export function useAction<
         // branch, so both the streaming and JSON arms see it. A guard that
         // publishes on a streaming action must still reach the store even
         // though the streaming arm never calls decodeActionResponse.
-        applyChannelSnapshot(
-          decodeSnapshot(response.headers.get(CHANNEL_HEADER))
-        );
+        applyChannelHeaders(response.headers);
 
         const contentType = response.headers.get('Content-Type') ?? '';
         if (contentType.includes('text/event-stream') && response.body) {

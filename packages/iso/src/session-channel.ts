@@ -1,6 +1,9 @@
 import type { ClientPageCtx, ServerBaseCtx } from './define-middleware.js';
 import { publishToChannel } from './internal/channel-registry.js';
-import { readChannelValue } from './internal/channel-store.js';
+import {
+  readChannelValue,
+  installChannelStore,
+} from './internal/channel-store.js';
 
 type ChannelPrimitive = string | number | boolean | null;
 
@@ -124,6 +127,10 @@ function warnMissingBuildTimeId(channelId: string): void {
 export function defineSessionChannel<T extends ChannelPayload>(
   id?: string
 ): SessionChannel<T> {
+  // Declaring a channel is what brings the client store into the graph at all:
+  // the always-loaded RPC paths reach it only through `internal/channel-sink.js`,
+  // which is inert until this runs. See `installChannelStore` (#400).
+  installChannelStore();
   // No `id` argument means neither the application nor the Vite plugin named
   // this channel, so the fallback counter below is the identity, and the two
   // bundles cannot agree on it. See `warnMissingBuildTimeId`.
