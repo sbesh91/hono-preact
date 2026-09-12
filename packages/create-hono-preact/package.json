@@ -1,6 +1,6 @@
 {
   "name": "create-hono-preact",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "Scaffold a new hono-preact app.",
   "keywords": [
     "hono-preact",
