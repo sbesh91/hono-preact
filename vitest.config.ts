@@ -130,6 +130,10 @@ export default defineConfig({
       'apps/site/src/**/__tests__/**/*.test.{ts,tsx}',
       'apps/site/scripts/__tests__/**/*.test.{ts,tsx}',
       'scripts/__tests__/**/*.test.mjs',
+      // The smoke suite's module-graph checker. The checker is unit-testable
+      // (it is a parser plus a fetch loop) and must be, since the suite that
+      // uses it is opt-in; only the walk itself needs real servers.
+      'smoke/__tests__/**/*.test.ts',
     ],
     // Type-level tests (`*.test-d.ts`) assert on conditional/template-literal
     // types via `expectTypeOf`/`@ts-expect-error`. They run ONLY under

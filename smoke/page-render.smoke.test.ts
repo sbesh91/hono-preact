@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer, type ViteDevServer } from 'vite';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { walkBootGraph, formatGraphFailures } from './module-graph.js';
 
 /**
  * Does a page actually RENDER?
@@ -29,11 +30,13 @@ import { fileURLToPath } from 'node:url';
  * behind integration tests that DO boot this exact dev server but only ever
  * open WebSockets against it.
  *
- * This suite is deliberately shallow and broad: status codes only, no DOM
- * assertions. Its whole job is "the server can render its pages at all", plus
- * the same shallow question for the two other things a page needs from the real
- * server stack and no unit test can ask -- a declared asset comes back as the
- * asset, and an action POST reaches its handler.
+ * This suite is deliberately shallow and broad: status codes and content
+ * types, no DOM assertions. Its job is "the server can render its pages at
+ * all", plus the same shallow question for the three other things a page needs
+ * from the real server stack and no unit test can ask -- a declared asset comes
+ * back as the asset, an action POST reaches its handler, and every module the
+ * page boots is served as JavaScript rather than as the SSR document (#392,
+ * where every status code was 200 and no client executed).
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -179,6 +182,26 @@ describe.each(TARGETS)(
         ).not.toMatch(/text\/html/);
       }
     );
+
+    it('ships a client module graph that loads', async () => {
+      const url = `http://localhost:${port}/`;
+      const html = await (await fetch(url)).text();
+      const result = await walkBootGraph(url, html);
+
+      // A walk that found nothing, or that found the entry and followed no
+      // edge, would pass vacuously: exactly the shape of failure this check
+      // exists to prevent. Unbundled dev graphs reach a dozen-odd modules here
+      // (including `/src/routes.ts`, the #392 module), so a floor of two only
+      // fires when the walk itself has stopped working.
+      expect(
+        result.checked.length,
+        `walked too few modules to prove anything: ${JSON.stringify(result.checked)}`
+      ).toBeGreaterThanOrEqual(2);
+      expect(
+        result.failures,
+        `modules not served as JavaScript:\n\n${formatGraphFailures(result)}`
+      ).toEqual([]);
+    });
 
     it.skipIf(!actionProbe)(
       'reaches a shell-wide action from a page outside its declaring route',

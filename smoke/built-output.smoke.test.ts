@@ -4,6 +4,7 @@ import { createServer as createNetServer } from 'node:net';
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { walkBootGraph, formatGraphFailures } from './module-graph.js';
 
 /**
  * The same "does a page render?" question as page-render.smoke.test.ts, but
@@ -186,6 +187,25 @@ describe.each(TARGETS)(
         res.status,
         `${path} -> ${res.status}\n${body.slice(0, 800)}`
       ).toBeLessThan(400);
+    });
+
+    it('ships a client module graph that loads', async () => {
+      const url = `http://localhost:${port}/`;
+      const html = await (await fetch(url)).text();
+      const result = await walkBootGraph(url, html);
+      // A walk that found nothing would pass vacuously, so require at least the
+      // document's own module script. The floor is one rather than the dev
+      // suite's two because a built client is a bundle: its static graph is
+      // already inlined, and what is left are dynamic route-chunk imports,
+      // which are not part of the boot graph and are deliberately not followed.
+      expect(
+        result.checked.length,
+        `no module scripts found in the rendered document: ${JSON.stringify(result.checked)}`
+      ).toBeGreaterThanOrEqual(1);
+      expect(
+        result.failures,
+        `modules not served as JavaScript:\n\n${formatGraphFailures(result)}`
+      ).toEqual([]);
     });
 
     it.skipIf(!assetProbe)(
