@@ -96,7 +96,7 @@ const publish = (name, pkgDir) => {
   });
   if (result.status !== 0) {
     console.error(`  ${name} publish failed (exit ${result.status})`);
-    if (!otp) console.error(otpFailureHint());
+    if (!otp) console.error(otpFailureHint('pnpm release'));
     process.exit(result.status ?? 1);
   }
 };

@@ -58,15 +58,21 @@ export function buildPublishArgs({ dryRun = false, otp = null } = {}) {
  * A hint to print when a publish fails, naming the cause that is not legible
  * from npm's own response.
  *
+ * Takes the driver's own command because the two drivers are separate entry
+ * points: telling someone whose `pnpm release:ui` just failed to re-run
+ * `pnpm release` would send them at the wrong package, at the moment they are
+ * least able to spot it.
+ *
  * `pnpm publish` wraps its request in OTP handling, but that only triggers on
  * npm's `401 EOTP` challenge. An account with two-factor auth set to
  * `auth-and-writes` publishing with a web-login session token gets a flat 404
  * instead, so pnpm never prompts and the operator sees a "not found" for a
  * package that plainly exists.
  *
+ * @param {string} command - the driver's own command, e.g. `pnpm release:ui`
  * @returns {string}
  */
-export function otpFailureHint() {
+export function otpFailureHint(command) {
   return [
     '',
     'If that was a 404 on the PUT for a package that exists, the write was most',
@@ -74,7 +80,7 @@ export function otpFailureHint() {
     'package. Check `npm profile get` for "two-factor auth: auth-and-writes",',
     'then re-run with an OTP:',
     '',
-    '  pnpm release -- --otp=123456',
+    `  ${command} -- --otp=123456`,
     '',
     '(`pnpm publish` only prompts when npm answers 401 EOTP; a 404 it cannot',
     'interpret, so the code has to be passed in.)',

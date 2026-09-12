@@ -75,8 +75,16 @@ describe('buildPublishArgs', () => {
 
 describe('otpFailureHint', () => {
   it('names the 404 symptom and the command that fixes it', () => {
-    const hint = otpFailureHint();
+    const hint = otpFailureHint('pnpm release');
     expect(hint).toMatch(/404/);
-    expect(hint).toMatch(/--otp=123456/);
+    expect(hint).toMatch(/pnpm release -- --otp=123456/);
+  });
+
+  it('names the caller\'s own command, not the framework one', () => {
+    // release-ui.mjs prints this too. Sending a stuck ui-release operator at
+    // `pnpm release` would point them at the wrong package.
+    const hint = otpFailureHint('pnpm release:ui');
+    expect(hint).toMatch(/pnpm release:ui -- --otp=123456/);
+    expect(hint).not.toMatch(/\bpnpm release --/);
   });
 });
