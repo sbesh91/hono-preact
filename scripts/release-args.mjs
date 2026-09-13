@@ -88,8 +88,42 @@ export function otpFailureHint(command) {
 }
 
 /**
+ * Block for `ms` without going async.
+ *
+ * The release drivers are synchronous end to end (spawnSync/execSync);
+ * restructuring them around promises just to wait between registry probes would
+ * be a much larger change than the wait is worth. `Atomics.wait` on the main
+ * thread is permitted in Node (unlike browsers).
+ *
+ * @param {number} ms
+ */
+export function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Classify one `npm view <pkg>@<version> version` result.
+ *
+ * Three outcomes, not two. "The registry says this version does not exist" and
+ * "the registry could not be reached" look identical through a boolean, and
+ * conflating them is how a transient 5xx or DNS blip turns a perfectly good
+ * publish into a failed release whose suggested remedy (publish again) fails
+ * with EPUBLISHCONFLICT.
+ *
+ * @param {{status: number|null, stdout: string, stderr: string, version: string}} r
+ * @returns {'published' | 'absent' | 'unknown'}
+ */
+export function classifyViewResult({ status, stdout, stderr, version }) {
+  if (status === 0) return stdout.trim() === version ? 'published' : 'absent';
+  // npm reports a missing package/version as E404. Anything else (ENOTFOUND,
+  // ETIMEDOUT, EAI_AGAIN, a 5xx, a proxy refusing) is "we did not get an
+  // answer", which is not evidence of absence.
+  return /E404|404 Not Found/.test(stderr) ? 'absent' : 'unknown';
+}
+
+/**
  * Confirm a version actually reached the registry, retrying while it
- * propagates.
+ * propagates or while the registry is unreachable.
  *
  * `pnpm publish` can exit 0 having uploaded nothing. That is not theoretical:
  * on the v0.14.0 cut it silently no-op'd for two of the three packages while
@@ -106,29 +140,31 @@ export function otpFailureHint(command) {
  * waiting in real time.
  *
  * @param {object} opts
- * @param {() => boolean} opts.isPublished - probes the registry; true when the
- *   version is visible
- * @param {(ms: number) => void} opts.sleep - blocks for `ms`
+ * @param {() => 'published' | 'absent' | 'unknown'} opts.probe
+ * @param {(ms: number) => void} opts.sleep
  * @param {number} [opts.attempts] - total probes, including the first
  * @param {number} [opts.delayMs] - wait between probes
- * @returns {boolean} whether the version showed up
+ * @returns {'published' | 'absent' | 'unknown'} the last verdict reached
  */
 export function verifyPublished({
-  isPublished,
+  probe,
   sleep,
   attempts = 5,
   delayMs = 3000,
 }) {
+  let last = 'unknown';
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    if (isPublished()) return true;
-    // No sleep after the last probe: nothing would read the result.
+    last = probe();
+    if (last === 'published') return last;
+    // No sleep after the final probe: nothing would read the result.
     if (attempt < attempts) sleep(delayMs);
   }
-  return false;
+  return last;
 }
 
 /**
- * What to print when a publish reports success but the version never appears.
+ * What to print when the registry positively reports the version as absent:
+ * the publish claimed success and uploaded nothing.
  *
  * @param {string} name
  * @param {string} version
@@ -148,5 +184,32 @@ export function missingAfterPublishMessage(name, version, pkgDir) {
     `  cd ${pkgDir} && npm publish --access public --otp=<code>`,
     '',
     `Confirm with: npm view ${name} version`,
+  ].join('\n');
+}
+
+/**
+ * What to print when the registry could not be reached at all.
+ *
+ * Deliberately different advice from the absent case: the publish may well have
+ * succeeded, so "publish again" is the wrong instinct. It would fail with
+ * EPUBLISHCONFLICT at best, and at worst send someone chasing a problem that
+ * does not exist.
+ *
+ * @param {string} name
+ * @param {string} version
+ * @returns {string}
+ */
+export function unconfirmedAfterPublishMessage(name, version) {
+  return [
+    `Could not reach the registry to confirm ${name}@${version}.`,
+    '',
+    'The publish may have succeeded. Nothing has been tagged, and nothing has',
+    'been re-published: check by hand before doing either.',
+    '',
+    `  npm view ${name} version`,
+    '',
+    'If it shows the new version, the publish worked and this script can be',
+    're-run (it skips what is already published). If it does not, publish with',
+    'npm rather than pnpm.',
   ].join('\n');
 }

@@ -26,7 +26,7 @@
 // Idempotency: if the version is already on the npm registry, the publish is
 // skipped with a note. Lets you re-run after a partial failure.
 
-import { execSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,8 +34,11 @@ import {
   parseOtp,
   buildPublishArgs,
   otpFailureHint,
+  sleepSync,
+  classifyViewResult,
   verifyPublished,
   missingAfterPublishMessage,
+  unconfirmedAfterPublishMessage,
 } from './release-args.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -80,30 +83,26 @@ if (uiPin !== expectedPin) {
 
 console.log(`Releasing ${name}@${version}${dryRun ? ' (dry-run)' : ''}`);
 
-// Synchronous sleep. The driver is sync end to end (spawnSync/execSync), and
-// going async just to wait between registry probes would restructure it.
-const sleepSync = (ms) => {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// One registry probe, three outcomes. `npm view` already revalidates against
+// the registry rather than answering from the local cache, so no cache flag is
+// needed here.
+const probeRegistry = (name, ver) => {
+  const r = spawnSync('npm', ['view', `${name}@${ver}`, 'version'], {
+    encoding: 'utf8',
+  });
+  return classifyViewResult({
+    status: r.status,
+    stdout: r.stdout ?? '',
+    stderr: r.stderr ?? '',
+    version: ver,
+  });
 };
 
-// `--prefer-online` on BOTH uses, not just the post-publish check. A stale
-// packument in npm's cache would otherwise make the skip path report a version
-// as already published when it is not, which skips the publish AND the
-// verification below and then tags: the exact failure this guard exists to
-// stop, arrived at from the other side. A release runs a few times a year, so
-// the extra round trip costs nothing worth counting.
-const alreadyPublished = (name, ver) => {
-  try {
-    const out = execSync(`npm view ${name}@${ver} version --prefer-online`, {
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim();
-    return out === ver;
-  } catch {
-    return false;
-  }
-};
+// Skip only on a positive answer. An unreachable registry must not be read as
+// "not published yet" here either, but the safe fallback differs: attempt the
+// publish and let npm reject a duplicate, rather than silently skipping one
+// that never happened.
+const alreadyPublished = (name, ver) => probeRegistry(name, ver) === 'published';
 
 const publish = (name, pkgDir) => {
   if (alreadyPublished(name, version)) {
@@ -118,13 +117,17 @@ const publish = (name, pkgDir) => {
   });
   if (result.status === 0 && !dryRun) {
     // The exit code is not evidence; ask the registry. See verifyPublished.
-    const landed = verifyPublished({
-      isPublished: () => alreadyPublished(name, version),
+    const verdict = verifyPublished({
+      probe: () => probeRegistry(name, version),
       sleep: sleepSync,
     });
-    if (!landed) {
+    if (verdict !== 'published') {
       console.error('');
-      console.error(missingAfterPublishMessage(name, version, pkgDir));
+      console.error(
+        verdict === 'absent'
+          ? missingAfterPublishMessage(name, version, pkgDir)
+          : unconfirmedAfterPublishMessage(name, version)
+      );
       process.exit(1);
     }
     console.log(`  ${name}@${version} confirmed on the registry`);
