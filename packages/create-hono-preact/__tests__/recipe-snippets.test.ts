@@ -107,6 +107,9 @@ describe('recipe snippets declare how they are checked', () => {
   });
 });
 
+// Generous on purpose; see the note at the test that uses it.
+const COMPILE_TIMEOUT_MS = 120_000;
+
 describe('recipe snippets typecheck against the framework', () => {
   beforeAll(() => {
     if (!existsSync(resolve(frameworkDist, 'index.d.ts'))) {
@@ -128,57 +131,67 @@ describe('recipe snippets typecheck against the framework', () => {
       (s) => parseMeta(s.meta).file
     );
     const testFn = snippets.length > 0 ? it : it.skip;
-    testFn(`${recipe} compiles`, () => {
-      const projectDir = resolve(scratchRoot, recipe.replace(/\.md$/, ''));
-      cpSync(baseTemplate, projectDir, { recursive: true });
+    // Each case spawns a full `tsc` over a scratch project, which measures
+    // 5-10s on an idle machine and longer under the parallel pool. Vitest's
+    // default 5s timeout is therefore below the work's own cost: the suite
+    // passed or failed depending on machine load, killing tsc mid-run and
+    // reporting it as a compile failure. The generous bound keeps a real hang
+    // catchable without making load the thing under test.
+    testFn(
+      `${recipe} compiles`,
+      () => {
+        const projectDir = resolve(scratchRoot, recipe.replace(/\.md$/, ''));
+        cpSync(baseTemplate, projectDir, { recursive: true });
 
-      for (const s of snippets) {
-        const target = resolve(projectDir, parseMeta(s.meta).file!);
-        mkdirSync(dirname(target), { recursive: true });
-        writeFileSync(target, `${s.code}\n`);
-      }
+        for (const s of snippets) {
+          const target = resolve(projectDir, parseMeta(s.meta).file!);
+          mkdirSync(dirname(target), { recursive: true });
+          writeFileSync(target, `${s.code}\n`);
+        }
 
-      writeFileSync(
-        resolve(projectDir, 'tsconfig.json'),
-        JSON.stringify(
-          {
-            compilerOptions: {
-              target: 'ESNext',
-              module: 'ESNext',
-              moduleResolution: 'bundler',
-              jsx: 'react-jsx',
-              jsxImportSource: 'preact',
-              strict: true,
-              esModuleInterop: true,
-              skipLibCheck: true,
-              isolatedModules: true,
-              noEmit: true,
-              lib: ['ESNext', 'DOM'],
-              types: [],
-              paths: {
-                'hono-preact': [resolve(frameworkDist, 'index.d.ts')],
-                'hono-preact/*': [resolve(frameworkDist, '*')],
+        writeFileSync(
+          resolve(projectDir, 'tsconfig.json'),
+          JSON.stringify(
+            {
+              compilerOptions: {
+                target: 'ESNext',
+                module: 'ESNext',
+                moduleResolution: 'bundler',
+                jsx: 'react-jsx',
+                jsxImportSource: 'preact',
+                strict: true,
+                esModuleInterop: true,
+                skipLibCheck: true,
+                isolatedModules: true,
+                noEmit: true,
+                lib: ['ESNext', 'DOM'],
+                types: [],
+                paths: {
+                  'hono-preact': [resolve(frameworkDist, 'index.d.ts')],
+                  'hono-preact/*': [resolve(frameworkDist, '*')],
+                },
               },
+              include: ['src'],
             },
-            include: ['src'],
-          },
-          null,
-          2
-        )
-      );
+            null,
+            2
+          )
+        );
 
-      try {
-        execFileSync(
-          resolve(repoRoot, 'node_modules', '.bin', 'tsc'),
-          ['--noEmit', '-p', projectDir],
-          { encoding: 'utf8', stdio: 'pipe' }
-        );
-      } catch (err) {
-        const e = err as { stdout?: string; stderr?: string };
-        throw new Error(
-          `${recipe} snippets do not typecheck:\n${e.stdout ?? ''}${e.stderr ?? ''}`
-        );
-      }
-    });
+        try {
+          execFileSync(
+            resolve(repoRoot, 'node_modules', '.bin', 'tsc'),
+            ['--noEmit', '-p', projectDir],
+            { encoding: 'utf8', stdio: 'pipe' }
+          );
+        } catch (err) {
+          const e = err as { stdout?: string; stderr?: string };
+          throw new Error(
+            `${recipe} snippets do not typecheck:\n${e.stdout ?? ''}${e.stderr ?? ''}`
+          );
+        }
+      },
+      COMPILE_TIMEOUT_MS
+    );
   }
 });
