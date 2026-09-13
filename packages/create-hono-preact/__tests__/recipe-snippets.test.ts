@@ -131,12 +131,17 @@ describe('recipe snippets typecheck against the framework', () => {
       (s) => parseMeta(s.meta).file
     );
     const testFn = snippets.length > 0 ? it : it.skip;
-    // Each case spawns a full `tsc` over a scratch project, which measures
-    // 5-10s on an idle machine and longer under the parallel pool. Vitest's
-    // default 5s timeout is therefore below the work's own cost: the suite
-    // passed or failed depending on machine load, killing tsc mid-run and
-    // reporting it as a compile failure. The generous bound keeps a real hang
-    // catchable without making load the thing under test.
+    // Each case spawns a full `tsc` over a scratch project: ~1s measured in
+    // isolation, but 5-10.5s inside the full parallel suite. Vitest's default
+    // timeout is 5s, so under load the work outran its own budget, tsc was
+    // killed mid-run, and the failure surfaced as "snippets do not typecheck"
+    // -- the worst possible disguise for a gate whose job is reporting compile
+    // failures. The generous bound keeps a real hang catchable without making
+    // machine load the thing under test.
+    //
+    // Passed per case deliberately. `vi.setConfig({ testTimeout })` reads as
+    // the tidier spelling and silently does NOT apply to these cases (verified:
+    // at 100ms they still pass, while 100ms passed here fails all four).
     testFn(
       `${recipe} compiles`,
       () => {
