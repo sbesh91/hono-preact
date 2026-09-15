@@ -15,10 +15,14 @@
 // pnpm cannot interpret, so the code has to come in on the command line:
 //   pnpm release -- --otp=123456
 //
+// Verification: a publish that reports success is confirmed against the
+// registry before anything is tagged. `pnpm publish` can exit 0 having
+// uploaded nothing, so its exit code is not evidence.
+//
 // Idempotency: if a version is already on the npm registry, that publish is
 // skipped with a note. Lets you re-run after a partial failure.
 
-import { execSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +30,11 @@ import {
   parseOtp,
   buildPublishArgs,
   otpFailureHint,
+  sleepSync,
+  classifyViewResult,
+  verifyPublished,
+  missingAfterPublishMessage,
+  unconfirmedAfterPublishMessage,
 } from './release-args.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -70,18 +79,26 @@ if (errors.length) {
 
 console.log(`Releasing v${version}${dryRun ? ' (dry-run)' : ''}`);
 
-const alreadyPublished = (name, ver) => {
-  try {
-    const out = execSync(`npm view ${name}@${ver} version`, {
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim();
-    return out === ver;
-  } catch {
-    return false;
-  }
+// One registry probe, three outcomes. `npm view` already revalidates against
+// the registry rather than answering from the local cache, so no cache flag is
+// needed here.
+const probeRegistry = (name, ver) => {
+  const r = spawnSync('npm', ['view', `${name}@${ver}`, 'version'], {
+    encoding: 'utf8',
+  });
+  return classifyViewResult({
+    status: r.status,
+    stdout: r.stdout ?? '',
+    stderr: r.stderr ?? '',
+    version: ver,
+  });
 };
+
+// Skip only on a positive answer. An unreachable registry must not be read as
+// "not published yet" here either, but the safe fallback differs: attempt the
+// publish and let npm reject a duplicate, rather than silently skipping one
+// that never happened.
+const alreadyPublished = (name, ver) => probeRegistry(name, ver) === 'published';
 
 const publish = (name, pkgDir) => {
   if (alreadyPublished(name, version)) {
@@ -94,6 +111,23 @@ const publish = (name, pkgDir) => {
     cwd: join(ROOT, pkgDir),
     stdio: 'inherit',
   });
+  if (result.status === 0 && !dryRun) {
+    // The exit code is not evidence; ask the registry. See verifyPublished.
+    const verdict = verifyPublished({
+      probe: () => probeRegistry(name, version),
+      sleep: sleepSync,
+    });
+    if (verdict !== 'published') {
+      console.error('');
+      console.error(
+        verdict === 'absent'
+          ? missingAfterPublishMessage(name, version, pkgDir)
+          : unconfirmedAfterPublishMessage(name, version)
+      );
+      process.exit(1);
+    }
+    console.log(`  ${name}@${version} confirmed on the registry`);
+  }
   if (result.status !== 0) {
     console.error(`  ${name} publish failed (exit ${result.status})`);
     if (!otp) console.error(otpFailureHint('pnpm release'));
