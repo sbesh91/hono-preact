@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { h } from 'preact';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { getRequestHonoContext } from '@hono-preact/iso/internal';
 import { pageActionsHandler } from '../page-actions-handler.js';
 import {
@@ -880,7 +880,7 @@ describe('pageActionsHandler', () => {
     // never seeded with { honoContext }. Both scope entries in this handler
     // (the action chain and the deny re-render) must seed it like the other
     // runRequestScope call sites do.
-    const post = (handler: ReturnType<typeof buildHandler>, accept: string) =>
+    const post = (handler: MiddlewareHandler, accept: string) =>
       new Hono().post('*', handler).request('/foo', {
         method: 'POST',
         headers: {
@@ -931,7 +931,7 @@ describe('pageActionsHandler', () => {
         resolvePageNode: () => h('div', null),
         appConfig: { use: [] },
       });
-      const res = await post(handler as never, 'text/html');
+      const res = await post(handler, 'text/html');
       expect(res.status).toBe(422);
       expect(seen).toBeDefined();
     });
