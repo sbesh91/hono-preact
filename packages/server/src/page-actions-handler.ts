@@ -388,6 +388,9 @@ export function pageActionsHandler(
     // must run while the AsyncLocalStorage store backing it is still live
     // (same constraint as takeServerDeny's call site in render.tsx).
     let channels: ReturnType<typeof takeChannelSnapshot> = null;
+    // Both scope entries below seed the Hono context like every other
+    // runRequestScope call site; getRequestHonoContext() throws on an unseeded scope.
+    const scopeSeed = { honoContext: c };
     try {
       const value = await runRequestScope(async () => {
         try {
@@ -414,7 +417,7 @@ export function pageActionsHandler(
         } finally {
           channels = takeChannelSnapshot();
         }
-      });
+      }, scopeSeed);
 
       if (isAsyncGenerator(value) || value instanceof ReadableStream) {
         streamingResult = value;
@@ -577,7 +580,7 @@ export function pageActionsHandler(
         }),
         channels
       );
-    });
+    }, scopeSeed);
   };
 }
 

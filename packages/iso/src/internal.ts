@@ -50,6 +50,7 @@ export type { PreloadedDeny } from './internal/preload.js';
 export {
   runRequestScope,
   getRequestStore,
+  getRequestHonoContext,
   captureRequestScope,
   getActionResultSlot,
   setActionResultSlot,
