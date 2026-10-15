@@ -389,32 +389,35 @@ export function pageActionsHandler(
     // (same constraint as takeServerDeny's call site in render.tsx).
     let channels: ReturnType<typeof takeChannelSnapshot> = null;
     try {
-      const value = await runRequestScope(async () => {
-        try {
-          const dispatch = await dispatchServer<unknown, 'action'>({
-            middleware: serverMw,
-            ctx,
-            inner: async () => {
-              // Schema failure: short-circuit to a 422 deny carrying the
-              // normalized issues under the reserved key. The handler never
-              // runs. Caught below by `isOutcome(err)`, serialized into the
-              // envelope (JSON) or the deny re-render (PE) like any deny.
-              const effectivePayload = entry.input
-                ? await coerceActionInput(entry.input, payload)
-                : payload;
-              const inner = await fn(actionCtx, effectivePayload);
-              // Normalize return-style outcomes to throw-style so the catch
-              // path handles all outcomes uniformly.
-              if (isOutcome(inner)) throw inner;
-              return inner;
-            },
-          });
-          if (dispatch.kind === 'outcome') throw dispatch.outcome;
-          return dispatch.value;
-        } finally {
-          channels = takeChannelSnapshot();
-        }
-      });
+      const value = await runRequestScope(
+        async () => {
+          try {
+            const dispatch = await dispatchServer<unknown, 'action'>({
+              middleware: serverMw,
+              ctx,
+              inner: async () => {
+                // Schema failure: short-circuit to a 422 deny carrying the
+                // normalized issues under the reserved key. The handler never
+                // runs. Caught below by `isOutcome(err)`, serialized into the
+                // envelope (JSON) or the deny re-render (PE) like any deny.
+                const effectivePayload = entry.input
+                  ? await coerceActionInput(entry.input, payload)
+                  : payload;
+                const inner = await fn(actionCtx, effectivePayload);
+                // Normalize return-style outcomes to throw-style so the catch
+                // path handles all outcomes uniformly.
+                if (isOutcome(inner)) throw inner;
+                return inner;
+              },
+            });
+            if (dispatch.kind === 'outcome') throw dispatch.outcome;
+            return dispatch.value;
+          } finally {
+            channels = takeChannelSnapshot();
+          }
+        },
+        { honoContext: c }
+      );
 
       if (isAsyncGenerator(value) || value instanceof ReadableStream) {
         streamingResult = value;
@@ -525,59 +528,64 @@ export function pageActionsHandler(
 
     // Deny or unexpected error: re-render the page with the resolution
     // injected into the request scope so useActionResult() reads it.
-    return await runRequestScope(async () => {
-      // The action chain published in a scope this handler already drained, so
-      // seed it into the re-render's scope: renderPage takes the snapshot from
-      // its own scope to build the document's channel bootstrap, and without
-      // this the re-rendered page would boot with an empty store even though
-      // the action published.
-      seedChannelSnapshot(channels);
-      setActionResultSlot({
-        module,
-        action,
-        resolution,
-        submittedPayload: payload,
-      });
-      const node = resolvePageNode(urlPath);
-      if (!node) {
+    return await runRequestScope(
+      async () => {
+        // The action chain published in a scope this handler already drained, so
+        // seed it into the re-render's scope: renderPage takes the snapshot from
+        // its own scope to build the document's channel bootstrap, and without
+        // this the re-rendered page would boot with an empty store even though
+        // the action published.
+        seedChannelSnapshot(channels);
+        setActionResultSlot({
+          module,
+          action,
+          resolution,
+          submittedPayload: payload,
+        });
+        const node = resolvePageNode(urlPath);
+        if (!node) {
+          if (
+            resolution.kind === 'outcome' &&
+            resolution.outcome.__outcome === 'deny'
+          ) {
+            return withChannelHeader(
+              c.text(resolution.outcome.message, resolution.outcome.status),
+              channels
+            );
+          }
+          return withChannelHeader(
+            c.text(
+              resolution.kind === 'error'
+                ? resolution.message
+                : 'Action failed',
+              500
+            ),
+            channels
+          );
+        }
+        const rendered = await renderPage(c, node, { appConfig, dev });
         if (
           resolution.kind === 'outcome' &&
           resolution.outcome.__outcome === 'deny'
         ) {
           return withChannelHeader(
-            c.text(resolution.outcome.message, resolution.outcome.status),
+            new Response(rendered.body, {
+              status: resolution.outcome.status,
+              headers: rendered.headers,
+            }),
             channels
           );
         }
         return withChannelHeader(
-          c.text(
-            resolution.kind === 'error' ? resolution.message : 'Action failed',
-            500
-          ),
-          channels
-        );
-      }
-      const rendered = await renderPage(c, node, { appConfig, dev });
-      if (
-        resolution.kind === 'outcome' &&
-        resolution.outcome.__outcome === 'deny'
-      ) {
-        return withChannelHeader(
           new Response(rendered.body, {
-            status: resolution.outcome.status,
+            status: 500,
             headers: rendered.headers,
           }),
           channels
         );
-      }
-      return withChannelHeader(
-        new Response(rendered.body, {
-          status: 500,
-          headers: rendered.headers,
-        }),
-        channels
-      );
-    });
+      },
+      { honoContext: c }
+    );
   };
 }
 

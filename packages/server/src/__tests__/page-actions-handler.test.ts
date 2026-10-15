@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { h } from 'preact';
 import { Hono } from 'hono';
+import { getRequestHonoContext } from '@hono-preact/iso/internal';
 import { pageActionsHandler } from '../page-actions-handler.js';
 import {
   deny,
@@ -872,6 +873,68 @@ describe('pageActionsHandler', () => {
     expect(
       (await postAction(handler, '/projects/active', 'mutate')).status
     ).toBe(200);
+  });
+
+  describe('request scope seeding', () => {
+    // getRequestHonoContext() throws when a request scope is active but was
+    // never seeded with { honoContext }. Both scope entries in this handler
+    // (the action chain and the deny re-render) must seed it like the other
+    // runRequestScope call sites do.
+    const post = (handler: ReturnType<typeof buildHandler>, accept: string) =>
+      new Hono().post('*', handler).request('/foo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: accept,
+        },
+        body: JSON.stringify({
+          module: 'pages/test.server',
+          action: 'submit',
+          payload: {},
+        }),
+      });
+
+    it('seeds honoContext for the action chain', async () => {
+      let seen: unknown;
+      const handler = buildHandler({
+        submit: async () => {
+          seen = getRequestHonoContext();
+          return { ok: true };
+        },
+      });
+      const res = await post(handler, 'application/json');
+      expect(res.status).toBe(200);
+      expect(seen).toBeDefined();
+    });
+
+    it('seeds honoContext for the deny re-render', async () => {
+      let seen: unknown;
+      const handler = pageActionsHandler({
+        resolverByPath: async () =>
+          new Map([
+            [
+              'submit',
+              {
+                fn: async () => {
+                  throw deny(422, 'bad');
+                },
+                use: [],
+                moduleKey: 'pages/test.server',
+              },
+            ],
+          ]),
+        resolvePageUseByPattern: async () => [],
+        renderPage: (async (c: { html: (s: string) => unknown }) => {
+          seen = getRequestHonoContext();
+          return c.html('RENDERED');
+        }) as never,
+        resolvePageNode: () => h('div', null),
+        appConfig: { use: [] },
+      });
+      const res = await post(handler as never, 'text/html');
+      expect(res.status).toBe(422);
+      expect(seen).toBeDefined();
+    });
   });
 });
 
