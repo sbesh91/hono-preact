@@ -195,7 +195,7 @@ export async function renderPage(
                   value={buildActionResultContext()}
                 >
                   <HonoRequestContext.Provider value={{ context: c }}>
-                    <DevModeContext.Provider value={options?.dev ?? false}>
+                    <DevModeContext.Provider value={options?.dev}>
                       <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
                     </DevModeContext.Provider>
                   </HonoRequestContext.Provider>

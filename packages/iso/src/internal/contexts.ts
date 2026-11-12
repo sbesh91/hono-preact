@@ -11,8 +11,8 @@ export const HonoRequestContext = createContext<{ context?: Context }>({});
  * generated server entry passes (`import.meta.env.DEV`, which Vite resolves in
  * the app's own entry). Server-rendered framework components read this instead
  * of `import.meta.env`, because a Node server loads this package externalized,
- * where Vite never injects `import.meta.env`. `undefined` when rendered
- * outside `renderPage`.
+ * where Vite never injects `import.meta.env`. `undefined` when the caller
+ * passes no `dev` option or renders outside `renderPage`.
  */
 export const DevModeContext = createContext<boolean | undefined>(undefined);
 

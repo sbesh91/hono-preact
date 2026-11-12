@@ -38,7 +38,9 @@ describe('renderPage threads its dev flag to <ClientScript />', () => {
     expect(await scriptSrc(true)).toBe(VIRTUAL_CLIENT_DEV_URL);
   });
 
-  it('defaults to production when no dev option is passed', async () => {
-    expect(await scriptSrc(undefined)).toBe(CLIENT_ENTRY_URL);
+  // A custom server entry that omits `dev` keeps the build-time choice; under
+  // Vitest that is dev.
+  it('falls back to the build env when no dev option is passed', async () => {
+    expect(await scriptSrc(undefined)).toBe(VIRTUAL_CLIENT_DEV_URL);
   });
 });
