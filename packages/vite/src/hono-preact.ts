@@ -3,7 +3,11 @@ import preact from '@preact/preset-vite';
 import { type Plugin } from 'vite';
 import { CLIENT_ENTRY_FILE } from '@hono-preact/iso/internal/contract';
 import { clientShimPlugin } from './client-shim.js';
-import { clientEntryPlugin, VIRTUAL_CLIENT_ENTRY_ID } from './client-entry.js';
+import {
+  clientEntryPlugin,
+  VIRTUAL_CLIENT_ENTRY_ID,
+  writeClientScanEntry,
+} from './client-entry.js';
 import { clientEntryContractPlugin } from './client-entry-contract.js';
 import { preloadManifestPlugin } from './preload-manifest.js';
 import { serverLoaderValidationPlugin } from './server-loader-validation.js';
@@ -228,7 +232,20 @@ export function honoPreact(options: HonoPreactOptions): Plugin[] {
     // `.S()` on the single per-component effect stored at `__$u`: the second
     // sees it already RUNNING and throws `Cycle detected` on EVERY route.
     configEnvironment(name: string) {
-      if (name === 'client') return;
+      // The client gets the same routes seed plus a scan-only module for the
+      // imports that live in virtual modules and transforms; see
+      // `writeClientScanEntry`. Forward slashes: optimizeDeps.entries are globs.
+      if (name === 'client') {
+        const root = rootRef.get();
+        return {
+          optimizeDeps: {
+            entries: [
+              resolve(root, routes),
+              writeClientScanEntry(root).split('\\').join('/'),
+            ],
+          },
+        };
+      }
       return {
         optimizeDeps: {
           entries: [resolve(rootRef.get(), routes)],

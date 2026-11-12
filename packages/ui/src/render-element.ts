@@ -155,7 +155,14 @@ function withTriggerWarn(
   ref: AnyRef<HTMLElement>,
   props: Props
 ): AnyRef<HTMLElement> {
-  if (!import.meta.env.DEV || !isInteractiveTrigger(props)) return ref;
+  // Guarded: a Node server loads this package externalized, where
+  // `import.meta.env` is undefined. The trigger warning is client-only.
+  if (
+    typeof import.meta.env === 'undefined' ||
+    !import.meta.env.DEV ||
+    !isInteractiveTrigger(props)
+  )
+    return ref;
   return mergeRefs(ref, triggerRef);
 }
 

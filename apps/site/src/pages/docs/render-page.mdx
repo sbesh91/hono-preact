@@ -18,7 +18,7 @@ That single line replaces the boilerplate for dispatcher setup, prerendering, he
 renderPage(
   c: Context,
   node: VNode,
-  options?: { defaultTitle?: string; appConfig?: AppConfig }
+  options?: { defaultTitle?: string; appConfig?: AppConfig; dev?: boolean }
 ): Promise<Response>
 ```
 
@@ -28,6 +28,7 @@ renderPage(
 | `node`                 | The root Preact element to render, typically your `<Layout>`                                                                                                                                                                                                                                                                                      |
 | `options.defaultTitle` | Fallback `<title>` when no page sets one via hoofd. Defaults to `''`. Express defaults via `<Head defaultTitle="...">` in your `Layout` for the common case; the option is here for custom server entries that call `renderPage` directly.                                                                                                        |
 | `options.appConfig`    | The default-exported result of `defineApp()`. Surfaces app-level config to the render: [middleware](/docs/middleware) composition via `use`, plus opt-in features like [`speculation`](/docs/link-prefetch). The framework's generated server entry threads this for you; custom server entries must pass it explicitly to enable those features. |
+| `options.dev`          | Whether this is a dev-server render. Selects the dev or built client entry for `<ClientScript />` and unmasks streaming loader errors. The generated server entry passes it for you; a custom server entry passes `import.meta.env.DEV`, which is required under the Node adapter because the framework loads there without `import.meta.env`.    |
 
 ## Head tags
 

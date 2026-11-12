@@ -135,6 +135,11 @@ function normalizePatterns(
   return patterns.map(normalizePattern);
 }
 
+/** Vite tags its own HMR and ping sockets with these subprotocols. */
+function isViteUpgrade(protocol: string | undefined): boolean {
+  return protocol === 'vite-hmr' || protocol === 'vite-ping';
+}
+
 export function nodeDevServerPlugin(
   ctx: HonoPreactAdapterContext,
   options: NodeDevServerOptions = {}
@@ -149,8 +154,11 @@ export function nodeDevServerPlugin(
       // Wire the WebSocket upgrade. @hono/node-ws's injectWebSocket(target)
       // just calls target.on('upgrade', fn); we pass a shim that captures
       // that handler so we can invoke it with Node's real upgrade args.
-      // Multiple 'upgrade' listeners coexist fine with Vite's own HMR one.
+      // Vite's HMR upgrade is Vite's alone: node-ws runs every upgrade through
+      // the app and, finding no route, writes an HTTP rejection onto the
+      // socket Vite already upgraded, which corrupts the HMR stream.
       server.httpServer?.on('upgrade', async (req, socket, head) => {
+        if (isViteUpgrade(req.headers['sec-websocket-protocol'])) return;
         try {
           const { injectWebSocket } = await runner.import(ctx.entryWrapperId);
           if (!injectWebSocket) return;

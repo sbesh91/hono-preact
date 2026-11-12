@@ -109,7 +109,10 @@ export function useViewTransitionClass(
     applyCssProp(nodeRef.current, 'view-transition-class', value);
   }, [value]);
 
-  if (import.meta.env.DEV) useInertClassWarning(nodeRef, value);
+  // Guarded: a Node server loads this package externalized, where
+  // `import.meta.env` is undefined. The warning is client-only regardless.
+  if (typeof import.meta.env !== 'undefined' && import.meta.env.DEV)
+    useInertClassWarning(nodeRef, value);
 
   return useCallback((node: Element | null) => {
     if (nodeRef.current && nodeRef.current !== node) {

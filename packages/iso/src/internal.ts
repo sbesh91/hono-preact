@@ -57,7 +57,7 @@ export {
   type ActionResultSlot,
 } from './cache.js';
 export { default as wrapPromise } from './internal/wrap-promise.js';
-export { HonoRequestContext } from './internal/contexts.js';
+export { HonoRequestContext, DevModeContext } from './internal/contexts.js';
 export { PageMiddlewareHost } from './internal/page-middleware-host.js';
 
 export { getNavDirection } from './internal/history-shim.js';
