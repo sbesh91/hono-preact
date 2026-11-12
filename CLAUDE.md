@@ -1,15 +1,5 @@
 # hono-preact
 
-## Tooling notes for AI agents
-
-**Serena MCP is configured** (see `.mcp.json`). It is an optional aid, not a mandate. `rg`/`grep` + Read + Edit is the default for code navigation and edits, and is fine for definitions, call-site spot checks, prose, config, and one-offs on a codebase this size.
-
-Reach for Serena in the one place it clearly beats grep: **renaming or changing the signature of an exported symbol**, where missing a call site is a real bug. `find_referencing_symbols` enumerates the actual call sites and skips the textual noise (re-exports, doc strings, same-named locals) a grep would make you hand-filter; `rename_symbol` rewrites them on the symbol graph. `find_symbol` / `get_symbols_overview`, and the `replace_symbol_body` / `insert_before_symbol` / `insert_after_symbol` edits, are there when you want them. Serena's tools are deferred: load them once per session with `ToolSearch` (`select:mcp__serena__find_referencing_symbols,mcp__serena__rename_symbol`), then call them.
-
-A `PreToolUse` hook (`.claude/hooks/prefer-serena.py`) nudges toward Serena only when a search looks like the front half of a textual refactor (an `rg`/`grep` feeding a shell mutator like `sed -i`); ordinary read/measure searches pass silently.
-
-Serena binds to the primary checkout (`--project .`), so it is unavailable in worktrees (see Worktree setup below) and when the MCP server is down (run `/mcp` to check). Fall back to native tools in both cases.
-
 ## Scope and delegation
 
 Deliver what was asked, at the scope intended. Make routine judgment calls yourself; check in only when different readings of the request would lead to materially different work. If the request seems mistaken, say so in a sentence and continue with it as asked rather than quietly narrowing, widening, or transforming it.
@@ -26,10 +16,7 @@ Delegate to a subagent only for large, genuinely independent tracks of work, suc
 
 When feature work runs in a fresh `git worktree`, the worktree shares tracked files but starts without the gitignored local state and build artifacts this monorepo needs. Run `pnpm wt:setup` (i.e. `bash scripts/worktree-setup.sh`) from inside the new worktree to bring it up: it copies `.env` and `.claude/settings.local.json` from the primary checkout, runs `pnpm install`, builds the framework `dist/`, and runs `pnpm typecheck`. Add `-- --test` to also run the unit suite (`pnpm wt:setup -- --test`).
 
-Two caveats the script cannot fix for you:
-
-- **Serena stays on the main checkout.** `.mcp.json` launches Serena with `--project .`, which binds to the primary checkout, so Serena keeps indexing main even while you work in the worktree. There is no in-session re-point tool. In a worktree, use `rg`/Read/Edit and do **not** use Serena's symbol/edit tools (they resolve paths against main, so an edit would land in the wrong tree). Re-pointing Serena needs an MCP restart against the worktree path, only worth it for large structural refactors.
-- **It is not auto-run.** Creating a worktree (e.g. via `EnterWorktree`) does not trigger setup; run `pnpm wt:setup` as the explicit next step.
+One caveat the script cannot fix for you: **it is not auto-run.** Creating a worktree (e.g. via `EnterWorktree`) does not trigger setup; run `pnpm wt:setup` as the explicit next step.
 
 `.wrangler/` is intentionally not copied: it is local Cloudflare emulation state that regenerates on `wrangler dev`, and a stale copy is worse than a cold start.
 

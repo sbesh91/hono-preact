@@ -33,15 +33,6 @@
             "command": ".claude/hooks/keep-docs-fresh-commit.sh"
           }
         ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/prefer-serena.py"
-          }
-        ]
       }
     ]
   }
