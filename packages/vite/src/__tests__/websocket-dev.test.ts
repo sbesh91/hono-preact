@@ -89,6 +89,29 @@ describe('Node adapter: WebSocket in dev', () => {
     const reply = await echoOverWs(serverPort(server), 'hello');
     expect(reply).toBe('echo: hello');
   }, 20_000);
+
+  // The app's upgrade listener must leave Vite's own HMR socket alone. Handing
+  // it to @hono/node-ws makes node-ws write an HTTP rejection onto a socket
+  // Vite already upgraded; the browser reads those bytes as an invalid frame,
+  // drops HMR, and Vite's client reload-loops the page.
+  it("leaves Vite's HMR socket uncorrupted", async () => {
+    const outcome = await new Promise<string>((res) => {
+      const ws = new WebSocket(
+        `ws://localhost:${serverPort(server)}/`,
+        'vite-hmr'
+      );
+      const frames: string[] = [];
+      ws.on('message', (data) => frames.push(data.toString()));
+      ws.on('error', (err) => res(`error: ${err.message}`));
+      ws.on('close', () => res(`closed after ${frames.join(' | ')}`));
+      // Long enough for the app listener's async import + app.request to land.
+      setTimeout(() => {
+        res(`open after ${frames.join(' | ')}`);
+        ws.close();
+      }, 3_000);
+    });
+    expect(outcome).toBe('open after {"type":"connected"}');
+  }, 20_000);
 });
 
 describe('Cloudflare adapter: WebSocket in dev', () => {

@@ -33,6 +33,7 @@ import {
   dispatchServer,
   partitionUse,
   getActionResultSlot,
+  DevModeContext,
 } from '@hono-preact/iso/internal';
 import type {
   ServerDenyRecord,
@@ -194,7 +195,9 @@ export async function renderPage(
                   value={buildActionResultContext()}
                 >
                   <HonoRequestContext.Provider value={{ context: c }}>
-                    <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
+                    <DevModeContext.Provider value={options?.dev ?? false}>
+                      <HoofdProvider value={dispatcher}>{node}</HoofdProvider>
+                    </DevModeContext.Provider>
                   </HonoRequestContext.Provider>
                 </ActionResultContext.Provider>
               );

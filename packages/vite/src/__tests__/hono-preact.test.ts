@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
@@ -232,7 +233,13 @@ describe('honoPreact config plugin', () => {
     }
   });
 
-  it('does not seed the client environment (no SSR prerender there)', async () => {
+  // Regression: a scaffolded app's first dev page load crashed hydration with
+  // `reading '__$f'`. The browser graph starts at virtual modules (the client
+  // entry imports preact-iso and hono-preact) and reaches
+  // hono-preact/internal/runtime only through the loader-stub transform, so an
+  // unseeded client optimizer discovered all of them mid-request, re-optimized
+  // while the page ran the previous bundle, and left two @preact/signals copies.
+  it('seeds the client environment with the routes and a scan-only module for virtual and injected imports', async () => {
     const cfg = findPlugin(
       honoPreact({ adapter: fakeAdapter() }),
       'hono-preact:config'
@@ -241,7 +248,18 @@ describe('honoPreact config plugin', () => {
       command: 'serve',
       mode: 'development',
     });
-    expect(client).toBeUndefined();
+    const entries = client?.optimizeDeps?.entries;
+    if (!Array.isArray(entries)) throw new Error('client entries not seeded');
+    expect(entries[0]).toBe(resolve(process.cwd(), 'src/routes.ts'));
+    const scan = readFileSync(entries[1], 'utf8');
+    for (const id of [
+      'preact',
+      'preact-iso',
+      'hono-preact',
+      'hono-preact/internal/runtime',
+    ]) {
+      expect(scan).toContain(`import '${id}';`);
+    }
   });
 
   it('honors a custom routes path in the scan entry', async () => {

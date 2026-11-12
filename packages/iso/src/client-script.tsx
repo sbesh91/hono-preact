@@ -1,11 +1,20 @@
 import type { VNode } from 'preact';
+import { useContext } from 'preact/hooks';
 import {
   CLIENT_ENTRY_URL,
   VIRTUAL_CLIENT_DEV_URL,
 } from './internal/contract.js';
+import { DevModeContext } from './internal/contexts.js';
 
 export function ClientScript(): VNode {
-  const src = import.meta.env.PROD ? CLIENT_ENTRY_URL : VIRTUAL_CLIENT_DEV_URL;
+  // The server render supplies the dev flag. Reading `import.meta.env` here
+  // would throw under a Node server, which loads this package externalized
+  // (Vite never injects `import.meta.env` there); the guarded read only serves
+  // renders outside `renderPage`.
+  const dev =
+    useContext(DevModeContext) ??
+    (typeof import.meta.env === 'undefined' || !import.meta.env.PROD);
+  const src = dev ? VIRTUAL_CLIENT_DEV_URL : CLIENT_ENTRY_URL;
   // `async` on a module script: download in parallel with parsing AND execute
   // as soon as available, rather than waiting for the document to finish
   // parsing. Critical for streaming SSR: without it, the client entry waits

@@ -57,6 +57,31 @@ export function generateClientEntrySource(
   );
 }
 
+const GENERATED_CLIENT_SCAN_RELATIVE =
+  'node_modules/.vite/hono-preact/client-scan.js';
+
+/**
+ * Writes a scan-only module for the client dep optimizer and returns its path.
+ * The browser graph starts at virtual modules (the client entry) and reaches
+ * `hono-preact/internal/runtime` only through a transform (the loader stub), so
+ * the optimizer's startup scan sees none of them. Discovered on the first page
+ * request instead, they trigger a re-optimize while the page is already running
+ * the previous bundle, and the two `@preact/signals` copies crash hydration.
+ * Listing them here lets the scan crawl them at startup; an id the app aliases
+ * to source is crawled as source rather than force-bundled. Never executed.
+ */
+export function writeClientScanEntry(root: string): string {
+  const file = path.resolve(root, GENERATED_CLIENT_SCAN_RELATIVE);
+  const source =
+    `import 'preact';\n` +
+    `import 'preact-iso';\n` +
+    `import 'hono-preact';\n` +
+    `import 'hono-preact/internal/runtime';\n`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, source, 'utf8');
+  return file;
+}
+
 export interface ClientEntryPluginOptions {
   routes: string; // project-relative or absolute
   /** Project-relative or absolute path to the app's global stylesheet. */
