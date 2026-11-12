@@ -10,11 +10,6 @@
 # Usage:
 #   bash scripts/worktree-setup.sh           # install + build + typecheck
 #   bash scripts/worktree-setup.sh --test    # also run the unit test suite
-#
-# Serena note: .mcp.json launches Serena with `--project .`, which resolves to
-# the primary checkout, so Serena keeps indexing main even while you work here.
-# In this worktree, use rg/Read/Edit rather than Serena's symbol/edit tools
-# (those resolve paths against main) unless you relaunch Serena pointed here.
 set -euo pipefail
 
 # Resolve the primary checkout so we can copy gitignored local files from it.
@@ -59,7 +54,4 @@ fi
 cat <<EOF
 
 Worktree ready at $WT_ROOT
-Reminder: Serena still indexes the MAIN checkout. In this worktree, use
-rg/Read/Edit rather than Serena's symbol/edit tools unless you relaunch
-Serena pointed here.
 EOF
